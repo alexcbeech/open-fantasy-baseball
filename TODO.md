@@ -49,5 +49,5 @@
 - [ ] Add API contract tests for scoped owner actions. (Manual bearer-token contract smoke and bearer parsing unit tests started.)
 - [ ] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings.
 - [x] Manually smoke test Neon-backed home, team, matchup, players, league, lineup validation, and mobile layout in the browser.
-- [ ] Add CI with lint, typecheck, tests, and build.
+- [x] Add CI with lint, typecheck, tests, and build. (GitHub Actions workflow on push/PR running npm ci, lint, typecheck, test, and next build; .npmrc pins legacy-peer-deps for the beta Neon Auth peer range.)
 - [ ] Review npm audit output and plan dependency upgrades.
