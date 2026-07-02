@@ -62,6 +62,20 @@ test.describe("lineup move sheet", () => {
     await fillSheet.getByText("Adley Rutschman").click();
     await expect(page.getByRole("button", { name: /Move Adley Rutschman out of the C slot/ })).toBeVisible();
   });
+
+  test("opens the player detail sheet when tapping the player", async ({ page }) => {
+    await page.goto("/team/team-1");
+
+    await page.getByRole("button", { name: /View Adley Rutschman details/ }).click();
+
+    const detail = page.getByRole("dialog", { name: "Player detail" });
+    await expect(detail).toBeVisible();
+    // The detail body loads via fetch; allow for the dev server compiling the
+    // /api/v1/players/[playerId] route on first hit.
+    await expect(detail.getByRole("heading", { name: "Adley Rutschman" })).toBeVisible({ timeout: 20000 });
+    await expect(detail.getByRole("heading", { name: "Stats" })).toBeVisible();
+    await expect(detail.getByRole("button", { name: "Drop" })).toBeVisible();
+  });
 });
 
 test.describe("player search", () => {

@@ -529,6 +529,73 @@ button.row {
   font-weight: 700;
 }
 
+/* Filled lineup rows split into two tap targets: the position badge moves the
+   player, the name opens the detail sheet. */
+.slot-button {
+  align-items: center;
+  align-self: center;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 4px 0;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+  width: 100%;
+}
+
+.slot-button-icon {
+  color: var(--brand);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.player-info-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 0;
+  text-align: left;
+}
+
+.detail-chevron {
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 900;
+  padding: 0 6px;
+}
+
+@media (hover: hover) {
+  .slot-button:hover {
+    border-color: var(--brand);
+    color: var(--ink);
+  }
+
+  .player-info-button:hover .player-name {
+    color: var(--brand-strong);
+  }
+}
+
+.detail-sheet-close-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.player-detail-sheet {
+  max-height: 90dvh;
+}
+
 /* Move Player bottom sheet (Yahoo-style position picker). */
 .sheet-overlay {
   align-items: flex-end;
