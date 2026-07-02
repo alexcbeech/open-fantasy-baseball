@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import { oauthScopes, scopeDescriptions } from "@/lib/auth/scopes";
+import { PushNotificationsControl } from "./push-notifications-control";
 import type { ApiTokenSummary, CreatedApiToken } from "@/lib/data/api-tokens";
 import type { OAuthScope } from "@/lib/auth/scopes";
 import type { DisplayMode, UserProfilePreferences } from "@/lib/data/profile";
@@ -310,6 +311,8 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
           ))}
         </div>
       </section>
+
+      <PushNotificationsControl />
 
       <div className="form-actions">
         <button className="primary-button" type="submit" disabled={isSaving}>

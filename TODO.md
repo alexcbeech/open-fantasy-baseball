@@ -28,7 +28,7 @@
 - [ ] Add MCP server after owner API scopes are stable. (First bearer-token protected JSON-RPC MCP tools endpoint started at /api/mcp.)
 - [ ] Add background worker process and Redis queue. (Runnable one-shot nightly job script started; durable queue still pending.)
 - [ ] Implement nightly waiver and scheduled-task processing. (Due waiver claim processing, background_job_run audit, CLI script, admin trigger endpoint, admin operations screen, and run history started.)
-- [ ] Add Web Push notification subscriptions and preference controls.
+- [x] Add Web Push notification subscriptions and preference controls. (VAPID-signed Web Push: service worker, per-device subscribe/unsubscribe/test controls on the profile screen, push_subscription persistence with gone-endpoint pruning, and /api/v1/profile/push routes.)
 - [x] Add first profile/preferences screen and make the home gear link to it.
 - [x] Persist editable profile and notification preferences in Postgres.
 - [x] Add light/dark/auto theme support wired to profile preferences.
@@ -37,17 +37,17 @@
 
 - [ ] Implement MLB Stats API adapter for player metadata, teams, schedules, probable starters, and live game stats where allowed. (Teams, active rosters, 40-man rosters, schedule, and probable starters started.)
 - [x] Add admin operations screen for manual MLB sync, nightly processing triggers, recent run history, and data freshness summary.
-- [ ] Add projections provider adapter.
-- [ ] Add player news provider adapter.
+- [x] Add projections provider adapter. (ProjectionsProvider interface with a default derived rest-of-season model computed from season + trailing-30-day stat windows; syncProjections writes projection_ros lines with ingestion_run attribution. `npm run sync:projections`.)
+- [x] Add player news provider adapter. (PlayerNewsProvider interface with a default provider synthesizing news from roster status and probable-starter schedule; syncPlayerNews deduped writes to player_news with ingestion_run attribution. `npm run sync:news`.)
 - [x] Add ingestion freshness tracking and source attribution.
 - [ ] Add scoring recalculation and matchup snapshot jobs. (Matchup detail repository/API and seeded category snapshots started.)
 - [x] Add Postgres infrastructure, migrations, seed data, Neon connection support, and repository-backed reads.
 
 ## Quality
 
-- [ ] Add unit tests for scoring, roster legality, waiver priority, FAAB, and league settings. (Scoring, roster legality, and league settings started.)
+- [x] Add unit tests for scoring, roster legality, waiver priority, FAAB, and league settings. (Scoring, roster legality, and league settings covered; added focused waiver-priority and FAAB tie-break tests in nightly-processing.test.ts.)
 - [ ] Add API contract tests for scoped owner actions. (Manual bearer-token contract smoke and bearer parsing unit tests started.)
-- [ ] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings.
+- [x] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings. (e2e/smoke.spec.ts runs against the app in demo/mock mode on a mobile viewport; `npm run test:e2e`, wired into a CI job.)
 - [x] Manually smoke test Neon-backed home, team, matchup, players, league, lineup validation, and mobile layout in the browser.
-- [ ] Add CI with lint, typecheck, tests, and build.
-- [ ] Review npm audit output and plan dependency upgrades.
+- [x] Add CI with lint, typecheck, tests, and build. (GitHub Actions workflow on push/PR running npm ci, lint, typecheck, test, and next build; .npmrc pins legacy-peer-deps for the beta Neon Auth peer range.)
+- [x] Review npm audit output and plan dependency upgrades. (See docs/security-audit.md: 5 moderate transitive advisories, all low exposure in OFB today; documented upstream-tracking plan instead of the breaking `audit fix --force` Next 9.x downgrade.)

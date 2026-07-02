@@ -80,6 +80,21 @@ export const openApiDocument = {
           },
         },
       },
+      PushSubscription: {
+        type: "object",
+        required: ["endpoint", "keys"],
+        properties: {
+          endpoint: { type: "string", format: "uri" },
+          keys: {
+            type: "object",
+            required: ["p256dh", "auth"],
+            properties: {
+              p256dh: { type: "string" },
+              auth: { type: "string" },
+            },
+          },
+        },
+      },
       ApiTokenSummary: {
         type: "object",
         required: ["id", "name", "scopes", "expiresAt", "createdAt", "revokedAt"],
@@ -261,6 +276,76 @@ export const openApiDocument = {
           "400": { description: "Invalid profile payload.", content: errorContent() },
           "401": { description: "Invalid bearer token.", content: errorContent() },
           "403": { description: "Missing required scope.", content: errorContent() },
+        },
+      },
+    },
+    "/profile/push": {
+      get: {
+        tags: ["Profile"],
+        summary: "Read Web Push status and the VAPID public key",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:profile",
+        responses: {
+          "200": {
+            description: "Push configuration and active device count.",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    configured: { type: "boolean" },
+                    publicKey: { type: "string", nullable: true },
+                    activeCount: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Sign in is required.", content: errorContent() },
+        },
+      },
+      post: {
+        tags: ["Profile"],
+        summary: "Register a Web Push subscription for the current device",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:profile",
+        requestBody: jsonBody({ $ref: "#/components/schemas/PushSubscription" }),
+        responses: {
+          "200": { description: "Subscription saved." },
+          "400": { description: "Invalid subscription payload.", content: errorContent() },
+          "401": { description: "Sign in is required.", content: errorContent() },
+          "503": { description: "Web Push is not configured on this server.", content: errorContent() },
+        },
+      },
+      delete: {
+        tags: ["Profile"],
+        summary: "Remove a Web Push subscription by endpoint",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:profile",
+        requestBody: jsonBody({
+          type: "object",
+          required: ["endpoint"],
+          properties: { endpoint: { type: "string", format: "uri" } },
+        }),
+        responses: {
+          "200": { description: "Subscription removed." },
+          "400": { description: "Invalid endpoint.", content: errorContent() },
+          "401": { description: "Sign in is required.", content: errorContent() },
+        },
+      },
+    },
+    "/profile/push/test": {
+      post: {
+        tags: ["Profile"],
+        summary: "Send a test Web Push notification to the current user's devices",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:profile",
+        responses: {
+          "200": { description: "Test notification delivered." },
+          "401": { description: "Sign in is required.", content: errorContent() },
+          "404": { description: "No push subscriptions are registered.", content: errorContent() },
+          "502": { description: "No test notification could be delivered.", content: errorContent() },
+          "503": { description: "Web Push is not configured on this server.", content: errorContent() },
         },
       },
     },

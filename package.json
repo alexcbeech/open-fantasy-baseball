@@ -10,11 +10,14 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/seed.mjs",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "jobs:nightly": "tsx scripts/run-nightly.ts",
-    "sync:mlb": "tsx scripts/sync-mlb.ts"
+    "sync:mlb": "tsx scripts/sync-mlb.ts",
+    "sync:projections": "tsx scripts/sync-projections.ts",
+    "sync:news": "tsx scripts/sync-news.ts"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.4.2-beta",
@@ -22,13 +25,16 @@
     "pg": "^8.13.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "web-push": "^3.6.7",
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.15.32",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.29.0",
     "eslint-config-next": "^15.3.4",
     "tsx": "^4.19.2",

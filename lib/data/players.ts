@@ -146,8 +146,12 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
         ),
         query<PlayerStatLineRow>(
           `select split, stats, collected_at
-           from player_stat_line
-           where player_id = $1 and split in ('season', 'last_7', 'last_14', 'last_30', 'projection_ros')
+           from (
+             select distinct on (split) split, stats, collected_at, stat_date
+             from player_stat_line
+             where player_id = $1 and split in ('season', 'last_7', 'last_14', 'last_30', 'projection_ros')
+             order by split, stat_date desc, collected_at desc
+           ) latest
            order by
              case split
                when 'season' then 0
@@ -156,8 +160,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
                when 'last_30' then 3
                when 'projection_ros' then 4
                else 5
-             end,
-             stat_date desc`,
+             end`,
           [playerId],
         ),
         query<PlayerGameLogRow>(
