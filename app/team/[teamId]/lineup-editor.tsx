@@ -6,6 +6,7 @@ import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
+import { PlayerDetailSheet } from "./player-detail-sheet";
 
 type LineupValidationIssue = {
   code: string;
@@ -79,6 +80,7 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
   const [isSaving, setIsSaving] = useState(false);
   const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
+  const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
 
   const currentLineup = useMemo<LineupPlayer[]>(
     () => initialLineup.map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
@@ -166,24 +168,33 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
               <div className="lineup-group-label">{group.label}</div>
               {group.rows.map((row) =>
                 row.player ? (
-                  <button
-                    className="row editable-row lineup-move-row"
-                    type="button"
-                    key={row.key}
-                    onClick={() => setMovingPlayerId(row.player!.id)}
-                    aria-label={`Move ${row.player.name} out of the ${row.slot} slot`}
-                  >
-                    <span className="slot">{row.slot}</span>
-                    <span className="player-main">
+                  <div className="row editable-row lineup-slot-row" key={row.key}>
+                    <button
+                      className="slot slot-button"
+                      type="button"
+                      onClick={() => setMovingPlayerId(row.player!.id)}
+                      aria-label={`Move ${row.player.name} out of the ${row.slot} slot`}
+                    >
+                      {row.slot}
+                      <span className="slot-button-icon" aria-hidden="true">
+                        &#8645;
+                      </span>
+                    </button>
+                    <button
+                      className="player-main player-info-button"
+                      type="button"
+                      onClick={() => setDetailPlayerId(row.player!.id)}
+                      aria-label={`View ${row.player.name} details`}
+                    >
                       <span className="player-name">{row.player.name}</span>
                       <span className="player-meta">
                         {row.player.mlbTeam} - {row.player.positions.join(", ")} - {row.player.status}
                       </span>
+                    </button>
+                    <span className="detail-chevron" aria-hidden="true">
+                      &rsaquo;
                     </span>
-                    <span className="move-indicator" aria-hidden="true">
-                      &#8645;
-                    </span>
-                  </button>
+                  </div>
                 ) : (
                   <button
                     className="row editable-row lineup-empty-row"
@@ -223,6 +234,10 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
 
       {fillingSlot ? (
         <FillSlotSheet slot={fillingSlot} lineup={currentLineup} onSelect={fillSlot} onClose={() => setFillingSlot(null)} />
+      ) : null}
+
+      {detailPlayerId ? (
+        <PlayerDetailSheet playerId={detailPlayerId} teamId={teamId} onClose={() => setDetailPlayerId(null)} />
       ) : null}
 
       <aside className="panel" aria-labelledby="lineup-status-heading">
