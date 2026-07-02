@@ -22,9 +22,7 @@ export default async function SignUpPage() {
           <span className="brand-kicker">Open Fantasy</span>
           <span className="brand-title">Create Account</span>
         </div>
-        <span className="icon-button" aria-hidden="true">
-          +
-        </span>
+        <span className="topbar-spacer" aria-hidden="true" />
       </header>
 
       <section className="page auth-page">

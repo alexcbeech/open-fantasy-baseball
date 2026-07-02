@@ -15,14 +15,6 @@ async function signOutAction() {
 }
 
 export async function AuthControl({ enabled }: { enabled: boolean }) {
-  if (!enabled) {
-    return (
-      <Link className="auth-link" href="/auth/sign-in">
-        Sign in
-      </Link>
-    );
-  }
-
   const user = await getCurrentOfbUser();
 
   if (!user) {
@@ -33,10 +25,23 @@ export async function AuthControl({ enabled }: { enabled: boolean }) {
     );
   }
 
+  const roleLabel = enabled ? (user.isAdmin ? "Admin" : null) : "Demo";
+
+  // Without Neon Auth configured the app runs as a demo user, so there is no
+  // session to sign out of; show who you are instead of a dead sign-in link.
+  if (!enabled) {
+    return (
+      <div className="auth-user">
+        <span className="auth-name">{user.displayName || user.email}</span>
+        {roleLabel ? <span className="auth-role">{roleLabel}</span> : null}
+      </div>
+    );
+  }
+
   return (
     <form action={signOutAction} className="auth-user">
       <span className="auth-name">{user.displayName || user.email}</span>
-      {user.isAdmin ? <span className="auth-role">Admin</span> : null}
+      {roleLabel ? <span className="auth-role">{roleLabel}</span> : null}
       <button className="auth-signout" type="submit">
         Sign out
       </button>

@@ -170,6 +170,13 @@ select {
   gap: 8px;
 }
 
+/* Reserves the width of a back button on the opposite side so a centered
+   page title stays centered without needing a decorative icon. */
+.topbar-spacer {
+  flex: 0 0 auto;
+  min-width: 42px;
+}
+
 .auth-link {
   align-items: center;
   background: rgb(255 255 255 / 14%);
@@ -737,6 +744,12 @@ button.row {
   padding: 10px 0;
 }
 
+/* News headlines should read in full rather than truncate like list rows. */
+.news-row .player-name {
+  overflow: visible;
+  white-space: normal;
+}
+
 .news-row:last-child {
   border-bottom: 0;
 }
@@ -1249,6 +1262,67 @@ button.row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Interaction polish: consistent focus rings, hover feedback, and transitions. */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.topbar :where(a, button):focus-visible {
+  outline-color: #fff;
+}
+
+.icon-button,
+.auth-link,
+.auth-signout,
+.primary-button,
+.secondary-button,
+.danger-button,
+.team-card,
+.tab,
+button.row {
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+@media (hover: hover) {
+  .icon-button:hover,
+  .auth-signout:hover {
+    background: rgb(255 255 255 / 26%);
+  }
+
+  .team-card:hover {
+    border-color: var(--brand);
+    box-shadow: 0 10px 24px rgb(23 32 29 / 12%);
+  }
+
+  .tab:not(.active):hover {
+    background: var(--surface-strong);
+    color: var(--ink);
+  }
+
+  button.row:hover {
+    background: var(--surface-strong);
+  }
+
+  .primary-button:hover:not(:disabled) {
+    background: var(--brand-strong);
+  }
+
+  .secondary-button:hover:not(:disabled) {
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+
+  .danger-button:hover:not(:disabled) {
+    background: var(--bad-bg);
+    filter: brightness(0.97);
+  }
 }
 
 @media (max-width: 760px) {

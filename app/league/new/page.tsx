@@ -8,15 +8,13 @@ export default function NewLeaguePage() {
     <main className="app-shell">
       <header className="topbar">
         <Link className="icon-button" href="/" aria-label="Back to all teams">
-          &lt;
+          &larr;
         </Link>
         <div className="brand-lockup">
           <span className="brand-kicker">Commissioner</span>
           <span className="brand-title">Create League</span>
         </div>
-        <span className="icon-button" aria-hidden="true">
-          B
-        </span>
+        <span className="topbar-spacer" aria-hidden="true" />
       </header>
 
       <section className="page">

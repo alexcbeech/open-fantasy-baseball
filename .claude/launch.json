@@ -6,6 +6,19 @@
       "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "dev-demo",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "env": {
+        "DATABASE_URL": "",
+        "NEON_AUTH_BASE_URL": "",
+        "NEON_AUTH_COOKIE_SECRET": "",
+        "WEB_PUSH_PUBLIC_KEY": "",
+        "WEB_PUSH_PRIVATE_KEY": ""
+      }
     }
   ]
 }
