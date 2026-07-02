@@ -14,7 +14,9 @@
     "db:seed": "node scripts/seed.mjs",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "jobs:nightly": "tsx scripts/run-nightly.ts",
-    "sync:mlb": "tsx scripts/sync-mlb.ts"
+    "sync:mlb": "tsx scripts/sync-mlb.ts",
+    "sync:projections": "tsx scripts/sync-projections.ts",
+    "sync:news": "tsx scripts/sync-news.ts"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.4.2-beta",

@@ -37,8 +37,8 @@
 
 - [ ] Implement MLB Stats API adapter for player metadata, teams, schedules, probable starters, and live game stats where allowed. (Teams, active rosters, 40-man rosters, schedule, and probable starters started.)
 - [x] Add admin operations screen for manual MLB sync, nightly processing triggers, recent run history, and data freshness summary.
-- [ ] Add projections provider adapter.
-- [ ] Add player news provider adapter.
+- [x] Add projections provider adapter. (ProjectionsProvider interface with a default derived rest-of-season model computed from season + trailing-30-day stat windows; syncProjections writes projection_ros lines with ingestion_run attribution. `npm run sync:projections`.)
+- [x] Add player news provider adapter. (PlayerNewsProvider interface with a default provider synthesizing news from roster status and probable-starter schedule; syncPlayerNews deduped writes to player_news with ingestion_run attribution. `npm run sync:news`.)
 - [x] Add ingestion freshness tracking and source attribution.
 - [ ] Add scoring recalculation and matchup snapshot jobs. (Matchup detail repository/API and seeded category snapshots started.)
 - [x] Add Postgres infrastructure, migrations, seed data, Neon connection support, and repository-backed reads.
