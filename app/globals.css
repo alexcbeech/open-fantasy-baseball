@@ -502,6 +502,33 @@ button.row {
   padding: 0 4px;
 }
 
+.lineup-group {
+  display: grid;
+}
+
+.lineup-group-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 12px 0 4px;
+  text-transform: uppercase;
+}
+
+.lineup-group:first-child .lineup-group-label {
+  padding-top: 0;
+}
+
+.lineup-empty-row .slot {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.lineup-empty-row .player-name.empty {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 /* Move Player bottom sheet (Yahoo-style position picker). */
 .sheet-overlay {
   align-items: flex-end;

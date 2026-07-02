@@ -50,6 +50,17 @@ test.describe("lineup move sheet", () => {
 
     await expect(page.getByRole("dialog", { name: "Move Player" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Move Adley Rutschman out of the UTIL slot/ })).toBeVisible();
+
+    // The vacated catcher slot now reads as an empty, fillable slot.
+    const emptyCatcher = page.getByRole("button", { name: /Fill the empty C slot/ });
+    await expect(emptyCatcher).toBeVisible();
+
+    // Filling it offers the catcher back and returns him to C.
+    await emptyCatcher.click();
+    const fillSheet = page.getByRole("dialog", { name: /Fill C slot/ });
+    await expect(fillSheet).toBeVisible();
+    await fillSheet.getByText("Adley Rutschman").click();
+    await expect(page.getByRole("button", { name: /Move Adley Rutschman out of the C slot/ })).toBeVisible();
   });
 });
 

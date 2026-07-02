@@ -1,0 +1,85 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
+import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
+
+const reserveSlots: RosterSlot[] = ["BN", "IL", "NA"];
+
+type FillSlotSheetProps = {
+  slot: RosterSlot;
+  lineup: LineupPlayer[];
+  onSelect: (playerId: string) => void;
+  onClose: () => void;
+};
+
+export function FillSlotSheet({ slot, lineup, onSelect, onClose }: FillSlotSheetProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  // Any player eligible for the slot who is not already in it. Reserve players
+  // (bench/IL/minors) surface first since they are the usual promotions.
+  const candidates = lineup
+    .filter((entry) => entry.slot !== slot && isSlotEligibleForPlayer(entry.player, slot))
+    .sort((left, right) => {
+      const leftReserve = reserveSlots.includes(left.slot) ? 0 : 1;
+      const rightReserve = reserveSlots.includes(right.slot) ? 0 : 1;
+      return leftReserve - rightReserve || left.player.name.localeCompare(right.player.name);
+    });
+
+  return (
+    <div className="sheet-overlay" role="presentation" onClick={onClose}>
+      <div
+        className="move-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="fill-sheet-title"
+        tabIndex={-1}
+        ref={dialogRef}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="move-sheet-grabber" aria-hidden="true" />
+        <div className="move-sheet-header">
+          <h2 id="fill-sheet-title">Fill {slot} slot</h2>
+          <button className="move-sheet-close" type="button" aria-label="Close" onClick={onClose}>
+            &times;
+          </button>
+        </div>
+        <p className="move-sheet-subtitle">Choose an eligible player to start at {slot}.</p>
+
+        <div className="move-option-list">
+          {candidates.length ? (
+            candidates.map((entry) => (
+              <button className="move-option" type="button" key={entry.player.id} onClick={() => onSelect(entry.player.id)}>
+                <span className="move-slot swap">
+                  {entry.slot}
+                  <span className="move-slot-icon" aria-hidden="true">
+                    &#8645;
+                  </span>
+                </span>
+                <span className="player-main">
+                  <span className="player-name">{entry.player.name}</span>
+                  <span className="player-meta">
+                    {entry.player.mlbTeam} &ndash; {entry.player.positions.join(", ")}
+                  </span>
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="empty-state">No eligible players are available for {slot}.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
