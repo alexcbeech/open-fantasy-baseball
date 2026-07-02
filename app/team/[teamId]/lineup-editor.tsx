@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
+import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
 
 type LineupValidationIssue = {
   code: string;
@@ -22,8 +24,6 @@ type LineupEditorProps = {
   initialValidation: LineupValidation;
 };
 
-const editableSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL", "SP", "RP", "P", "BN", "IL", "NA"];
-
 export function LineupEditor({ teamId, initialLineup, initialValidation }: LineupEditorProps) {
   const [slotByPlayerId, setSlotByPlayerId] = useState(() =>
     Object.fromEntries(initialLineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>,
@@ -31,15 +31,41 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
   const [validation, setValidation] = useState(initialValidation);
   const [message, setMessage] = useState(initialValidation.valid ? "Legal lineup" : "Lineup needs attention");
   const [isSaving, setIsSaving] = useState(false);
+  const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
 
-  const entries = useMemo(
-    () =>
-      initialLineup.map((entry) => ({
-        playerId: entry.player.id,
-        slot: slotByPlayerId[entry.player.id],
-      })),
+  const currentLineup = useMemo<LineupPlayer[]>(
+    () => initialLineup.map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
     [initialLineup, slotByPlayerId],
   );
+
+  const entries = useMemo(
+    () => currentLineup.map((entry) => ({ playerId: entry.player.id, slot: entry.slot })),
+    [currentLineup],
+  );
+
+  const movingEntry = movingPlayerId ? currentLineup.find((entry) => entry.player.id === movingPlayerId) : undefined;
+
+  function applyMove(target: MoveTarget) {
+    if (!movingPlayerId) {
+      return;
+    }
+
+    setSlotByPlayerId((current) => {
+      const vacatedSlot = current[movingPlayerId];
+      const next = { ...current, [movingPlayerId]: target.slot };
+
+      if (target.swapWithPlayerId) {
+        const displaced = currentLineup.find((entry) => entry.player.id === target.swapWithPlayerId);
+        // The displaced player takes the vacated slot when eligible; otherwise
+        // they drop to the bench so the swap never creates an illegal slot.
+        next[target.swapWithPlayerId] =
+          displaced && isSlotEligibleForPlayer(displaced.player, vacatedSlot) ? vacatedSlot : "BN";
+      }
+
+      return next;
+    });
+    setMovingPlayerId(null);
+  }
 
   async function validateMoves() {
     setIsSaving(true);
@@ -77,43 +103,41 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
       <section className="panel" aria-labelledby="lineup-heading">
         <h2 id="lineup-heading">Lineup</h2>
         <div className="lineup-list">
-          {initialLineup.map((entry) => (
-            <div className="row editable-row" key={`${entry.slot}-${entry.player.id}`}>
-              <span className="slot">{slotByPlayerId[entry.player.id]}</span>
+          {currentLineup.map((entry) => (
+            <button
+              className="row editable-row lineup-move-row"
+              type="button"
+              key={entry.player.id}
+              onClick={() => setMovingPlayerId(entry.player.id)}
+              aria-label={`Move ${entry.player.name} out of the ${entry.slot} slot`}
+            >
+              <span className="slot">{entry.slot}</span>
               <span className="player-main">
                 <span className="player-name">{entry.player.name}</span>
                 <span className="player-meta">
                   {entry.player.mlbTeam} - {entry.player.positions.join(", ")} - {entry.player.status}
                 </span>
               </span>
-              <select
-                aria-label={`Move ${entry.player.name}`}
-                value={slotByPlayerId[entry.player.id]}
-                onChange={(event) =>
-                  setSlotByPlayerId((current) => ({
-                    ...current,
-                    [entry.player.id]: event.target.value as RosterSlot,
-                  }))
-                }
-              >
-                {editableSlots
-                  .filter(
-                    (slot) =>
-                      isSlotEligibleForPlayer(entry.player, slot) || slot === slotByPlayerId[entry.player.id],
-                  )
-                  .map((slot) => (
-                    <option value={slot} key={slot}>
-                      {slot}
-                    </option>
-                  ))}
-              </select>
-            </div>
+              <span className="move-indicator" aria-hidden="true">
+                &#8645;
+              </span>
+            </button>
           ))}
           <button className="primary-button" type="button" onClick={validateMoves} disabled={isSaving}>
             {isSaving ? "Checking..." : "Validate Moves"}
           </button>
         </div>
       </section>
+
+      {movingEntry ? (
+        <MovePlayerSheet
+          mover={movingEntry}
+          lineup={currentLineup}
+          rosterSlots={defaultRosterSlots}
+          onSelect={applyMove}
+          onClose={() => setMovingPlayerId(null)}
+        />
+      ) : null}
 
       <aside className="panel" aria-labelledby="lineup-status-heading">
         <h3 id="lineup-status-heading">Lineup Status</h3>
