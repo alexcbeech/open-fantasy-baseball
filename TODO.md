@@ -50,4 +50,4 @@
 - [ ] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings.
 - [x] Manually smoke test Neon-backed home, team, matchup, players, league, lineup validation, and mobile layout in the browser.
 - [x] Add CI with lint, typecheck, tests, and build. (GitHub Actions workflow on push/PR running npm ci, lint, typecheck, test, and next build; .npmrc pins legacy-peer-deps for the beta Neon Auth peer range.)
-- [ ] Review npm audit output and plan dependency upgrades.
+- [x] Review npm audit output and plan dependency upgrades. (See docs/security-audit.md: 5 moderate transitive advisories, all low exposure in OFB today; documented upstream-tracking plan instead of the breaking `audit fix --force` Next 9.x downgrade.)
