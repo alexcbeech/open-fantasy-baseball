@@ -750,6 +750,16 @@ button.row {
   white-space: normal;
 }
 
+/* Settings descriptions are explanatory, so wrap them instead of truncating.
+   Paragraph metas are always prose; inline (span) metas in list rows keep the
+   single-line ellipsis behavior. */
+p.player-meta,
+.preference-row .player-meta,
+.scope-row .player-meta {
+  overflow: visible;
+  white-space: normal;
+}
+
 .news-row:last-child {
   border-bottom: 0;
 }
