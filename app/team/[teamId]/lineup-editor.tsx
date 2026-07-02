@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 
 type LineupValidationIssue = {
@@ -95,11 +96,16 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
                   }))
                 }
               >
-                {editableSlots.map((slot) => (
-                  <option value={slot} key={slot}>
-                    {slot}
-                  </option>
-                ))}
+                {editableSlots
+                  .filter(
+                    (slot) =>
+                      isSlotEligibleForPlayer(entry.player, slot) || slot === slotByPlayerId[entry.player.id],
+                  )
+                  .map((slot) => (
+                    <option value={slot} key={slot}>
+                      {slot}
+                    </option>
+                  ))}
               </select>
             </div>
           ))}

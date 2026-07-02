@@ -10,28 +10,43 @@ export type LineupValidationIssue = {
 
 const inactiveSlots: RosterSlot[] = ["BN", "IL", "NA"];
 
-function canUseSlot(entry: LineupPlayer) {
-  if (entry.slot === "BN") {
+type SlotEligibilityPlayer = {
+  positions: readonly RosterSlot[];
+  status: LineupPlayer["player"]["status"];
+};
+
+/**
+ * Whether a player may occupy a given roster slot. Bench is universal; IL/NA
+ * are status-gated; UTIL/P are position-group flex slots; every other slot
+ * requires exact position eligibility. Shared by lineup validation and the
+ * lineup editor's slot picker so the UI never offers an illegal move.
+ */
+export function isSlotEligibleForPlayer(player: SlotEligibilityPlayer, slot: RosterSlot): boolean {
+  if (slot === "BN") {
     return true;
   }
 
-  if (entry.slot === "IL") {
-    return entry.player.status === "injured" || entry.player.status === "day-to-day";
+  if (slot === "IL") {
+    return player.status === "injured" || player.status === "day-to-day";
   }
 
-  if (entry.slot === "NA") {
-    return entry.player.status === "minors";
+  if (slot === "NA") {
+    return player.status === "minors";
   }
 
-  if (entry.slot === "UTIL") {
-    return entry.player.positions.some((position) => ["C", "1B", "2B", "3B", "SS", "OF"].includes(position));
+  if (slot === "UTIL") {
+    return player.positions.some((position) => ["C", "1B", "2B", "3B", "SS", "OF"].includes(position));
   }
 
-  if (entry.slot === "P") {
-    return entry.player.positions.some((position) => ["SP", "RP", "P"].includes(position));
+  if (slot === "P") {
+    return player.positions.some((position) => ["SP", "RP", "P"].includes(position));
   }
 
-  return entry.player.positions.includes(entry.slot);
+  return player.positions.includes(slot);
+}
+
+function canUseSlot(entry: LineupPlayer) {
+  return isSlotEligibleForPlayer(entry.player, entry.slot);
 }
 
 export function validateLineup(lineup: LineupPlayer[], rosterSlots = defaultRosterSlots) {
