@@ -47,7 +47,7 @@
 
 - [x] Add unit tests for scoring, roster legality, waiver priority, FAAB, and league settings. (Scoring, roster legality, and league settings covered; added focused waiver-priority and FAAB tie-break tests in nightly-processing.test.ts.)
 - [ ] Add API contract tests for scoped owner actions. (Manual bearer-token contract smoke and bearer parsing unit tests started.)
-- [ ] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings.
+- [x] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings. (e2e/smoke.spec.ts runs against the app in demo/mock mode on a mobile viewport; `npm run test:e2e`, wired into a CI job.)
 - [x] Manually smoke test Neon-backed home, team, matchup, players, league, lineup validation, and mobile layout in the browser.
 - [x] Add CI with lint, typecheck, tests, and build. (GitHub Actions workflow on push/PR running npm ci, lint, typecheck, test, and next build; .npmrc pins legacy-peer-deps for the beta Neon Auth peer range.)
 - [x] Review npm audit output and plan dependency upgrades. (See docs/security-audit.md: 5 moderate transitive advisories, all low exposure in OFB today; documented upstream-tracking plan instead of the breaking `audit fix --force` Next 9.x downgrade.)

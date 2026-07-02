@@ -13,5 +13,11 @@ pnpm-debug.log*
 dev-server*.log
 *.tsbuildinfo
 
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/.last-run.json
+
 # Local Claude Code settings
 .claude/settings.local.json

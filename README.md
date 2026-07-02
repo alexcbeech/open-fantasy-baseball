@@ -80,6 +80,20 @@ WEB_PUSH_SUBJECT="mailto:ops@your-domain"
 
 Without these keys the feature degrades gracefully: the profile screen reports push as unavailable and the send helpers become no-ops. The service worker lives at `public/sw.js`, per-device enable/disable/test controls are on the profile screen, and subscriptions persist in the `push_subscription` table (endpoints the push service reports as gone are pruned automatically). The `/profile/push` routes are documented in the OpenAPI spec.
 
+## Testing
+
+Unit tests (Vitest) cover scoring, roster legality, league settings, waiver priority/FAAB, ingestion adapters, and API helpers:
+
+```bash
+npm.cmd test
+```
+
+Playwright smoke tests exercise the mobile landing, team tabs, player search, and commissioner settings. They run the app in demo/mock mode (blank `DATABASE_URL`/Neon Auth env), so they need no database or sign-in:
+
+```bash
+npm.cmd run test:e2e
+```
+
 ## Current Shape
 
 - `app/` contains the mobile-first Next.js screens.
