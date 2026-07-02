@@ -96,7 +96,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         </nav>
 
         {selectedTab === "Team" ? <TeamTab teamId={team.id} lineup={teamLineup} watchPlayers={playerPool} /> : null}
-        {selectedTab === "Matchup" && matchupDetails ? <MatchupTab matchup={matchupDetails} /> : null}
+        {selectedTab === "Matchup" ? (
+          matchupDetails ? <MatchupTab matchup={matchupDetails} /> : <MatchupEmptyState teamName={team.teamName} />
+        ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
         {selectedTab === "League" && leagueOverview ? <LeagueTab overview={leagueOverview} /> : null}
       </section>
@@ -178,6 +180,18 @@ function MatchupTab({ matchup }: { matchup: MatchupDetails }) {
         </div>
       </aside>
     </div>
+  );
+}
+
+function MatchupEmptyState({ teamName }: { teamName: string }) {
+  return (
+    <section className="panel" aria-labelledby="matchup-empty-heading">
+      <h2 id="matchup-empty-heading">No Active Matchup</h2>
+      <div className="empty-state">
+        {teamName} isn&apos;t scheduled in a head-to-head matchup this scoring period. Check back when the next period opens,
+        or open the League tab for current standings.
+      </div>
+    </section>
   );
 }
 
