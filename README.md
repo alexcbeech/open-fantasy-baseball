@@ -57,6 +57,22 @@ The auth proxy handler lives at `/api/auth/*`, and OFB provides app-native pages
 
 For local development, use `http://localhost:3000` for browser auth flows. Neon Auth treats `http://127.0.0.1:3000` as a different origin; OFB redirects `127.0.0.1` to `localhost` in development to avoid invalid-origin sign-in and sign-up failures.
 
+## Web Push Notifications
+
+OFB delivers injury, trade, waiver, and lineup alerts via the standard VAPID-signed Web Push protocol. Generate a keypair and add it to `.env.local`:
+
+```bash
+node -e "console.log(require('web-push').generateVAPIDKeys())"
+```
+
+```bash
+WEB_PUSH_PUBLIC_KEY="<publicKey>"
+WEB_PUSH_PRIVATE_KEY="<privateKey>"
+WEB_PUSH_SUBJECT="mailto:ops@your-domain"
+```
+
+Without these keys the feature degrades gracefully: the profile screen reports push as unavailable and the send helpers become no-ops. The service worker lives at `public/sw.js`, per-device enable/disable/test controls are on the profile screen, and subscriptions persist in the `push_subscription` table (endpoints the push service reports as gone are pruned automatically). The `/profile/push` routes are documented in the OpenAPI spec.
+
 ## Current Shape
 
 - `app/` contains the mobile-first Next.js screens.
@@ -65,5 +81,6 @@ For local development, use `http://localhost:3000` for browser auth flows. Neon 
 - `lib/fantasy/` contains league defaults, mock data, and scoring helpers.
 - `lib/data/` contains database repositories and MLB ingestion.
 - `lib/auth/` contains OAuth scope definitions.
+- `lib/notifications/` contains the Web Push (VAPID) send helper.
 - `lib/jobs/` contains the nightly processing checklist.
 - `TODO.md` is the working implementation backlog.

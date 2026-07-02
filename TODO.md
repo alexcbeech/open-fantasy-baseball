@@ -28,7 +28,7 @@
 - [ ] Add MCP server after owner API scopes are stable. (First bearer-token protected JSON-RPC MCP tools endpoint started at /api/mcp.)
 - [ ] Add background worker process and Redis queue. (Runnable one-shot nightly job script started; durable queue still pending.)
 - [ ] Implement nightly waiver and scheduled-task processing. (Due waiver claim processing, background_job_run audit, CLI script, admin trigger endpoint, admin operations screen, and run history started.)
-- [ ] Add Web Push notification subscriptions and preference controls.
+- [x] Add Web Push notification subscriptions and preference controls. (VAPID-signed Web Push: service worker, per-device subscribe/unsubscribe/test controls on the profile screen, push_subscription persistence with gone-endpoint pruning, and /api/v1/profile/push routes.)
 - [x] Add first profile/preferences screen and make the home gear link to it.
 - [x] Persist editable profile and notification preferences in Postgres.
 - [x] Add light/dark/auto theme support wired to profile preferences.

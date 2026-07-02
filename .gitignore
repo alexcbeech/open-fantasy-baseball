@@ -12,3 +12,6 @@ yarn-error.log*
 pnpm-debug.log*
 dev-server*.log
 *.tsbuildinfo
+
+# Local Claude Code settings
+.claude/settings.local.json
