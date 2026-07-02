@@ -45,7 +45,7 @@
 
 ## Quality
 
-- [ ] Add unit tests for scoring, roster legality, waiver priority, FAAB, and league settings. (Scoring, roster legality, and league settings started.)
+- [x] Add unit tests for scoring, roster legality, waiver priority, FAAB, and league settings. (Scoring, roster legality, and league settings covered; added focused waiver-priority and FAAB tie-break tests in nightly-processing.test.ts.)
 - [ ] Add API contract tests for scoped owner actions. (Manual bearer-token contract smoke and bearer parsing unit tests started.)
 - [ ] Add Playwright smoke tests for mobile landing, team tabs, player search, and commissioner settings.
 - [x] Manually smoke test Neon-backed home, team, matchup, players, league, lineup validation, and mobile layout in the browser.
