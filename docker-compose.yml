@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ofb-postgres
+    environment:
+      POSTGRES_DB: ofb
+      POSTGRES_USER: ofb
+      POSTGRES_PASSWORD: ofb
+    ports:
+      - "5432:5432"
+    volumes:
+      - ofb-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ofb -d ofb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ofb-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ofb-redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+volumes:
+  ofb-postgres-data:
+  ofb-redis-data:
+

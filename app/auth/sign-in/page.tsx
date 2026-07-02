@@ -1,0 +1,57 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { SignInForm } from "./sign-in-form";
+
+export const dynamic = "force-dynamic";
+
+export default async function SignInPage() {
+  const [currentUser, setup] = await Promise.all([getCurrentOfbUser(), Promise.resolve(getAuthSetupStatus())]);
+
+  if (currentUser && isNeonAuthConfigured()) {
+    redirect("/");
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <Link className="icon-button" href="/" aria-label="Back to all teams">
+          &larr;
+        </Link>
+        <div className="brand-lockup">
+          <span className="brand-kicker">Open Fantasy</span>
+          <span className="brand-title">Sign In</span>
+        </div>
+        <span className="icon-button" aria-hidden="true">
+          @
+        </span>
+      </header>
+
+      <section className="page auth-page">
+        <div className="panel auth-page-panel">
+          <h1>Sign in</h1>
+          <p className="subtle">Use your Neon Auth account to manage teams, preferences, and owner API tokens.</p>
+          {isNeonAuthConfigured() ? <SignInForm /> : <AuthSetupNotice setup={setup} />}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AuthSetupNotice({ setup }: { setup: ReturnType<typeof getAuthSetupStatus> }) {
+  return (
+    <div className="auth-form">
+      <div className="status-banner bad">Neon Auth needs two local env values before browser sign-in is enabled.</div>
+      <div className="setting-list">
+        <div className="setting-row">
+          <span>NEON_AUTH_BASE_URL</span>
+          <strong>{setup.baseUrl ? "set" : "missing"}</strong>
+        </div>
+        <div className="setting-row">
+          <span>NEON_AUTH_COOKIE_SECRET</span>
+          <strong>{setup.cookieSecret ? "set" : "missing"}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}

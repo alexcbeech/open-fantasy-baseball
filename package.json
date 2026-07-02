@@ -1,0 +1,38 @@
+{
+  "name": "open-fantasy-baseball",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open Fantasy Baseball, a mobile-first fantasy baseball app inspired by familiar fantasy sports workflows.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "db:setup": "npm run db:migrate && npm run db:seed",
+    "jobs:nightly": "tsx scripts/run-nightly.ts",
+    "sync:mlb": "tsx scripts/sync-mlb.ts"
+  },
+  "dependencies": {
+    "@neondatabase/auth": "^0.4.2-beta",
+    "next": "^15.3.4",
+    "pg": "^8.13.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "eslint": "^9.29.0",
+    "eslint-config-next": "^15.3.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
+  }
+}
