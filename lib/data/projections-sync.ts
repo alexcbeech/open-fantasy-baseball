@@ -125,82 +125,85 @@ export async function syncProjections(
 ): Promise<SyncProjectionsResult> {
   const pool = getPool();
   const client = await pool.connect();
-  const ingestion = await client.query<{ id: string }>(
-    `insert into ingestion_run (source, job_type, status)
-     values ($1, 'projections', 'started')
-     returning id`,
-    [provider.source],
-  );
-  const ingestionRunId = ingestion.rows[0].id;
-  const statDate = today.toISOString().slice(0, 10);
-  let rowsSeen = 0;
-  let rowsWritten = 0;
 
   try {
-    const lines = await client.query<StatLineRow>(
-      `select distinct on (psl.player_id, psl.split)
-         psl.player_id, p.full_name, psl.split, psl.stats
-       from player_stat_line psl
-       join player p on p.id = psl.player_id
-       where psl.split in ('season', 'last_30')
-       order by psl.player_id, psl.split, psl.stat_date desc`,
+    const ingestion = await client.query<{ id: string }>(
+      `insert into ingestion_run (source, job_type, status)
+       values ($1, 'projections', 'started')
+       returning id`,
+      [provider.source],
     );
+    const ingestionRunId = ingestion.rows[0].id;
+    const statDate = today.toISOString().slice(0, 10);
+    let rowsSeen = 0;
+    let rowsWritten = 0;
 
-    const byPlayer = new Map<string, PlayerProjectionContext>();
+    try {
+      const lines = await client.query<StatLineRow>(
+        `select distinct on (psl.player_id, psl.split)
+           psl.player_id, p.full_name, psl.split, psl.stats
+         from player_stat_line psl
+         join player p on p.id = psl.player_id
+         where psl.split in ('season', 'last_30')
+         order by psl.player_id, psl.split, psl.stat_date desc`,
+      );
 
-    for (const row of lines.rows) {
-      rowsSeen += 1;
-      const existing = byPlayer.get(row.player_id) ?? {
-        playerId: row.player_id,
-        fullName: row.full_name,
-        season: {},
-        recent: null,
-      };
+      const byPlayer = new Map<string, PlayerProjectionContext>();
 
-      if (row.split === "season") {
-        existing.season = row.stats;
-      } else {
-        existing.recent = row.stats;
+      for (const row of lines.rows) {
+        rowsSeen += 1;
+        const existing = byPlayer.get(row.player_id) ?? {
+          playerId: row.player_id,
+          fullName: row.full_name,
+          season: {},
+          recent: null,
+        };
+
+        if (row.split === "season") {
+          existing.season = row.stats;
+        } else {
+          existing.recent = row.stats;
+        }
+
+        byPlayer.set(row.player_id, existing);
       }
 
-      byPlayer.set(row.player_id, existing);
-    }
+      const contexts = [...byPlayer.values()].filter((context) => Object.keys(context.season).length > 0);
+      const projections = await provider.project(contexts);
 
-    const contexts = [...byPlayer.values()].filter((context) => Object.keys(context.season).length > 0);
-    const projections = await provider.project(contexts);
+      await client.query("begin");
 
-    await client.query("begin");
+      for (const projection of projections) {
+        if (Object.keys(projection.stats).length === 0) {
+          continue;
+        }
 
-    for (const projection of projections) {
-      if (Object.keys(projection.stats).length === 0) {
-        continue;
+        await client.query(
+          `insert into player_stat_line (player_id, stat_date, split, stats, source)
+           values ($1, $2, 'projection_ros', $3::jsonb, $4)
+           on conflict (player_id, stat_date, split, source) do update set
+             stats = excluded.stats,
+             collected_at = now()`,
+          [projection.playerId, statDate, JSON.stringify(projection.stats), provider.source],
+        );
+        rowsWritten += 1;
       }
 
       await client.query(
-        `insert into player_stat_line (player_id, stat_date, split, stats, source)
-         values ($1, $2, 'projection_ros', $3::jsonb, $4)
-         on conflict (player_id, stat_date, split, source) do update set
-           stats = excluded.stats,
-           collected_at = now()`,
-        [projection.playerId, statDate, JSON.stringify(projection.stats), provider.source],
+        `update ingestion_run set status = 'succeeded', finished_at = now(), rows_seen = $1 where id = $2`,
+        [rowsSeen, ingestionRunId],
       );
-      rowsWritten += 1;
+      await client.query("commit");
+
+      return { ingestionRunId, rowsSeen, rowsWritten, status: "succeeded", source: provider.source };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      await client.query(
+        `update ingestion_run set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2 where id = $3`,
+        [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
+      );
+      throw error;
     }
-
-    await client.query(
-      `update ingestion_run set status = 'succeeded', finished_at = now(), rows_seen = $1 where id = $2`,
-      [rowsSeen, ingestionRunId],
-    );
-    await client.query("commit");
-
-    return { ingestionRunId, rowsSeen, rowsWritten, status: "succeeded", source: provider.source };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    await client.query(
-      `update ingestion_run set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2 where id = $3`,
-      [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
-    );
-    throw error;
   } finally {
     client.release();
   }

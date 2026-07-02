@@ -119,90 +119,93 @@ export async function syncPlayerNews(
 ): Promise<SyncPlayerNewsResult> {
   const pool = getPool();
   const client = await pool.connect();
-  const ingestion = await client.query<{ id: string }>(
-    `insert into ingestion_run (source, job_type, status)
-     values ($1, 'player-news', 'started')
-     returning id`,
-    [provider.source],
-  );
-  const ingestionRunId = ingestion.rows[0].id;
-  const fromDate = today.toISOString().slice(0, 10);
-  let rowsSeen = 0;
-  let rowsWritten = 0;
 
   try {
-    const sources = await client.query<NewsSourceRow>(
-      `select
-         p.id as player_id,
-         p.full_name,
-         p.status,
-         mt.abbreviation as team_abbrev,
-         ps.game_date,
-         opp.abbreviation as opponent_abbrev
-       from player p
-       left join mlb_team mt on mt.id = p.current_mlb_team_id
-       left join lateral (
-         select
-           g.game_date,
-           case when g.home_probable_pitcher_player_id = p.id then g.away_mlb_team_id else g.home_mlb_team_id end as opponent_team_id
-         from mlb_game g
-         where (g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id)
-           and g.game_date >= $1::date
-         order by g.game_date asc
-         limit 1
-       ) ps on true
-       left join mlb_team opp on opp.id = ps.opponent_team_id
-       where p.status in ('injured', 'day-to-day', 'minors') or ps.game_date is not null`,
-      [fromDate],
+    const ingestion = await client.query<{ id: string }>(
+      `insert into ingestion_run (source, job_type, status)
+       values ($1, 'player-news', 'started')
+       returning id`,
+      [provider.source],
     );
+    const ingestionRunId = ingestion.rows[0].id;
+    const fromDate = today.toISOString().slice(0, 10);
+    let rowsSeen = 0;
+    let rowsWritten = 0;
 
-    const contexts: PlayerNewsContext[] = sources.rows.map((row) => {
-      rowsSeen += 1;
-      return {
-        playerId: row.player_id,
-        fullName: row.full_name,
-        status: row.status,
-        teamAbbrev: row.team_abbrev,
-        probableStart: row.game_date
-          ? {
-              gameDate: row.game_date instanceof Date ? row.game_date.toISOString() : String(row.game_date),
-              opponentAbbrev: row.opponent_abbrev,
-            }
-          : null,
-      };
-    });
-
-    const drafts = await provider.generate(contexts, today);
-
-    await client.query("begin");
-
-    for (const draft of drafts) {
-      const inserted = await client.query(
-        `insert into player_news (player_id, source, headline, summary, published_at)
-         select $1, $2, $3, $4, $5
-         where not exists (
-           select 1 from player_news
-           where player_id = $1 and headline = $3 and published_at = $5
-         )`,
-        [draft.playerId, provider.source, draft.headline, draft.summary, draft.publishedAt],
+    try {
+      const sources = await client.query<NewsSourceRow>(
+        `select
+           p.id as player_id,
+           p.full_name,
+           p.status,
+           mt.abbreviation as team_abbrev,
+           ps.game_date,
+           opp.abbreviation as opponent_abbrev
+         from player p
+         left join mlb_team mt on mt.id = p.current_mlb_team_id
+         left join lateral (
+           select
+             g.game_date,
+             case when g.home_probable_pitcher_player_id = p.id then g.away_mlb_team_id else g.home_mlb_team_id end as opponent_team_id
+           from mlb_game g
+           where (g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id)
+             and g.game_date >= $1::date
+           order by g.game_date asc
+           limit 1
+         ) ps on true
+         left join mlb_team opp on opp.id = ps.opponent_team_id
+         where p.status in ('injured', 'day-to-day', 'minors') or ps.game_date is not null`,
+        [fromDate],
       );
-      rowsWritten += inserted.rowCount ?? 0;
+
+      const contexts: PlayerNewsContext[] = sources.rows.map((row) => {
+        rowsSeen += 1;
+        return {
+          playerId: row.player_id,
+          fullName: row.full_name,
+          status: row.status,
+          teamAbbrev: row.team_abbrev,
+          probableStart: row.game_date
+            ? {
+                gameDate: row.game_date instanceof Date ? row.game_date.toISOString() : String(row.game_date),
+                opponentAbbrev: row.opponent_abbrev,
+              }
+            : null,
+        };
+      });
+
+      const drafts = await provider.generate(contexts, today);
+
+      await client.query("begin");
+
+      for (const draft of drafts) {
+        const inserted = await client.query(
+          `insert into player_news (player_id, source, headline, summary, published_at)
+           select $1, $2, $3, $4, $5
+           where not exists (
+             select 1 from player_news
+             where player_id = $1 and headline = $3 and published_at = $5
+           )`,
+          [draft.playerId, provider.source, draft.headline, draft.summary, draft.publishedAt],
+        );
+        rowsWritten += inserted.rowCount ?? 0;
+      }
+
+      await client.query(
+        `update ingestion_run set status = 'succeeded', finished_at = now(), rows_seen = $1 where id = $2`,
+        [rowsSeen, ingestionRunId],
+      );
+      await client.query("commit");
+
+      return { ingestionRunId, rowsSeen, rowsWritten, status: "succeeded", source: provider.source };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      await client.query(
+        `update ingestion_run set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2 where id = $3`,
+        [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
+      );
+      throw error;
     }
-
-    await client.query(
-      `update ingestion_run set status = 'succeeded', finished_at = now(), rows_seen = $1 where id = $2`,
-      [rowsSeen, ingestionRunId],
-    );
-    await client.query("commit");
-
-    return { ingestionRunId, rowsSeen, rowsWritten, status: "succeeded", source: provider.source };
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    await client.query(
-      `update ingestion_run set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2 where id = $3`,
-      [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
-    );
-    throw error;
   } finally {
     client.release();
   }
