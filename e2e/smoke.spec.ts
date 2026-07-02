@@ -31,6 +31,28 @@ test.describe("team tabs", () => {
   });
 });
 
+test.describe("lineup move sheet", () => {
+  test("moves a player through the eligible-slot sheet", async ({ page }) => {
+    await page.goto("/team/team-1");
+
+    await page.getByRole("button", { name: /Move Adley Rutschman out of the C slot/ }).click();
+
+    const sheet = page.getByRole("dialog", { name: "Move Player" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText(/new position for Adley Rutschman/)).toBeVisible();
+
+    // A catcher may flex to UTIL/BN but never to shortstop or a pitching slot.
+    await expect(sheet.getByText("Open UTIL spot")).toBeVisible();
+    await expect(sheet.getByText(/Open SS spot/)).toHaveCount(0);
+    await expect(sheet.getByText(/Open SP spot/)).toHaveCount(0);
+
+    await sheet.getByText("Open UTIL spot").click();
+
+    await expect(page.getByRole("dialog", { name: "Move Player" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Move Adley Rutschman out of the UTIL slot/ })).toBeVisible();
+  });
+});
+
 test.describe("player search", () => {
   test("filters the player pool by name", async ({ page }) => {
     await page.goto("/team/team-1?tab=players");
