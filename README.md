@@ -62,7 +62,15 @@ npm.cmd run sync:schedule
 npm.cmd run sync:bios
 ```
 
-Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:schedule` → `sync:bios` → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news`.
+Recompute each active matchup's category battle from the current lineups' real stats (`lib/data/matchup-scoring.ts`). Counting categories sum; rate categories (AVG/ERA/WHIP) are computed from components (H/AB, IP/ER/BB/HA):
+
+```bash
+npm.cmd run sync:matchups
+```
+
+Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:schedule` → `sync:bios` → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news` → `sync:matchups`.
+
+`npm.cmd run seed:opponent` drafts a real lineup onto the seeded opponent team so the demo matchup has two full rosters to score.
 
 The app uses Postgres automatically when `DATABASE_URL` is set. Without `DATABASE_URL`, it falls back to the bundled mock data so the UI remains usable.
 

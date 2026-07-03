@@ -20,7 +20,9 @@
     "sync:stats": "tsx scripts/sync-stats.ts",
     "sync:bios": "tsx scripts/sync-bios.ts",
     "sync:projections": "tsx scripts/sync-projections.ts",
-    "sync:news": "tsx scripts/sync-news.ts"
+    "sync:news": "tsx scripts/sync-news.ts",
+    "sync:matchups": "tsx scripts/sync-matchups.ts",
+    "seed:opponent": "tsx scripts/seed-opponent.ts"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.4.2-beta",
