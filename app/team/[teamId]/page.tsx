@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
+import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
@@ -107,22 +108,11 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
 function TeamTab({ teamId, lineup, watchPlayers }: { teamId: string; lineup: LineupPlayer[]; watchPlayers: Player[] }) {
   return (
-    <div className="content-grid">
+    <div className="team-tab">
+      <div className="team-toolbar">
+        <PlayerWatchButton players={watchPlayers} />
+      </div>
       <LineupEditor teamId={teamId} initialLineup={lineup} />
-      <aside className="panel" aria-labelledby="watch-heading">
-        <h3 id="watch-heading">Player Watch</h3>
-        <div className="stat-list">
-          {watchPlayers.slice(0, 3).map((player) => (
-            <div className="setting-row" key={player.id}>
-              <div>
-                <div className="player-name">{player.name}</div>
-                <div className="player-meta">{player.newsHeadline}</div>
-              </div>
-              <span className="pill">{player.status}</span>
-            </div>
-          ))}
-        </div>
-      </aside>
     </div>
   );
 }

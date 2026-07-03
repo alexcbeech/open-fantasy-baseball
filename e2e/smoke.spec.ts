@@ -37,6 +37,19 @@ test.describe("team tabs", () => {
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Commissioner" })).toBeVisible();
   });
+
+  test("opens player watch news from the badged button", async ({ page }) => {
+    await page.goto("/team/team-1");
+
+    // Player Watch is now a badged button, not a persistent side panel.
+    const watch = page.getByRole("button", { name: /Player Watch/ });
+    await expect(watch).toBeVisible();
+    await watch.click();
+
+    const sheet = page.getByRole("dialog", { name: "Player Watch" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText("Homered and stole a base in Monday's win.")).toBeVisible();
+  });
 });
 
 test.describe("lineup move sheet", () => {
