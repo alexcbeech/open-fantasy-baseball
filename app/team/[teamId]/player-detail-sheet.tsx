@@ -116,7 +116,13 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
           </button>
         </div>
         {player ? (
-          <PlayerDetailView player={player} actionInFlight={state.kind === "loading"} statusBanner={statusBanner} onAction={applyAction} />
+          <PlayerDetailView
+            player={player}
+            actionInFlight={state.kind === "loading"}
+            statusBanner={statusBanner}
+            onAction={applyAction}
+            variant="card"
+          />
         ) : (
           <div className={state.kind === "error" ? "status-banner bad" : "empty-state"}>{state.message}</div>
         )}

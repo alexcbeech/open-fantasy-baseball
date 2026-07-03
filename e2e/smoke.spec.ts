@@ -73,8 +73,12 @@ test.describe("lineup move sheet", () => {
     // The detail body loads via fetch; allow for the dev server compiling the
     // /api/v1/players/[playerId] route on first hit.
     await expect(detail.getByRole("heading", { name: "Adley Rutschman" })).toBeVisible({ timeout: 20000 });
-    await expect(detail.getByRole("heading", { name: "Stats" })).toBeVisible();
     await expect(detail.getByRole("button", { name: "Drop" })).toBeVisible();
+
+    // Tabbed Yahoo-style card: Overview shows first, Stats tab reveals windows.
+    await expect(detail.getByRole("tab", { name: "Overview" })).toBeVisible();
+    await detail.getByRole("tab", { name: "Stats" }).click();
+    await expect(detail.getByRole("heading", { name: "Stats" })).toBeVisible();
   });
 });
 
