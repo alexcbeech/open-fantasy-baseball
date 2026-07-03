@@ -98,6 +98,13 @@ export type PlayerNewsItem = {
   publishedAt: string;
 };
 
+export type PlayerWatchItem = {
+  id: string;
+  name: string;
+  status: Player["status"];
+  headline: string;
+};
+
 export type PlayerStatWindow = {
   split: "season" | "last_7" | "last_14" | "last_30" | "projection_ros";
   label: string;
