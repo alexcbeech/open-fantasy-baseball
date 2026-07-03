@@ -7,9 +7,29 @@ const source = "mlb-stats-api";
 
 type StatMap = Record<string, number | string>;
 
-// MLB Stats API field names → OFB stat categories.
-const HITTING_MAP: Record<string, string> = { runs: "R", homeRuns: "HR", rbi: "RBI", stolenBases: "SB", avg: "AVG" };
-const PITCHING_MAP: Record<string, string> = { wins: "W", saves: "SV", strikeOuts: "K", era: "ERA", whip: "WHIP" };
+// MLB Stats API field names → OFB stat categories. H/AB and IP/ER/BB/HA are
+// carried so team rate categories (AVG/ERA/WHIP) can be recomputed from
+// components rather than averaged; they are not shown in the primary stat list.
+const HITTING_MAP: Record<string, string> = {
+  runs: "R",
+  homeRuns: "HR",
+  rbi: "RBI",
+  stolenBases: "SB",
+  avg: "AVG",
+  hits: "H",
+  atBats: "AB",
+};
+const PITCHING_MAP: Record<string, string> = {
+  wins: "W",
+  saves: "SV",
+  strikeOuts: "K",
+  era: "ERA",
+  whip: "WHIP",
+  inningsPitched: "IP",
+  earnedRuns: "ER",
+  baseOnBalls: "BB",
+  hits: "HA",
+};
 const RATE_KEYS = new Set(["AVG", "ERA", "WHIP"]);
 
 const recentSplits: Array<{ split: string; days: number }> = [
