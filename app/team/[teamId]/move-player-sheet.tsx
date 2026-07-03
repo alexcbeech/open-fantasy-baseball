@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
+import { PlayerAvatar } from "./player-avatar";
+import { PositionBadge } from "./position-badge";
 
 const slotOrder: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL", "SP", "RP", "P", "BN", "IL", "NA"];
 
@@ -88,11 +90,14 @@ export function MovePlayerSheet({ mover, lineup, rosterSlots, onSelect, onClose 
 
         <div className="move-option-list">
           <button className="move-option current" type="button" onClick={onClose}>
-            <span className="move-slot">{mover.slot}</span>
-            <span className="player-main">
-              <span className="player-name">{mover.player.name}</span>
-              <span className="player-meta">
-                {mover.player.mlbTeam} &ndash; {mover.player.positions.join(", ")}
+            <PositionBadge slot={mover.slot} />
+            <span className="move-option-player">
+              <PlayerAvatar mlbPlayerId={mover.player.mlbPlayerId} name={mover.player.name} />
+              <span className="player-main">
+                <span className="player-name">{mover.player.name}</span>
+                <span className="player-meta">
+                  {mover.player.mlbTeam} &ndash; {mover.player.positions.join(", ")}
+                </span>
               </span>
             </span>
             <span className="move-keep-tag">Keep</span>
@@ -109,25 +114,23 @@ export function MovePlayerSheet({ mover, lineup, rosterSlots, onSelect, onClose 
                   key={option.kind === "swap" ? `${option.slot}-${option.occupant.player.id}` : `open-${option.slot}`}
                   onClick={() => onSelect({ slot: option.slot, swapWithPlayerId: occupant?.id })}
                 >
-                  <span className="move-slot swap">
-                    {option.slot}
-                    <span className="move-slot-icon" aria-hidden="true">
-                      &#8645;
-                    </span>
-                  </span>
-                  <span className="player-main">
+                  <PositionBadge slot={option.slot} swap />
+                  <span className="move-option-player">
                     {occupant ? (
                       <>
-                        <span className="player-name">{occupant.name}</span>
-                        <span className="player-meta">
-                          {occupant.mlbTeam} &ndash; {occupant.positions.join(", ")}
+                        <PlayerAvatar mlbPlayerId={occupant.mlbPlayerId} name={occupant.name} />
+                        <span className="player-main">
+                          <span className="player-name">{occupant.name}</span>
+                          <span className="player-meta">
+                            {occupant.mlbTeam} &ndash; {occupant.positions.join(", ")}
+                          </span>
                         </span>
                       </>
                     ) : (
-                      <>
+                      <span className="player-main">
                         <span className="player-name">Open {option.slot} spot</span>
                         <span className="player-meta">Move here without a swap</span>
-                      </>
+                      </span>
                     )}
                   </span>
                 </button>

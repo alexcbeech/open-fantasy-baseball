@@ -6,7 +6,9 @@ import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
+import { PlayerAvatar } from "./player-avatar";
 import { PlayerDetailSheet } from "./player-detail-sheet";
+import { PositionBadge } from "./position-badge";
 
 type LineupValidationIssue = {
   code: string;
@@ -29,12 +31,14 @@ type LineupEditorProps = {
 type SlotRow = { key: string; slot: RosterSlot; player: LineupPlayer["player"] | null };
 type LineupGroup = { label: string; rows: SlotRow[] };
 
-const starterSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL", "SP", "RP", "P"];
+const batterSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL"];
+const pitcherSlots: RosterSlot[] = ["SP", "RP", "P"];
 
 /**
  * Turn the flat lineup into a slot-oriented view: every starting slot is shown
  * (filled or empty) so a vacated position reads as an open slot, while reserve
- * sections only list the players actually parked there.
+ * sections only list the players actually parked there. Starters are split into
+ * Batters and Pitchers, Yahoo-style.
  */
 function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlot, number>): LineupGroup[] {
   const occupantsBySlot = new Map<RosterSlot, LineupPlayer[]>();
@@ -42,16 +46,22 @@ function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlo
     occupantsBySlot.set(entry.slot, [...(occupantsBySlot.get(entry.slot) ?? []), entry]);
   }
 
-  const starterRows: SlotRow[] = [];
-  for (const slot of starterSlots) {
-    const occupants = occupantsBySlot.get(slot) ?? [];
-    const rowCount = Math.max(rosterSlots[slot] ?? 0, occupants.length);
-    for (let index = 0; index < rowCount; index += 1) {
-      starterRows.push({ key: `${slot}-${index}`, slot, player: occupants[index]?.player ?? null });
+  const buildRows = (slots: RosterSlot[]): SlotRow[] => {
+    const rows: SlotRow[] = [];
+    for (const slot of slots) {
+      const occupants = occupantsBySlot.get(slot) ?? [];
+      const rowCount = Math.max(rosterSlots[slot] ?? 0, occupants.length);
+      for (let index = 0; index < rowCount; index += 1) {
+        rows.push({ key: `${slot}-${index}`, slot, player: occupants[index]?.player ?? null });
+      }
     }
-  }
+    return rows;
+  };
 
-  const groups: LineupGroup[] = [{ label: "Starters", rows: starterRows }];
+  const groups: LineupGroup[] = [
+    { label: "Batters", rows: buildRows(batterSlots) },
+    { label: "Pitchers", rows: buildRows(pitcherSlots) },
+  ];
 
   const reserves: Array<{ slot: RosterSlot; label: string }> = [
     { slot: "BN", label: "Bench" },
@@ -170,16 +180,14 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
                 row.player ? (
                   <div className="row editable-row lineup-slot-row" key={row.key}>
                     <button
-                      className="slot slot-button"
+                      className="pos-badge-button"
                       type="button"
                       onClick={() => setMovingPlayerId(row.player!.id)}
                       aria-label={`Move ${row.player.name} out of the ${row.slot} slot`}
                     >
-                      {row.slot}
-                      <span className="slot-button-icon" aria-hidden="true">
-                        &#8645;
-                      </span>
+                      <PositionBadge slot={row.slot} swap />
                     </button>
+                    <PlayerAvatar mlbPlayerId={row.player.mlbPlayerId} name={row.player.name} />
                     <button
                       className="player-main player-info-button"
                       type="button"
@@ -188,7 +196,7 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
                     >
                       <span className="player-name">{row.player.name}</span>
                       <span className="player-meta">
-                        {row.player.mlbTeam} - {row.player.positions.join(", ")} - {row.player.status}
+                        {row.player.mlbTeam} &middot; {row.player.positions.join(", ")} &middot; {row.player.status}
                       </span>
                     </button>
                     <span className="detail-chevron" aria-hidden="true">
@@ -203,7 +211,7 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
                     onClick={() => setFillingSlot(row.slot)}
                     aria-label={`Fill the empty ${row.slot} slot`}
                   >
-                    <span className="slot">{row.slot}</span>
+                    <PositionBadge slot={row.slot} />
                     <span className="player-main">
                       <span className="player-name empty">Empty</span>
                       <span className="player-meta">Tap to add a player</span>

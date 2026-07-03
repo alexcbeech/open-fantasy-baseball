@@ -67,6 +67,7 @@ export function mapTeamSummary(row: DbTeamSummaryRow): TeamSummary {
 export function mapPlayer(row: DbPlayerRow): Player {
   return {
     id: row.id,
+    mlbPlayerId: row.mlb_player_id,
     name: row.full_name,
     mlbTeam: row.mlb_team ?? "FA",
     positions: (row.positions?.length ? row.positions : ["UTIL"]) as Player["positions"],

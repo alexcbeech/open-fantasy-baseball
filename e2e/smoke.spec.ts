@@ -18,6 +18,10 @@ test.describe("team tabs", () => {
     await page.goto("/team/team-1");
     await expect(page.getByRole("heading", { name: "Golden Sombreros" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
+    // Yahoo-style lineup: Batters/Pitchers sections and player headshots.
+    await expect(page.getByText("Batters", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pitchers", { exact: true })).toBeVisible();
+    await expect(page.locator(".lineup-list .player-avatar").first()).toBeVisible();
 
     await page.getByRole("link", { name: "Matchup", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Category Score" })).toBeVisible();
