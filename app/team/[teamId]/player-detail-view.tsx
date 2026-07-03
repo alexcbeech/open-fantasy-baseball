@@ -267,8 +267,47 @@ function presentCategories(rows: Array<Record<string, number | string>>) {
   return primaryStats.filter((category) => rows.some((stats) => stats[category] !== undefined));
 }
 
+type GameLogColumn = { label: string; render: (stats: Record<string, number | string>) => string };
+
+// A game log shows per-game production. Rate stats (AVG/ERA/WHIP) are omitted
+// because the MLB feed reports them season-to-date, not per game; hitters get a
+// combined H/AB, pitchers get their line. Only columns with data are shown.
+function gameLogColumns(games: PlayerGameLog[]): GameLogColumn[] {
+  const present = (key: string) => games.some((game) => game.stats[key] !== undefined);
+  const cell = (key: string): GameLogColumn["render"] => (stats) => (stats[key] !== undefined ? String(stats[key]) : "-");
+  const pick = (defs: Array<{ label: string; key: string }>) =>
+    defs.filter((def) => present(def.key)).map((def) => ({ label: def.label, render: cell(def.key) }));
+
+  const isPitching = present("IP") || present("ER");
+
+  if (isPitching) {
+    return pick([
+      { label: "IP", key: "IP" },
+      { label: "H", key: "HA" },
+      { label: "ER", key: "ER" },
+      { label: "BB", key: "BB" },
+      { label: "K", key: "K" },
+      { label: "W", key: "W" },
+      { label: "SV", key: "SV" },
+    ]);
+  }
+
+  const columns: GameLogColumn[] = [];
+  if (present("H") || present("AB")) {
+    columns.push({ label: "H/AB", render: (stats) => `${stats.H ?? 0}/${stats.AB ?? 0}` });
+  }
+  return columns.concat(
+    pick([
+      { label: "R", key: "R" },
+      { label: "HR", key: "HR" },
+      { label: "RBI", key: "RBI" },
+      { label: "SB", key: "SB" },
+    ]),
+  );
+}
+
 function PlayerGameLogRows({ games }: { games: PlayerGameLog[] }) {
-  const categories = presentCategories(games.map((game) => game.stats));
+  const columns = gameLogColumns(games);
 
   return (
     <section aria-labelledby="player-game-log-heading">
@@ -279,9 +318,9 @@ function PlayerGameLogRows({ games }: { games: PlayerGameLog[] }) {
             <thead>
               <tr>
                 <th scope="col">Date</th>
-                {categories.map((category) => (
-                  <th scope="col" key={category}>
-                    {category}
+                {columns.map((column) => (
+                  <th scope="col" key={column.label}>
+                    {column.label}
                   </th>
                 ))}
               </tr>
@@ -290,8 +329,8 @@ function PlayerGameLogRows({ games }: { games: PlayerGameLog[] }) {
               {games.map((game) => (
                 <tr key={game.id}>
                   <th scope="row">{new Date(game.date).toLocaleDateString()}</th>
-                  {categories.map((category) => (
-                    <td key={category}>{game.stats[category] ?? "-"}</td>
+                  {columns.map((column) => (
+                    <td key={column.label}>{column.render(game.stats)}</td>
                   ))}
                 </tr>
               ))}
