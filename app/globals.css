@@ -436,6 +436,49 @@ select {
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
 }
 
+.team-tab {
+  display: grid;
+  gap: 12px;
+}
+
+.team-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.watch-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.watch-button:hover {
+  background: var(--surface-strong);
+}
+
+.watch-badge {
+  align-items: center;
+  background: var(--accent);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
