@@ -113,8 +113,18 @@ export type PlayerGameLog = {
   stats: Record<string, number | string>;
 };
 
+export type PlayerNextGame = {
+  date: string;
+  opponent: string | null;
+  homeAway: "home" | "away";
+  venue: string | null;
+};
+
 export type PlayerDetail = Player & {
   mlbPlayerId: number | null;
+  teamName: string | null;
+  jerseyNumber: string | null;
+  nextGame: PlayerNextGame | null;
   news: PlayerNewsItem[];
   statWindows: PlayerStatWindow[];
   gameLog: PlayerGameLog[];

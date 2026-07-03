@@ -266,3 +266,76 @@ async function syncRosteredPlayer(
     }
   }
 }
+
+export type SyncPlayerBiosResult = {
+  ingestionRunId: string;
+  rowsSeen: number;
+  rowsWritten: number;
+  status: "succeeded";
+  source: string;
+};
+
+type MlbPerson = { id?: number; primaryNumber?: string };
+type MlbPeopleResponse = { people?: MlbPerson[] };
+
+/**
+ * Fill in player bio detail (jersey number) from the MLB Stats API, batching
+ * the /people endpoint so ~1,300 players resolve in a dozen requests.
+ */
+export async function syncPlayerBios(baseUrl = defaultBaseUrl): Promise<SyncPlayerBiosResult> {
+  const pool = getPool();
+  const client = await pool.connect();
+
+  try {
+    const ingestion = await client.query<{ id: string }>(
+      `insert into ingestion_run (source, job_type, status) values ($1, 'player-bios', 'started') returning id`,
+      [source],
+    );
+    const ingestionRunId = ingestion.rows[0].id;
+    let rowsSeen = 0;
+    let rowsWritten = 0;
+
+    try {
+      const players = await client.query<{ mlb_player_id: number }>(
+        `select mlb_player_id from player where mlb_player_id is not null`,
+      );
+      const ids = players.rows.map((row) => row.mlb_player_id);
+      const batchSize = 100;
+
+      for (let index = 0; index < ids.length; index += batchSize) {
+        const batch = ids.slice(index, index + batchSize);
+        const payload = await fetchJson<MlbPeopleResponse>(`/people?personIds=${batch.join(",")}`, baseUrl);
+
+        for (const person of payload.people ?? []) {
+          rowsSeen += 1;
+          if (person.id == null || !person.primaryNumber) {
+            continue;
+          }
+          const result = await client.query(`update player set jersey_number = $1, updated_at = now() where mlb_player_id = $2`, [
+            person.primaryNumber,
+            person.id,
+          ]);
+          rowsWritten += result.rowCount ?? 0;
+        }
+      }
+
+      await client.query(`update ingestion_run set status = 'succeeded', finished_at = now(), rows_seen = $1 where id = $2`, [
+        rowsSeen,
+        ingestionRunId,
+      ]);
+
+      return { ingestionRunId, rowsSeen, rowsWritten, status: "succeeded", source };
+    } catch (error) {
+      await client
+        .query(`update ingestion_run set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2 where id = $3`, [
+          rowsSeen,
+          error instanceof Error ? error.message : String(error),
+          ingestionRunId,
+        ])
+        .catch(() => undefined);
+      throw error;
+    }
+  } finally {
+    client.release();
+  }
+}

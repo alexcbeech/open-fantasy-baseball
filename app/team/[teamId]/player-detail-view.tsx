@@ -95,7 +95,8 @@ export function PlayerDetailView({
           <div>
             <h3 id="player-detail-heading">{player.name}</h3>
             <span className="player-meta">
-              {player.positions.join(", ")} &middot; {player.mlbTeam} &middot; {availabilityLabel(player.availability)}
+              {player.positions.join(", ")} &middot; {player.teamName ?? player.mlbTeam}
+              {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
             </span>
           </div>
         </div>
@@ -152,10 +153,29 @@ export function PlayerDetailView({
   );
 }
 
+function formatGameTime(iso: string) {
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function PlayerOverview({ player, health, summary }: { player: PlayerDetail; health: string; summary: string | null }) {
   return (
     <section aria-labelledby="player-overview-heading">
       <h3 id="player-overview-heading">Overview</h3>
+
+      {player.nextGame ? (
+        <div className="next-game">
+          <span className="next-game-label">Next Game</span>
+          <span className="next-game-value">
+            {formatGameTime(player.nextGame.date)} {player.nextGame.homeAway === "home" ? "vs" : "@"}{" "}
+            {player.nextGame.opponent ?? "TBD"}
+          </span>
+        </div>
+      ) : null}
+
       <div className="metric-grid">
         <div className="metric">
           <span className="metric-label">Availability</span>
