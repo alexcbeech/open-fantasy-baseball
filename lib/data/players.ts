@@ -66,6 +66,16 @@ export async function listPlayers(options: { query?: string; availability?: Play
 
 type PlayerDetailRow = DbPlayerRow & {
   mlb_player_id: number | null;
+  team_name: string | null;
+  jersey_number: string | null;
+  current_mlb_team_id: number | null;
+};
+
+type PlayerNextGameRow = {
+  game_date: Date | string;
+  venue_name: string | null;
+  home_away: "home" | "away";
+  opponent: string | null;
 };
 
 type PlayerNewsRow = {
@@ -99,7 +109,10 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
             p.id,
             p.mlb_player_id,
             p.full_name,
+            p.jersey_number,
+            p.current_mlb_team_id,
             mt.abbreviation as mlb_team,
+            mt.name as team_name,
             p.status,
             coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
             case when active_roster.player_id is null then 'free-agent' else 'rostered' end as availability,
@@ -124,7 +137,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
             select stats from player_stat_line psl where psl.player_id = p.id and split = 'projection_ros' order by stat_date desc limit 1
           ) projection_stats on true
           where p.id = $1
-          group by p.id, mt.abbreviation, active_roster.player_id, latest_news.headline, season_stats.stats, projection_stats.stats
+          group by p.id, mt.abbreviation, mt.name, active_roster.player_id, latest_news.headline, season_stats.stats, projection_stats.stats
           limit 1
         `,
         [playerId],
@@ -135,7 +148,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
         return null;
       }
 
-      const [newsResult, statsResult, gameLogResult] = await Promise.all([
+      const [newsResult, statsResult, gameLogResult, nextGameResult] = await Promise.all([
         query<PlayerNewsRow>(
           `select id, source, source_url, headline, summary, published_at
            from player_news
@@ -171,13 +184,36 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
            limit 10`,
           [playerId],
         ),
+        query<PlayerNextGameRow>(
+          `select g.game_date, g.venue_name,
+             case when g.home_mlb_team_id = $1 then 'home' else 'away' end as home_away,
+             case when g.home_mlb_team_id = $1 then away.abbreviation else home.abbreviation end as opponent
+           from mlb_game g
+           left join mlb_team home on home.id = g.home_mlb_team_id
+           left join mlb_team away on away.id = g.away_mlb_team_id
+           where (g.home_mlb_team_id = $1 or g.away_mlb_team_id = $1) and g.game_date >= now()
+           order by g.game_date asc
+           limit 1`,
+          [playerRow.current_mlb_team_id],
+        ),
       ]);
 
       const player = mapPlayer(playerRow);
+      const nextGameRow = nextGameResult.rows[0];
 
       return {
         ...player,
         mlbPlayerId: playerRow.mlb_player_id,
+        teamName: playerRow.team_name,
+        jerseyNumber: playerRow.jersey_number,
+        nextGame: nextGameRow
+          ? {
+              date: new Date(nextGameRow.game_date).toISOString(),
+              opponent: nextGameRow.opponent,
+              homeAway: nextGameRow.home_away,
+              venue: nextGameRow.venue_name,
+            }
+          : null,
         news: newsResult.rows.map(mapNewsItem),
         statWindows: statsResult.rows.map(mapStatWindow),
         gameLog: gameLogResult.rows.map(mapGameLog),
@@ -202,7 +238,10 @@ function mockPlayerDetail(playerId: string): PlayerDetail | null {
 
   return {
     ...player,
-    mlbPlayerId: null,
+    mlbPlayerId: player.mlbPlayerId ?? null,
+    teamName: player.mlbTeam,
+    jerseyNumber: null,
+    nextGame: null,
     news: [
       {
         id: "mock-news-1",
