@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
+import { PlayerAvatar } from "./player-avatar";
+import { PositionBadge } from "./position-badge";
 
 const reserveSlots: RosterSlot[] = ["BN", "IL", "NA"];
 
@@ -61,16 +63,14 @@ export function FillSlotSheet({ slot, lineup, onSelect, onClose }: FillSlotSheet
           {candidates.length ? (
             candidates.map((entry) => (
               <button className="move-option" type="button" key={entry.player.id} onClick={() => onSelect(entry.player.id)}>
-                <span className="move-slot swap">
-                  {entry.slot}
-                  <span className="move-slot-icon" aria-hidden="true">
-                    &#8645;
-                  </span>
-                </span>
-                <span className="player-main">
-                  <span className="player-name">{entry.player.name}</span>
-                  <span className="player-meta">
-                    {entry.player.mlbTeam} &ndash; {entry.player.positions.join(", ")}
+                <PositionBadge slot={entry.slot} swap />
+                <span className="move-option-player">
+                  <PlayerAvatar mlbPlayerId={entry.player.mlbPlayerId} name={entry.player.name} />
+                  <span className="player-main">
+                    <span className="player-name">{entry.player.name}</span>
+                    <span className="player-meta">
+                      {entry.player.mlbTeam} &ndash; {entry.player.positions.join(", ")}
+                    </span>
                   </span>
                 </span>
               </button>

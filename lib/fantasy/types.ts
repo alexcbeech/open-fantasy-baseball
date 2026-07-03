@@ -79,6 +79,7 @@ export type TeamSummary = {
 export type Player = {
   id: string;
   name: string;
+  mlbPlayerId?: number | null;
   mlbTeam: string;
   positions: RosterSlot[];
   status: "active" | "day-to-day" | "injured" | "minors";

@@ -59,6 +59,7 @@ export const players: Player[] = [
   {
     id: "player-1",
     name: "Julio Rodriguez",
+    mlbPlayerId: 677594,
     mlbTeam: "SEA",
     positions: ["OF"],
     status: "active",
@@ -70,6 +71,7 @@ export const players: Player[] = [
   {
     id: "player-2",
     name: "Corbin Carroll",
+    mlbPlayerId: 682998,
     mlbTeam: "ARI",
     positions: ["OF"],
     status: "day-to-day",
@@ -81,6 +83,7 @@ export const players: Player[] = [
   {
     id: "player-3",
     name: "Spencer Strider",
+    mlbPlayerId: 675911,
     mlbTeam: "ATL",
     positions: ["SP", "P"],
     status: "injured",
@@ -92,6 +95,7 @@ export const players: Player[] = [
   {
     id: "player-4",
     name: "Andres Munoz",
+    mlbPlayerId: 662253,
     mlbTeam: "SEA",
     positions: ["RP", "P"],
     status: "active",
@@ -103,6 +107,7 @@ export const players: Player[] = [
   {
     id: "player-5",
     name: "Elly De La Cruz",
+    mlbPlayerId: 682829,
     mlbTeam: "CIN",
     positions: ["SS", "3B"],
     status: "active",
@@ -114,6 +119,7 @@ export const players: Player[] = [
   {
     id: "player-6",
     name: "Adley Rutschman",
+    mlbPlayerId: 668939,
     mlbTeam: "BAL",
     positions: ["C"],
     status: "active",
@@ -125,6 +131,7 @@ export const players: Player[] = [
   {
     id: "player-7",
     name: "Freddie Freeman",
+    mlbPlayerId: 518692,
     mlbTeam: "LAD",
     positions: ["1B"],
     status: "active",
@@ -136,6 +143,7 @@ export const players: Player[] = [
   {
     id: "player-8",
     name: "Tarik Skubal",
+    mlbPlayerId: 669373,
     mlbTeam: "DET",
     positions: ["SP", "P"],
     status: "active",

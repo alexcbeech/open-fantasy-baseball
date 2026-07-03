@@ -519,49 +519,112 @@ button.row {
   padding-top: 0;
 }
 
-.lineup-empty-row .slot {
-  color: var(--muted);
-  opacity: 0.7;
-}
-
 .lineup-empty-row .player-name.empty {
   color: var(--muted);
   font-weight: 700;
 }
 
-/* Filled lineup rows split into two tap targets: the position badge moves the
-   player, the name opens the detail sheet. */
-.slot-button {
+/* Circular player headshot (MLB CDN) with an initials fallback. */
+.player-avatar {
   align-items: center;
-  align-self: center;
+  aspect-ratio: 1;
   background: var(--surface-strong);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--muted);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
   justify-content: center;
-  min-height: 40px;
-  padding: 4px 0;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
+  overflow: hidden;
+}
+
+.player-avatar-md {
+  width: 44px;
+}
+
+.player-avatar-sm {
+  width: 34px;
+}
+
+.player-avatar img {
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
   width: 100%;
 }
 
-.slot-button-icon {
-  color: var(--brand);
-  font-size: 11px;
-  line-height: 1;
+.player-avatar-fallback {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
 }
 
+/* Colored circular position badge. */
+.pos-badge {
+  align-items: center;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 1px;
+  justify-content: center;
+  width: 40px;
+}
+
+.pos-badge-slot {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.pos-badge-swap {
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.pos-badge-active {
+  background: var(--brand);
+  color: #fff;
+}
+
+.pos-badge-reserve {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+/* Bare button reset so the badge stays tappable to move a player. */
+.pos-badge-button,
 .player-info-button {
   background: transparent;
   border: 0;
   color: inherit;
   cursor: pointer;
+  padding: 0;
+}
+
+.pos-badge-button {
+  border-radius: 999px;
+  transition: box-shadow 0.15s ease;
+}
+
+.lineup-slot-row {
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+
+.lineup-empty-row {
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.players-row {
+  gap: 10px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+
+.player-info-button {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -577,9 +640,8 @@ button.row {
 }
 
 @media (hover: hover) {
-  .slot-button:hover {
-    border-color: var(--brand);
-    color: var(--ink);
+  .pos-badge-button:hover {
+    box-shadow: 0 0 0 2px var(--brand);
   }
 
   .player-info-button:hover .player-name {
@@ -692,7 +754,7 @@ button.row {
   cursor: pointer;
   display: grid;
   gap: 12px;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 62px;
   padding: 10px 12px;
   text-align: left;
@@ -700,6 +762,13 @@ button.row {
     border-color 0.15s ease,
     background-color 0.15s ease;
   width: 100%;
+}
+
+.move-option-player {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
 }
 
 .move-option.current {
@@ -711,31 +780,6 @@ button.row {
   .move-option:hover {
     border-color: var(--brand);
   }
-}
-
-.move-slot {
-  align-items: center;
-  aspect-ratio: 1;
-  background: var(--progress-bg);
-  border-radius: 999px;
-  color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  font-size: 13px;
-  font-weight: 900;
-  justify-content: center;
-  width: 48px;
-}
-
-.move-slot.swap {
-  background: var(--brand);
-  color: #fff;
-}
-
-.move-slot-icon {
-  font-size: 11px;
-  line-height: 1;
-  margin-top: 1px;
 }
 
 .move-keep-tag {

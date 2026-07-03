@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { readPlayerStat } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail } from "@/lib/fantasy/types";
+import { PlayerAvatar } from "./player-avatar";
 import { PlayerDetailView, type PlayerAction } from "./player-detail-view";
+import { PositionBadge } from "./position-badge";
 
 type PlayersBrowserProps = {
   teamId: string;
@@ -129,12 +131,13 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
         <div className="player-list" aria-live="polite">
           {filteredPlayers.length ? (
             filteredPlayers.map((player) => (
-              <button className="row" type="button" key={player.id} onClick={() => openPlayerDetail(player.id)}>
-                <span className="slot">{player.positions[0]}</span>
+              <button className="row players-row" type="button" key={player.id} onClick={() => openPlayerDetail(player.id)}>
+                <PositionBadge slot={player.positions[0]} />
+                <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
                 <span className="player-main">
                   <span className="player-name">{player.name}</span>
                   <span className="player-meta">
-                    {player.mlbTeam} - {player.availability} - Proj HR {readPlayerStat(player, "HR", true)}
+                    {player.mlbTeam} &middot; {player.availability} &middot; Proj HR {readPlayerStat(player, "HR", true)}
                   </span>
                 </span>
                 <span className="pill">{player.status}</span>
