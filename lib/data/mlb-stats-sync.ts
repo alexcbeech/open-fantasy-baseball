@@ -111,10 +111,11 @@ async function detectCurrentSeason(baseUrl: string, today: Date): Promise<number
 
 /**
  * Ingest real 2026 stats from the MLB Stats API into player_stat_line:
- * season stats for every player we know (via the bulk leaderboard) plus full
- * game logs and trailing 7/14/30-day splits for rostered players. Writes with
- * source 'mlb-stats-api' so getPlayerDetail's latest-per-split query surfaces
- * them over the seeded rows.
+ * season stats for every player we know (via the bulk leaderboard), full game
+ * logs and trailing 7/14/30-day splits for rostered players, and game logs for
+ * qualified free agents (anyone with season stats) so any player the user can
+ * open has a real game log. Writes with source 'mlb-stats-api' so
+ * getPlayerDetail's latest-per-split query surfaces them over the seeded rows.
  */
 export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date()): Promise<SyncPlayerStatsResult> {
   const pool = getPool();
@@ -201,6 +202,26 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
         });
       }
 
+      // 3) Non-rostered players with season stats (qualified free agents the
+      // user can browse and open) get a real game log too -- just the log, not
+      // the per-player season/split calls, keeping this pass to one request each.
+      const freeAgents = await client.query<{ id: string; mlb_player_id: number }>(
+        `select p.id, p.mlb_player_id
+         from player p
+         where p.mlb_player_id is not null
+           and p.season_fan_points is not null
+           and not exists (
+             select 1 from roster_entry re
+             where re.player_id = p.id and re.dropped_at is null
+           )`,
+      );
+
+      for (const player of freeAgents.rows) {
+        await syncPlayerGameLog(baseUrl, season, player, upsert, () => {
+          rowsSeen += 1;
+        });
+      }
+
       // Real data supersedes the seeded placeholder lines for the same
       // player+split, so the detail view stops interleaving fake games.
       await client.query(
@@ -257,6 +278,38 @@ async function syncRosteredPlayer(
     }
   }
 
+  await syncPlayerGameLog(baseUrl, season, player, upsert, seen);
+
+  for (const { split, days } of recentSplits) {
+    const start = new Date(today);
+    start.setUTCDate(start.getUTCDate() - days);
+    const startDate = start.toISOString().slice(0, 10);
+    const payload = await fetchJson<MlbStatsResponse>(
+      `/people/${player.mlb_player_id}/stats?stats=byDateRange&startDate=${startDate}&endDate=${statDate}&group=hitting,pitching&season=${season}`,
+      baseUrl,
+    );
+    for (const block of payload.stats ?? []) {
+      const stats = mapMlbStat(block.splits?.[0]?.stat, blockGroup(block));
+      if (Object.keys(stats).length) {
+        seen();
+        await upsert(player.id, statDate, split, stats);
+      }
+    }
+  }
+}
+
+/**
+ * Fetch a player's game log and store the most recent games. Shared by the
+ * rostered full-detail sync and the leaner non-rostered pass so any player the
+ * user can click (rostered or a qualified free agent) has a real game log.
+ */
+async function syncPlayerGameLog(
+  baseUrl: string,
+  season: number,
+  player: { id: string; mlb_player_id: number },
+  upsert: (playerId: string, date: string, split: string, stats: StatMap, gamePk?: number | null) => Promise<void>,
+  seen: () => void,
+) {
   const gameLog = await fetchJson<MlbStatsResponse>(
     `/people/${player.mlb_player_id}/stats?stats=gameLog&group=hitting,pitching&season=${season}`,
     baseUrl,
@@ -276,23 +329,6 @@ async function syncRosteredPlayer(
       if (Object.keys(stats).length) {
         seen();
         await upsert(player.id, split.date, "game", stats, split.game?.gamePk ?? null);
-      }
-    }
-  }
-
-  for (const { split, days } of recentSplits) {
-    const start = new Date(today);
-    start.setUTCDate(start.getUTCDate() - days);
-    const startDate = start.toISOString().slice(0, 10);
-    const payload = await fetchJson<MlbStatsResponse>(
-      `/people/${player.mlb_player_id}/stats?stats=byDateRange&startDate=${startDate}&endDate=${statDate}&group=hitting,pitching&season=${season}`,
-      baseUrl,
-    );
-    for (const block of payload.stats ?? []) {
-      const stats = mapMlbStat(block.splits?.[0]?.stat, blockGroup(block));
-      if (Object.keys(stats).length) {
-        seen();
-        await upsert(player.id, statDate, split, stats);
       }
     }
   }
