@@ -268,6 +268,11 @@ async function syncRosteredPlayer(
         continue;
       }
       const stats = mapMlbStat(split.stat, group);
+      // The feed's game-log AVG/ERA/WHIP are season-to-date, not per-game, so
+      // drop them; the per-game counting stats and H/AB, IP/ER, etc. are real.
+      for (const rateKey of ["AVG", "ERA", "WHIP"]) {
+        delete stats[rateKey];
+      }
       if (Object.keys(stats).length) {
         seen();
         await upsert(player.id, split.date, "game", stats, split.game?.gamePk ?? null);
