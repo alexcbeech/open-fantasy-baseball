@@ -35,9 +35,16 @@ jobs:
         run: npm ci
 
       # Order matters: stats first (writes season / splits / game logs), then
-      # matchups (recomputes category scores from those fresh season stats).
+      # projections (derived from season + trailing splits) and matchups
+      # (recomputed from those fresh season stats). News is independent.
       - name: Sync player stats (season, splits, game logs)
         run: npm run sync:stats
+
+      - name: Sync rest-of-season projections
+        run: npm run sync:projections
+
+      - name: Sync player news
+        run: npm run sync:news
 
       - name: Recompute matchup category scores
         run: npm run sync:matchups
