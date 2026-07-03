@@ -1,5 +1,6 @@
 import { query, tryDatabase } from "@/lib/db/client";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
+import { calculateSimplePoints } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow } from "@/lib/fantasy/types";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 
@@ -69,6 +70,14 @@ type PlayerDetailRow = DbPlayerRow & {
   team_name: string | null;
   jersey_number: string | null;
   current_mlb_team_id: number | null;
+  season_fan_points: string | number | null;
+};
+
+type PlayerValueRow = {
+  rank_ahead: string | number;
+  total_ranked: string | number;
+  rostered_teams: string | number;
+  total_teams: string | number;
 };
 
 type PlayerNextGameRow = {
@@ -111,6 +120,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
             p.full_name,
             p.jersey_number,
             p.current_mlb_team_id,
+            p.season_fan_points,
             mt.abbreviation as mlb_team,
             mt.name as team_name,
             p.status,
@@ -148,7 +158,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
         return null;
       }
 
-      const [newsResult, statsResult, gameLogResult, nextGameResult] = await Promise.all([
+      const [newsResult, statsResult, gameLogResult, nextGameResult, valueResult] = await Promise.all([
         query<PlayerNewsRow>(
           `select id, source, source_url, headline, summary, published_at
            from player_news
@@ -196,16 +206,35 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
            limit 1`,
           [playerRow.current_mlb_team_id],
         ),
+        query<PlayerValueRow>(
+          `select
+             (select count(*) from player x where x.season_fan_points > p.season_fan_points) as rank_ahead,
+             (select count(*) from player x where x.season_fan_points is not null) as total_ranked,
+             (select count(distinct re.team_id) from roster_entry re where re.player_id = p.id and re.dropped_at is null) as rostered_teams,
+             (select count(*) from fantasy_team) as total_teams
+           from player p
+           where p.id = $1`,
+          [playerId],
+        ),
       ]);
 
       const player = mapPlayer(playerRow);
       const nextGameRow = nextGameResult.rows[0];
+      const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
+      const valueRow = valueResult.rows[0];
+      const totalTeams = valueRow ? Number(valueRow.total_teams) : 0;
 
       return {
         ...player,
         mlbPlayerId: playerRow.mlb_player_id,
         teamName: playerRow.team_name,
         jerseyNumber: playerRow.jersey_number,
+        value: {
+          fanPoints,
+          rank: fanPoints != null && valueRow ? Number(valueRow.rank_ahead) + 1 : null,
+          totalRanked: valueRow ? Number(valueRow.total_ranked) : 0,
+          rosteredPercent: valueRow && totalTeams > 0 ? Math.round((Number(valueRow.rostered_teams) / totalTeams) * 100) : null,
+        },
         nextGame: nextGameRow
           ? {
               date: new Date(nextGameRow.game_date).toISOString(),
@@ -241,6 +270,12 @@ function mockPlayerDetail(playerId: string): PlayerDetail | null {
     mlbPlayerId: player.mlbPlayerId ?? null,
     teamName: player.mlbTeam,
     jerseyNumber: null,
+    value: {
+      fanPoints: Math.round(calculateSimplePoints(player)),
+      rank: null,
+      totalRanked: 0,
+      rosteredPercent: null,
+    },
     nextGame: null,
     news: [
       {

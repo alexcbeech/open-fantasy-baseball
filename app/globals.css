@@ -1056,6 +1056,47 @@ button.row {
   margin: 12px 0 0;
 }
 
+.detail-value-row {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.detail-value {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  text-align: center;
+}
+
+.detail-value-num {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.detail-value-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.star-rating {
+  color: var(--accent);
+  font-size: 18px;
+  letter-spacing: 2px;
+  margin-top: 10px;
+}
+
+.star-rating .star {
+  color: var(--line);
+}
+
+.star-rating .star.filled {
+  color: var(--accent);
+}
+
 .next-game {
   align-items: center;
   background: var(--surface-strong);

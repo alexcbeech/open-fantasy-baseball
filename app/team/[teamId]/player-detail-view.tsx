@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerStatWindow } from "@/lib/fantasy/types";
+import type { Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
 export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na";
@@ -103,6 +103,8 @@ export function PlayerDetailView({
         <span className={`health-badge ${health.className}`}>{health.label}</span>
       </div>
 
+      <PlayerValueRow value={player.value} />
+
       {statusBanner ? <div className={`status-banner ${statusBanner.kind}`}>{statusBanner.message}</div> : null}
 
       <div className="player-actions" aria-label="Player management actions">
@@ -153,6 +155,49 @@ export function PlayerDetailView({
   );
 }
 
+function PlayerValueRow({ value }: { value: PlayerValueMetrics }) {
+  if (value.fanPoints == null && value.rank == null && value.rosteredPercent == null) {
+    return null;
+  }
+
+  return (
+    <div className="detail-value-row">
+      <div className="detail-value">
+        <span className="detail-value-num">{value.fanPoints ?? "-"}</span>
+        <span className="detail-value-label">Fan Points</span>
+      </div>
+      <div className="detail-value">
+        <span className="detail-value-num">{value.rank ?? "-"}</span>
+        <span className="detail-value-label">Rank</span>
+      </div>
+      <div className="detail-value">
+        <span className="detail-value-num">{value.rosteredPercent != null ? `${value.rosteredPercent}%` : "-"}</span>
+        <span className="detail-value-label">Rostered</span>
+      </div>
+    </div>
+  );
+}
+
+function starRating(value: PlayerValueMetrics): number | null {
+  if (value.rank == null || value.totalRanked <= 0) {
+    return null;
+  }
+  const percentile = 1 - (value.rank - 1) / value.totalRanked;
+  return Math.min(5, Math.max(1, Math.ceil(percentile * 5)));
+}
+
+function StarRating({ stars }: { stars: number }) {
+  return (
+    <div className="star-rating" aria-label={`${stars} of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <span key={n} className={n <= stars ? "star filled" : "star"} aria-hidden="true">
+          {n <= stars ? "★" : "☆"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function formatGameTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
     weekday: "short",
@@ -162,6 +207,8 @@ function formatGameTime(iso: string) {
 }
 
 function PlayerOverview({ player, health, summary }: { player: PlayerDetail; health: string; summary: string | null }) {
+  const stars = starRating(player.value);
+
   return (
     <section aria-labelledby="player-overview-heading">
       <h3 id="player-overview-heading">Overview</h3>
@@ -190,6 +237,8 @@ function PlayerOverview({ player, health, summary }: { player: PlayerDetail; hea
           <span className="metric-value">{player.positions.join(", ")}</span>
         </div>
       </div>
+
+      {stars != null ? <StarRating stars={stars} /> : null}
 
       {summary ? <p className="detail-summary">{summary}</p> : null}
 
