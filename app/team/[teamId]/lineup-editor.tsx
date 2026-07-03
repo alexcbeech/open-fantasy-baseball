@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
+import { isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
@@ -10,22 +10,9 @@ import { PlayerAvatar } from "./player-avatar";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 import { PositionBadge } from "./position-badge";
 
-type LineupValidationIssue = {
-  code: string;
-  message: string;
-  playerId?: string;
-  slot?: RosterSlot;
-};
-
-type LineupValidation = {
-  valid: boolean;
-  issues: LineupValidationIssue[];
-};
-
 type LineupEditorProps = {
   teamId: string;
   initialLineup: LineupPlayer[];
-  initialValidation: LineupValidation;
 };
 
 type SlotRow = { key: string; slot: RosterSlot; player: LineupPlayer["player"] | null };
@@ -81,13 +68,11 @@ function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlo
   return groups;
 }
 
-export function LineupEditor({ teamId, initialLineup, initialValidation }: LineupEditorProps) {
+export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
   const [slotByPlayerId, setSlotByPlayerId] = useState(() =>
     Object.fromEntries(initialLineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>,
   );
-  const [validation, setValidation] = useState(initialValidation);
-  const [message, setMessage] = useState(initialValidation.valid ? "Legal lineup" : "Lineup needs attention");
-  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
@@ -99,32 +84,54 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
 
   const groups = useMemo(() => buildLineupGroups(currentLineup, defaultRosterSlots), [currentLineup]);
 
-  const entries = useMemo(
-    () => currentLineup.map((entry) => ({ playerId: entry.player.id, slot: entry.slot })),
-    [currentLineup],
-  );
-
   const movingEntry = movingPlayerId ? currentLineup.find((entry) => entry.player.id === movingPlayerId) : undefined;
+
+  // Auto-clear the illegal-move notice so it never lingers past the next action.
+  useEffect(() => {
+    if (!error) {
+      return;
+    }
+    const timer = setTimeout(() => setError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  /**
+   * Validate the proposed slot assignment before committing it. The move/fill
+   * sheets only ever offer legal destinations, so this is a guard rail: a move
+   * that would produce an illegal lineup is rejected and surfaced inline rather
+   * than requiring a separate "validate" step.
+   */
+  function commitSlots(nextSlots: Record<string, RosterSlot>) {
+    const nextLineup = initialLineup.map((entry) => ({ ...entry, slot: nextSlots[entry.player.id] }));
+    const result = validateLineup(nextLineup);
+
+    if (!result.valid) {
+      setError(result.issues[0]?.message ?? "That move would create an illegal lineup.");
+      return false;
+    }
+
+    setError(null);
+    setSlotByPlayerId(nextSlots);
+    return true;
+  }
 
   function applyMove(target: MoveTarget) {
     if (!movingPlayerId) {
       return;
     }
 
-    setSlotByPlayerId((current) => {
-      const vacatedSlot = current[movingPlayerId];
-      const next = { ...current, [movingPlayerId]: target.slot };
+    const vacatedSlot = slotByPlayerId[movingPlayerId];
+    const next = { ...slotByPlayerId, [movingPlayerId]: target.slot };
 
-      if (target.swapWithPlayerId) {
-        const displaced = currentLineup.find((entry) => entry.player.id === target.swapWithPlayerId);
-        // The displaced player takes the vacated slot when eligible; otherwise
-        // they drop to the bench so the swap never creates an illegal slot.
-        next[target.swapWithPlayerId] =
-          displaced && isSlotEligibleForPlayer(displaced.player, vacatedSlot) ? vacatedSlot : "BN";
-      }
+    if (target.swapWithPlayerId) {
+      const displaced = currentLineup.find((entry) => entry.player.id === target.swapWithPlayerId);
+      // The displaced player takes the vacated slot when eligible; otherwise
+      // they drop to the bench so the swap never creates an illegal slot.
+      next[target.swapWithPlayerId] =
+        displaced && isSlotEligibleForPlayer(displaced.player, vacatedSlot) ? vacatedSlot : "BN";
+    }
 
-      return next;
-    });
+    commitSlots(next);
     setMovingPlayerId(null);
   }
 
@@ -133,45 +140,19 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
       return;
     }
 
-    setSlotByPlayerId((current) => ({ ...current, [playerId]: fillingSlot }));
+    commitSlots({ ...slotByPlayerId, [playerId]: fillingSlot });
     setFillingSlot(null);
-  }
-
-  async function validateMoves() {
-    setIsSaving(true);
-    setMessage("Checking lineup...");
-
-    try {
-      const response = await fetch(`/api/v1/teams/${teamId}/lineup`, {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ entries }),
-      });
-
-      const result = (await response.json()) as {
-        accepted?: boolean;
-        validation?: LineupValidation;
-        error?: string;
-      };
-
-      if (!response.ok || !result.validation) {
-        setMessage(result.error ?? "Could not validate lineup.");
-        return;
-      }
-
-      setValidation(result.validation);
-      setMessage(result.accepted ? "Lineup moves are valid" : "Lineup moves need changes");
-    } finally {
-      setIsSaving(false);
-    }
   }
 
   return (
     <>
       <section className="panel" aria-labelledby="lineup-heading">
         <h2 id="lineup-heading">Lineup</h2>
+        {error ? (
+          <div className="status-banner bad" role="alert">
+            {error}
+          </div>
+        ) : null}
         <div className="lineup-list">
           {groups.map((group) => (
             <div className="lineup-group" key={group.label}>
@@ -224,9 +205,6 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
               )}
             </div>
           ))}
-          <button className="primary-button" type="button" onClick={validateMoves} disabled={isSaving}>
-            {isSaving ? "Checking..." : "Validate Moves"}
-          </button>
         </div>
       </section>
 
@@ -247,20 +225,6 @@ export function LineupEditor({ teamId, initialLineup, initialValidation }: Lineu
       {detailPlayerId ? (
         <PlayerDetailSheet playerId={detailPlayerId} teamId={teamId} onClose={() => setDetailPlayerId(null)} />
       ) : null}
-
-      <aside className="panel" aria-labelledby="lineup-status-heading">
-        <h3 id="lineup-status-heading">Lineup Status</h3>
-        <div className={validation.valid ? "status-banner good" : "status-banner bad"}>{message}</div>
-        {validation.issues.length ? (
-          <div className="issue-list" aria-label="Lineup validation issues">
-            {validation.issues.map((issue) => (
-              <div className="issue-row" key={`${issue.code}-${issue.playerId ?? issue.slot ?? issue.message}`}>
-                {issue.message}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </aside>
     </>
   );
 }

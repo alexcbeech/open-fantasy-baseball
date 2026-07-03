@@ -19,8 +19,6 @@
   --good-bg: #e3f5eb;
   --bad-bg: #f8e8e5;
   --danger-bg: #f8e8e5;
-  --issue-bg: #fff7f5;
-  --issue-line: #f0c6bd;
   --token-secret-bg: #111c19;
   --token-secret-ink: #ffffff;
   --shadow: 0 14px 32px rgb(23 32 29 / 10%);
@@ -47,8 +45,6 @@
   --good-bg: #143326;
   --bad-bg: #3a1f1d;
   --danger-bg: #3a1f1d;
-  --issue-bg: #351e1b;
-  --issue-line: #714138;
   --token-secret-bg: #08100e;
   --token-secret-ink: #e6fff9;
   --shadow: 0 14px 32px rgb(0 0 0 / 32%);
@@ -76,8 +72,6 @@
     --good-bg: #143326;
     --bad-bg: #3a1f1d;
     --danger-bg: #3a1f1d;
-    --issue-bg: #351e1b;
-    --issue-line: #714138;
     --token-secret-bg: #08100e;
     --token-secret-ink: #e6fff9;
     --shadow: 0 14px 32px rgb(0 0 0 / 32%);
@@ -1526,22 +1520,6 @@ p.player-meta,
 .status-banner.bad {
   background: var(--bad-bg);
   color: var(--loss);
-}
-
-.issue-list {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.issue-row {
-  background: var(--issue-bg);
-  border: 1px solid var(--issue-line);
-  border-radius: 8px;
-  color: var(--loss);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 10px;
 }
 
 .empty-state {
