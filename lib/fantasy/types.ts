@@ -120,11 +120,19 @@ export type PlayerNextGame = {
   venue: string | null;
 };
 
+export type PlayerValueMetrics = {
+  fanPoints: number | null;
+  rank: number | null;
+  totalRanked: number;
+  rosteredPercent: number | null;
+};
+
 export type PlayerDetail = Player & {
   mlbPlayerId: number | null;
   teamName: string | null;
   jerseyNumber: string | null;
   nextGame: PlayerNextGame | null;
+  value: PlayerValueMetrics;
   news: PlayerNewsItem[];
   statWindows: PlayerStatWindow[];
   gameLog: PlayerGameLog[];

@@ -28,8 +28,9 @@ export function readPlayerStat(player: Player, category: string, projection = fa
   return stats[category] ?? "-";
 }
 
-export function calculateSimplePoints(player: Player) {
-  return Object.entries(player.seasonStats).reduce((total, [category, value]) => {
+/** Fantasy points for an arbitrary stat line using the default points weights. */
+export function calculateFantasyPoints(stats: Record<string, number | string>) {
+  return Object.entries(stats).reduce((total, [category, value]) => {
     const numeric = typeof value === "number" ? value : Number.parseFloat(value);
     const weight = pointsWeights[category as keyof typeof pointsWeights] ?? 0;
 
@@ -39,5 +40,9 @@ export function calculateSimplePoints(player: Player) {
 
     return total + numeric * weight;
   }, 0);
+}
+
+export function calculateSimplePoints(player: Player) {
+  return calculateFantasyPoints(player.seasonStats);
 }
 

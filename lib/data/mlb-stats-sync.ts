@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { getPool } from "../db/client";
+import { calculateFantasyPoints } from "../fantasy/scoring";
 
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
 const source = "mlb-stats-api";
@@ -151,6 +152,10 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
             const stats = mapMlbStat(split.stat, group);
             if (Object.keys(stats).length) {
               await upsert(playerId, statDate, "season", stats);
+              await client.query(`update player set season_fan_points = $1 where id = $2`, [
+                calculateFantasyPoints(stats),
+                playerId,
+              ]);
             }
           }
 
@@ -228,6 +233,7 @@ async function syncRosteredPlayer(
     if (Object.keys(stats).length) {
       seen();
       await upsert(player.id, statDate, "season", stats);
+      await client.query(`update player set season_fan_points = $1 where id = $2`, [calculateFantasyPoints(stats), player.id]);
     }
   }
 

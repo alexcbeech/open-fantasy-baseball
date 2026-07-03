@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSimplePoints, formatScoringType, readPlayerStat } from "./scoring";
+import { calculateFantasyPoints, calculateSimplePoints, formatScoringType, readPlayerStat } from "./scoring";
 import type { Player } from "./types";
 
 const hitter: Player = {
@@ -28,5 +28,11 @@ describe("fantasy scoring helpers", () => {
 
   it("calculates simple points from weighted counting stats", () => {
     expect(calculateSimplePoints(hitter)).toBe(32);
+  });
+
+  it("scores an arbitrary stat line and ignores non-scoring rate stats", () => {
+    // 27 R + 8 HR*4 + 43 RBI = 102; AVG is not weighted.
+    expect(calculateFantasyPoints({ R: 27, HR: 8, RBI: 43, SB: 0, AVG: ".252" })).toBe(102);
+    expect(calculateFantasyPoints({ W: 9, SV: 0, K: 156, ERA: "1.47" })).toBe(9 * 5 + 156);
   });
 });
