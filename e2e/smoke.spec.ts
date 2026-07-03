@@ -22,6 +22,10 @@ test.describe("team tabs", () => {
     await expect(page.getByText("Batters", { exact: true })).toBeVisible();
     await expect(page.getByText("Pitchers", { exact: true })).toBeVisible();
     await expect(page.locator(".lineup-list .player-avatar").first()).toBeVisible();
+    // Lineups auto-validate on each move, so the manual "Validate Moves" step
+    // and the Lineup Status pane are gone; the lineup fills that space.
+    await expect(page.getByRole("button", { name: "Validate Moves" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Lineup Status" })).toHaveCount(0);
 
     await page.getByRole("link", { name: "Matchup", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Category Score" })).toBeVisible();

@@ -9,7 +9,6 @@ import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { listPlayers } from "@/lib/data/players";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
-import { validateLineup } from "@/lib/fantasy/roster-validation";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LineupPlayer, MatchupDetails, Player } from "@/lib/fantasy/types";
 
@@ -107,11 +106,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 }
 
 function TeamTab({ teamId, lineup, watchPlayers }: { teamId: string; lineup: LineupPlayer[]; watchPlayers: Player[] }) {
-  const validation = validateLineup(lineup);
-
   return (
     <div className="content-grid">
-      <LineupEditor teamId={teamId} initialLineup={lineup} initialValidation={validation} />
+      <LineupEditor teamId={teamId} initialLineup={lineup} />
       <aside className="panel" aria-labelledby="watch-heading">
         <h3 id="watch-heading">Player Watch</h3>
         <div className="stat-list">
