@@ -83,6 +83,9 @@ test.describe("lineup move sheet", () => {
     await expect(detail.getByRole("tab", { name: "Overview" })).toBeVisible();
     await detail.getByRole("tab", { name: "Stats" }).click();
     await expect(detail.getByRole("heading", { name: "Stats" })).toBeVisible();
+    // Stats render as a Yahoo-style table with a Split column and a Season row.
+    await expect(detail.getByRole("columnheader", { name: "Split" })).toBeVisible();
+    await expect(detail.getByRole("rowheader", { name: "Season" })).toBeVisible();
   });
 });
 
