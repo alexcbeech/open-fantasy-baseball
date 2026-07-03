@@ -100,6 +100,18 @@ test.describe("player search", () => {
     await expect(page.getByText("Julio Rodriguez")).toBeVisible();
     await expect(page.getByText("Freddie Freeman")).toHaveCount(0);
   });
+
+  test("opens the shared player detail popup from a player row", async ({ page }) => {
+    await page.goto("/team/team-1?tab=players");
+
+    await page.getByRole("button", { name: /View Julio Rodriguez details/ }).click();
+
+    // Same tabbed detail sheet the Team tab uses (dialog + Overview/Game Log/Stats tabs).
+    const detail = page.getByRole("dialog", { name: "Player detail" });
+    await expect(detail).toBeVisible();
+    await expect(detail.getByRole("heading", { name: "Julio Rodriguez" })).toBeVisible({ timeout: 20000 });
+    await expect(detail.getByRole("tab", { name: "Game Log" })).toBeVisible();
+  });
 });
 
 test.describe("commissioner settings", () => {
