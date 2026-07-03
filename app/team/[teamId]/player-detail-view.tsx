@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerStatWindow } from "@/lib/fantasy/types";
+import { PlayerAvatar } from "./player-avatar";
 
 export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na";
 
@@ -89,11 +90,14 @@ export function PlayerDetailView({
   return (
     <>
       <div className="player-detail-header">
-        <div>
-          <h3 id="player-detail-heading">{player.name}</h3>
-          <span className="player-meta">
-            {player.positions.join(", ")} &middot; {player.mlbTeam} &middot; {availabilityLabel(player.availability)}
-          </span>
+        <div className="player-detail-identity">
+          <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
+          <div>
+            <h3 id="player-detail-heading">{player.name}</h3>
+            <span className="player-meta">
+              {player.positions.join(", ")} &middot; {player.mlbTeam} &middot; {availabilityLabel(player.availability)}
+            </span>
+          </div>
         </div>
         <span className={`health-badge ${health.className}`}>{health.label}</span>
       </div>
@@ -189,32 +193,45 @@ function PlayerOverview({ player, health, summary }: { player: PlayerDetail; hea
   );
 }
 
+// The stat categories present across a set of stat maps, in canonical order.
+function presentCategories(rows: Array<Record<string, number | string>>) {
+  return primaryStats.filter((category) => rows.some((stats) => stats[category] !== undefined));
+}
+
 function PlayerGameLogRows({ games }: { games: PlayerGameLog[] }) {
+  const categories = presentCategories(games.map((game) => game.stats));
+
   return (
     <section aria-labelledby="player-game-log-heading">
       <h3 id="player-game-log-heading">Game Log</h3>
-      <div className="game-log-list">
-        {games.length ? (
-          games.map((game) => (
-            <div className="game-log-row" key={game.id}>
-              <span className="player-meta">{new Date(game.date).toLocaleDateString()}</span>
-              <div className="stat-chip-grid">
-                {primaryStats
-                  .filter((category) => game.stats[category] !== undefined)
-                  .slice(0, 5)
-                  .map((category) => (
-                    <span className="stat-chip" key={category}>
-                      <span>{category}</span>
-                      <strong>{game.stats[category]}</strong>
-                    </span>
+      {games.length ? (
+        <div className="stat-table-wrap">
+          <table className="stat-table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                {categories.map((category) => (
+                  <th scope="col" key={category}>
+                    {category}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {games.map((game) => (
+                <tr key={game.id}>
+                  <th scope="row">{new Date(game.date).toLocaleDateString()}</th>
+                  {categories.map((category) => (
+                    <td key={category}>{game.stats[category] ?? "-"}</td>
                   ))}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="empty-state">No recent game log available.</div>
-        )}
-      </div>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No recent game log available.</div>
+      )}
     </section>
   );
 }
@@ -226,27 +243,34 @@ function PlayerStatWindows({ windows, fallbackPlayer }: { windows: PlayerStatWin
         { split: "season" as const, label: "Season", stats: fallbackPlayer.seasonStats },
         { split: "projection_ros" as const, label: "ROS Projection", stats: fallbackPlayer.projectedStats },
       ];
+  const categories = presentCategories(visibleWindows.map((window) => window.stats));
 
   return (
     <section aria-labelledby="player-stats-heading">
       <h3 id="player-stats-heading">Stats</h3>
-      <div className="stat-window-list">
-        {visibleWindows.map((window) => (
-          <div className="stat-window" key={window.split}>
-            <span className="player-name">{window.label}</span>
-            <div className="stat-chip-grid">
-              {primaryStats
-                .filter((category) => window.stats[category] !== undefined)
-                .slice(0, 6)
-                .map((category) => (
-                  <span className="stat-chip" key={category}>
-                    <span>{category}</span>
-                    <strong>{window.stats[category]}</strong>
-                  </span>
+      <div className="stat-table-wrap">
+        <table className="stat-table">
+          <thead>
+            <tr>
+              <th scope="col">Split</th>
+              {categories.map((category) => (
+                <th scope="col" key={category}>
+                  {category}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visibleWindows.map((window) => (
+              <tr key={window.split}>
+                <th scope="row">{window.label}</th>
+                {categories.map((category) => (
+                  <td key={category}>{window.stats[category] ?? "-"}</td>
                 ))}
-            </div>
-          </div>
-        ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
