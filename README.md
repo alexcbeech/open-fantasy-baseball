@@ -42,12 +42,20 @@ Sync MLB teams, active rosters, 40-man rosters, schedules, and probable starters
 npm.cmd run sync:mlb
 ```
 
+Ingest real player stats from the MLB Stats API — season stats for every known player plus game logs and trailing 7/14/30-day splits for rostered players (`lib/data/mlb-stats-sync.ts`):
+
+```bash
+npm.cmd run sync:stats
+```
+
 Refresh derived rest-of-season projections and synthesized player news. Both are provider-adapter based (`lib/data/projections-sync.ts`, `lib/data/player-news-sync.ts`): the default providers derive data from stats and schedule OFB already ingests, and a real projections/news feed can be dropped in by implementing the same interface. Each run records an `ingestion_run` row for freshness and source attribution.
 
 ```bash
 npm.cmd run sync:projections
 npm.cmd run sync:news
 ```
+
+Recommended sync order for real data: `sync:mlb` (teams, rosters, schedule) → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news`.
 
 The app uses Postgres automatically when `DATABASE_URL` is set. Without `DATABASE_URL`, it falls back to the bundled mock data so the UI remains usable.
 

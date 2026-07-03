@@ -16,6 +16,7 @@
     "db:setup": "npm run db:migrate && npm run db:seed",
     "jobs:nightly": "tsx scripts/run-nightly.ts",
     "sync:mlb": "tsx scripts/sync-mlb.ts",
+    "sync:stats": "tsx scripts/sync-stats.ts",
     "sync:projections": "tsx scripts/sync-projections.ts",
     "sync:news": "tsx scripts/sync-news.ts"
   },
