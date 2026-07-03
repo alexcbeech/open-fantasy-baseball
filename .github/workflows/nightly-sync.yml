@@ -1,0 +1,43 @@
+name: Nightly data sync
+
+on:
+  schedule:
+    # 10:00 UTC = 06:00 ET / 03:00 PT. Runs after every MLB game (including
+    # west-coast night games, which can end ~01:00 PT) is final, so game logs
+    # and recomputed matchup scores reflect the full day's results.
+    - cron: "0 10 * * *"
+  # Also runnable on demand from the Actions tab (e.g. to backfill after a
+  # deploy or to test the pipeline without waiting for the schedule).
+  workflow_dispatch: {}
+
+# Never run two syncs at once (a manual dispatch overlapping a scheduled run),
+# but don't cancel one that's already in flight.
+concurrency:
+  group: nightly-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Order matters: stats first (writes season / splits / game logs), then
+      # matchups (recomputes category scores from those fresh season stats).
+      - name: Sync player stats (season, splits, game logs)
+        run: npm run sync:stats
+
+      - name: Recompute matchup category scores
+        run: npm run sync:matchups
