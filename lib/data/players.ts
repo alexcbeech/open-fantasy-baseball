@@ -1,8 +1,49 @@
 import { query, tryDatabase } from "@/lib/db/client";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow } from "@/lib/fantasy/types";
+import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem } from "@/lib/fantasy/types";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
+
+function mockPlayerWatch(): PlayerWatchItem[] {
+  return mockPlayers
+    .filter((player) => player.newsHeadline)
+    .map((player) => ({ id: player.id, name: player.name, status: player.status, headline: player.newsHeadline! }));
+}
+
+/**
+ * The team's rostered players that currently have news, most-recent first.
+ * Backs the Team tab's Player Watch button; falls back to the mock roster's
+ * headlines in demo mode.
+ */
+export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatchItem[]> {
+  return tryDatabase(
+    async () => {
+      const result = await query<{ id: string; full_name: string; status: Player["status"]; headline: string }>(
+        `select p.id, p.full_name, p.status, latest_news.headline
+         from roster_entry re
+         join player p on p.id = re.player_id
+         join lateral (
+           select headline, published_at
+           from player_news pn
+           where pn.player_id = p.id
+           order by published_at desc
+           limit 1
+         ) latest_news on true
+         where re.team_id = $1 and re.dropped_at is null
+         order by latest_news.published_at desc`,
+        [teamId],
+      );
+
+      return result.rows.map((row) => ({
+        id: row.id,
+        name: row.full_name,
+        status: row.status,
+        headline: row.headline,
+      }));
+    },
+    () => mockPlayerWatch(),
+  );
+}
 
 export async function listPlayers(options: { query?: string; availability?: Player["availability"] } = {}): Promise<Player[]> {
   return tryDatabase(

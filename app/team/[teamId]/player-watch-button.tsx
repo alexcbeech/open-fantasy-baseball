@@ -1,23 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Player } from "@/lib/fantasy/types";
+import type { PlayerWatchItem } from "@/lib/fantasy/types";
 
 type PlayerWatchButtonProps = {
-  players: Player[];
+  items: PlayerWatchItem[];
 };
 
 /**
  * Collapses the old always-on Player Watch side panel into a single button
- * badged with the number of watched players carrying news. Tapping it opens a
+ * badged with the number of rostered players carrying news. Tapping it opens a
  * sheet with the headlines, so the lineup can use the full page width.
  */
-export function PlayerWatchButton({ players }: PlayerWatchButtonProps) {
+export function PlayerWatchButton({ items }: PlayerWatchButtonProps) {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const withNews = players.filter((player) => player.newsHeadline);
-  const count = withNews.length;
+  const count = items.length;
 
   useEffect(() => {
     if (!open) {
@@ -68,14 +67,14 @@ export function PlayerWatchButton({ players }: PlayerWatchButtonProps) {
               </button>
             </div>
             <div className="stat-list">
-              {withNews.length ? (
-                withNews.map((player) => (
-                  <div className="setting-row" key={player.id}>
+              {items.length ? (
+                items.map((item) => (
+                  <div className="setting-row" key={item.id}>
                     <div>
-                      <div className="player-name">{player.name}</div>
-                      <div className="player-meta">{player.newsHeadline}</div>
+                      <div className="player-name">{item.name}</div>
+                      <div className="player-meta">{item.headline}</div>
                     </div>
-                    <span className="pill">{player.status}</span>
+                    <span className="pill">{item.status}</span>
                   </div>
                 ))
               ) : (

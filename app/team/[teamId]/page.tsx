@@ -7,11 +7,10 @@ import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
-import { listPlayers } from "@/lib/data/players";
+import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
-import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { formatScoringType } from "@/lib/fantasy/scoring";
-import type { LeagueOverview, LineupPlayer, MatchupDetails, Player } from "@/lib/fantasy/types";
+import type { LeagueOverview, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
 
 type TeamPageProps = {
   params: Promise<{
@@ -37,7 +36,8 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   const team = await getTeamSummary(teamId);
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const teamLineup = await getLineupForTeam(teamId);
-  const playerPool = selectedTab === "Players" ? await listPlayers() : mockPlayers;
+  const playerPool = selectedTab === "Players" ? await listPlayers() : [];
+  const watchItems = selectedTab === "Team" ? await getPlayerWatchForTeam(teamId) : [];
   const matchupDetails = selectedTab === "Matchup" ? await getMatchupDetailsForTeam(teamId) : null;
   const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;
 
@@ -95,7 +95,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           })}
         </nav>
 
-        {selectedTab === "Team" ? <TeamTab teamId={team.id} lineup={teamLineup} watchPlayers={playerPool} /> : null}
+        {selectedTab === "Team" ? <TeamTab teamId={team.id} lineup={teamLineup} watchItems={watchItems} /> : null}
         {selectedTab === "Matchup" ? (
           matchupDetails ? <MatchupTab matchup={matchupDetails} /> : <MatchupEmptyState teamName={team.teamName} />
         ) : null}
@@ -106,11 +106,11 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   );
 }
 
-function TeamTab({ teamId, lineup, watchPlayers }: { teamId: string; lineup: LineupPlayer[]; watchPlayers: Player[] }) {
+function TeamTab({ teamId, lineup, watchItems }: { teamId: string; lineup: LineupPlayer[]; watchItems: PlayerWatchItem[] }) {
   return (
     <div className="team-tab">
       <div className="team-toolbar">
-        <PlayerWatchButton players={watchPlayers} />
+        <PlayerWatchButton items={watchItems} />
       </div>
       <LineupEditor teamId={teamId} initialLineup={lineup} />
     </div>
