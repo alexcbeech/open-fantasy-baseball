@@ -5,6 +5,7 @@ import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
@@ -31,6 +32,14 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   if (!currentUser && authEnabled) {
     redirect("/auth/sign-in");
+  }
+
+  // With a real database, a non-UUID id (e.g. the demo "team-1") can't match a
+  // row, so the data layer would silently fall back to mock data. 404 instead
+  // so real-DB mode never masquerades as populated. Demo mode (no DATABASE_URL)
+  // still serves the mock team ids.
+  if (isDatabaseConfigured() && !isUuid(teamId)) {
+    notFound();
   }
 
   const team = await getTeamSummary(teamId);
