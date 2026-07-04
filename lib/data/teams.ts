@@ -58,16 +58,40 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
             p.status,
             coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
             null::text as news_headline,
-            '{}'::jsonb as season_stats,
-            '{}'::jsonb as projected_stats,
+            coalesce(season_stats.stats, '{}'::jsonb) as season_stats,
+            coalesce(projection_stats.stats, '{}'::jsonb) as projected_stats,
+            p.season_fan_points,
+            next_game.game_date,
+            next_game.home_away,
+            next_game.opponent,
             0 as matchup_total
           from lineup_entry le
           join player p on p.id = le.player_id
           left join mlb_team mt on mt.id = p.current_mlb_team_id
           left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
+          left join lateral (
+            select stats from player_stat_line psl where psl.player_id = p.id and split = 'season' order by stat_date desc limit 1
+          ) season_stats on true
+          left join lateral (
+            select stats from player_stat_line psl where psl.player_id = p.id and split = 'projection_ros' order by stat_date desc limit 1
+          ) projection_stats on true
+          left join lateral (
+            select
+              g.game_date,
+              case when g.home_mlb_team_id = p.current_mlb_team_id then 'home' else 'away' end as home_away,
+              case when g.home_mlb_team_id = p.current_mlb_team_id then away.abbreviation else home.abbreviation end as opponent
+            from mlb_game g
+            left join mlb_team home on home.id = g.home_mlb_team_id
+            left join mlb_team away on away.id = g.away_mlb_team_id
+            where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
+              and g.game_date >= now()
+            order by g.game_date asc
+            limit 1
+          ) next_game on true
           where le.team_id = $1
             and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
-          group by le.id, le.slot, p.id, mt.abbreviation
+          group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
+            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent
           order by le.lineup_date desc, le.id
         `,
         [teamId],

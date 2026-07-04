@@ -111,7 +111,7 @@ select {
 .app-shell {
   min-height: 100dvh;
   background:
-    linear-gradient(180deg, var(--topbar-start) 0, var(--topbar-end) 170px, transparent 170px),
+    linear-gradient(180deg, var(--topbar-start) 0, var(--topbar-end) 128px, transparent 128px),
     var(--bg);
 }
 
@@ -283,6 +283,31 @@ select {
 .subtle {
   color: var(--muted);
   font-size: 13px;
+}
+
+.featured-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 16px;
+}
+
+.featured-league {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@media (hover: hover) {
+  .featured-card:hover {
+    border-color: var(--brand);
+  }
 }
 
 .team-list {
@@ -544,9 +569,12 @@ button.row {
 }
 
 .lineup-group-label {
+  align-items: flex-end;
   color: var(--muted);
+  display: flex;
   font-size: 11px;
   font-weight: 900;
+  justify-content: space-between;
   letter-spacing: 0.06em;
   padding: 12px 0 4px;
   text-transform: uppercase;
@@ -676,12 +704,102 @@ button.row {
   padding: 0 6px;
 }
 
+/* Second meta line on a lineup row: the player's next game or status. */
+.player-game {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-game.injury {
+  color: var(--loss);
+  font-weight: 700;
+}
+
+/* Live in-game row treatment: a pulsing dot on the inning line and a
+   highlighted live-points number that replaces the season total. */
+.player-game.is-live {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-weight: 800;
+  gap: 6px;
+}
+
+.player-game.is-live::before {
+  animation: live-pulse 1.4s ease-in-out infinite;
+  background: var(--loss);
+  border-radius: 999px;
+  content: "";
+  flex: 0 0 auto;
+  height: 6px;
+  width: 6px;
+}
+
+.points-live.is-live {
+  color: var(--brand-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-game.is-live::before {
+    animation: none;
+  }
+}
+
+/* Right-aligned stacked numbers (season points over projected), Yahoo-style. */
+.player-points {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: 1px;
+  justify-items: end;
+  min-width: 52px;
+  padding: 6px 2px;
+  text-align: right;
+}
+
+.points-live {
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.points-proj {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+/* Column legend that sits above the stacked numbers in each group header. */
+.lineup-col-heads {
+  display: grid;
+  gap: 0;
+  justify-items: end;
+  line-height: 1.15;
+  min-width: 52px;
+  padding-right: 2px;
+}
+
+.lineup-col-heads span:last-child {
+  color: var(--muted);
+  font-weight: 700;
+  opacity: 0.85;
+}
+
 @media (hover: hover) {
   .pos-badge-button:hover {
     box-shadow: 0 0 0 2px var(--brand);
   }
 
-  .player-info-button:hover .player-name {
+  .player-info-button:hover .player-name,
+  .player-points:hover .points-live {
     color: var(--brand-strong);
   }
 }
@@ -909,6 +1027,126 @@ button.row {
   text-align: right;
 }
 
+.matchup-tab {
+  display: grid;
+  gap: 12px;
+}
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* Matchup hero: big scores over a two-sided share bar. */
+.matchup-hero {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.matchup-hero-scores {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.matchup-hero-team {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.matchup-hero-team.right {
+  text-align: right;
+}
+
+.matchup-hero-score {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.matchup-share {
+  background: var(--loss);
+  border-radius: 999px;
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+}
+
+.matchup-share-user {
+  background: var(--brand);
+  display: block;
+  height: 100%;
+}
+
+/* Per-position head-to-head roster compare. */
+.matchup-compare {
+  display: grid;
+  margin-top: 12px;
+}
+
+.compare-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+  min-height: 52px;
+  padding: 8px 0;
+}
+
+.compare-slot {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.compare-side {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.compare-side.right {
+  flex-direction: row-reverse;
+}
+
+.compare-side.empty {
+  color: var(--muted);
+  justify-content: center;
+}
+
+.compare-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.compare-side.right .compare-info {
+  text-align: right;
+}
+
+.compare-pts {
+  flex: 0 0 auto;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.compare-pts.is-live {
+  color: var(--brand-strong);
+}
+
 .category-table {
   display: grid;
 }
@@ -970,6 +1208,54 @@ button.row {
   color: var(--ink);
   min-height: 42px;
   padding: 0 10px;
+}
+
+/* Horizontal, scrollable filter chip strip (Yahoo Availability/Position rows). */
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 34px;
+  padding: 0 14px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.filter-chip.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .filter-chip:not(.active):hover {
+    border-color: var(--brand);
+    color: var(--ink);
+  }
+}
+
+.lineup-list-legend {
+  margin-top: 2px;
 }
 
 .primary-button {
@@ -1144,6 +1430,85 @@ button.row {
   justify-content: space-between;
   margin-bottom: 10px;
   padding: 10px 12px;
+}
+
+/* Live in-game badge + card (player detail while a game is in progress). */
+.live-pill {
+  align-items: center;
+  background: var(--loss);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  padding: 5px 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.live-pill::before {
+  animation: live-pulse 1.4s ease-in-out infinite;
+  background: #fff;
+  border-radius: 999px;
+  content: "";
+  height: 7px;
+  width: 7px;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.live-game {
+  border: 1px solid var(--loss);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.live-game-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.live-state {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.live-game-body {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+}
+
+.live-line {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.live-points {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-pill::before {
+    animation: none;
+  }
 }
 
 .next-game-label {

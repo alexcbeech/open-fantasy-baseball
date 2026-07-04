@@ -74,6 +74,16 @@ Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:sche
 
 The app uses Postgres automatically when `DATABASE_URL` is set. Without `DATABASE_URL`, it falls back to the bundled mock data so the UI remains usable.
 
+## Live In-Game Stats
+
+While MLB games are in progress, the Team tab and the player detail sheet show live fantasy points and the current inning, updating as the game plays. This is intentionally separate from the nightly sync: it reads directly from the free MLB Stats API on demand (`/schedule`, `/game/{pk}/boxscore`, `/game/{pk}/linescore`) rather than the database, so no poller or extra sync job is needed.
+
+- `GET /api/v1/players/{playerId}/live` returns one player's in-progress line, points, and inning state (or `live: false`).
+- `GET /api/v1/teams/{teamId}/live` returns a map of the team's lineup players who are in a live game, fetching each in-progress game's boxscore once.
+- `GET /api/v1/teams/{teamId}/matchup/live` recomputes the active matchup's category battle from each side's season stats plus live in-game lines, so the Matchup tab's category values, categories-won score, and per-player points move during games (`lib/data/live-matchup.ts`). The live line is appended as an extra stat entry per player so counting categories sum and rate categories (AVG/ERA/WHIP) are rebuilt from summed components.
+- The lineup rows, the open detail sheet, and the Matchup tab poll these every 30s; when no relevant game is in progress they simply show season points, the next scheduled game, and the stored nightly category battle. In demo/mock mode (blank `DATABASE_URL`) the routes return the not-live result. See `lib/data/mlb-live.ts`.
+- MLB reads go through a short-TTL, single-flight cache (`cachedFetchJson` in `lib/data/mlb-live.ts`): concurrent requests for the same schedule/boxscore/linescore share one upstream fetch, and repeats within the TTL (60s schedule, 15s boxscore/linescore) read the memoized value — so the polling fanout across routes, tabs, and users collapses to roughly one MLB request per URL per TTL. The cache is per server instance; a shared Redis cache is the path if OFB ever runs multi-instance under load.
+
 ## Auth
 
 OFB uses Neon Auth with the `@neondatabase/auth` Next.js server SDK. Add the Neon Auth variables to `.env.local` to enable browser sign-in:

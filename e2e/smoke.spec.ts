@@ -8,7 +8,8 @@ test.describe("mobile landing", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "My Teams" })).toBeVisible();
-    await expect(page.getByText("Teams", { exact: true })).toBeVisible();
+    // The landing leads with a featured head-to-head hero above the team cards.
+    await expect(page.getByRole("heading", { name: "Featured Matchup" })).toBeVisible();
     await expect(page.getByRole("link", { name: /Golden Sombreros/ })).toBeVisible();
   });
 });
@@ -28,7 +29,9 @@ test.describe("team tabs", () => {
     await expect(page.getByRole("heading", { name: "Lineup Status" })).toHaveCount(0);
 
     await page.getByRole("link", { name: "Matchup", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Category Score" })).toBeVisible();
+    // The Matchup tab is a client component (live category recalc); allow for the
+    // dev server compiling it on first hit.
+    await expect(page.getByRole("heading", { name: "Category Breakdown" })).toBeVisible({ timeout: 20000 });
 
     await page.getByRole("link", { name: "Players", exact: true }).click();
     await expect(page.getByPlaceholder("Search all players")).toBeVisible();

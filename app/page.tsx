@@ -16,8 +16,15 @@ export default async function HomePage() {
   }
 
   const teams = await listTeamsForCurrentUser();
-  const bestRank = Math.min(...teams.map((team) => team.rank));
-  const activeMatchups = teams.filter((team) => team.scoringType !== "roto").length;
+  // Lead with a live head-to-head if there is one, else the top-ranked team.
+  const featured =
+    teams.find((team) => team.scoringType !== "roto" && team.matchup.opponentName !== "Season Standings") ??
+    teams.toSorted((left, right) => left.rank - right.rank)[0];
+  const otherTeams = teams.filter((team) => team.id !== featured?.id);
+  const shareFor = (team: (typeof teams)[number]) => {
+    const total = team.matchup.userScore + team.matchup.opponentScore;
+    return total > 0 ? Math.round((team.matchup.userScore / total) * 100) : 50;
+  };
 
   return (
     <main className="app-shell">
@@ -43,28 +50,45 @@ export default async function HomePage() {
       </header>
 
       <section className="page" aria-labelledby="teams-heading">
-        <div className="summary-strip" aria-label="Fantasy baseball summary">
-          <div className="summary-stat">
-            <span className="summary-label">Teams</span>
-            <span className="summary-value">{teams.length}</span>
-          </div>
-          <div className="summary-stat">
-            <span className="summary-label">Best Rank</span>
-            <span className="summary-value">#{bestRank}</span>
-          </div>
-          <div className="summary-stat">
-            <span className="summary-label">Live Matchups</span>
-            <span className="summary-value">{activeMatchups}</span>
-          </div>
-        </div>
+        {featured ? (
+          <>
+            <div className="section-title">
+              <h2 id="featured-heading">Featured Matchup</h2>
+              <span className="subtle">{featured.matchup.periodLabel}</span>
+            </div>
+            <Link
+              className="featured-card"
+              href={`/team/${featured.id}`}
+              aria-label={`${featured.teamName} vs ${featured.matchup.opponentName}`}
+            >
+              <div className="featured-league">
+                {featured.leagueName} · {formatScoringType(featured.scoringType)}
+              </div>
+              <div className="matchup-hero-scores">
+                <div className="matchup-hero-team">
+                  <span className="score-name">{featured.teamName}</span>
+                  <span className="matchup-hero-score">{featured.matchup.userScore}</span>
+                </div>
+                <span className="versus">vs</span>
+                <div className="matchup-hero-team right">
+                  <span className="score-name">{featured.matchup.opponentName}</span>
+                  <span className="matchup-hero-score">{featured.matchup.opponentScore}</span>
+                </div>
+              </div>
+              <div className="matchup-share" aria-hidden="true">
+                <span className="matchup-share-user" style={{ width: `${shareFor(featured)}%` }} />
+              </div>
+            </Link>
+          </>
+        ) : null}
 
         <div className="section-title">
           <h2 id="teams-heading">My Teams</h2>
-          <span className="subtle">Today</span>
+          <span className="subtle">{teams.length} total</span>
         </div>
 
         <div className="team-list">
-          {teams.map((team) => {
+          {otherTeams.map((team) => {
             const isWinning = team.matchup.userScore >= team.matchup.opponentScore;
 
             return (
@@ -91,8 +115,8 @@ export default async function HomePage() {
                   </div>
                 </div>
 
-                <div className="progress" aria-label={`${team.matchup.progressPercent}% of scoring period complete`}>
-                  <span style={{ width: `${team.matchup.progressPercent}%` }} />
+                <div className="progress" aria-label={`${shareFor(team)}% score share`}>
+                  <span style={{ width: `${shareFor(team)}%` }} />
                 </div>
               </Link>
             );
