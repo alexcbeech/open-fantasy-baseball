@@ -145,6 +145,21 @@ select {
   line-height: 1.1;
 }
 
+/* The team page's brand shows a live team name, which can be long enough to
+   push the topbar actions off a phone screen. Let that lockup shrink and
+   ellipsize (the full name is repeated in the hero below). Other pages keep
+   their short static titles intact. */
+.brand-lockup--clip {
+  min-width: 0;
+}
+
+.brand-lockup--clip .brand-kicker,
+.brand-lockup--clip .brand-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .icon-button {
   align-items: center;
   aspect-ratio: 1;
