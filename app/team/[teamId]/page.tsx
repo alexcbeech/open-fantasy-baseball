@@ -61,7 +61,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup">
+        <div className="brand-lockup brand-lockup--clip">
           <span className="brand-kicker">{team.leagueName}</span>
           <span className="brand-title">{team.teamName}</span>
         </div>
