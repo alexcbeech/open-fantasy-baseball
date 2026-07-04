@@ -6,6 +6,17 @@ export function isDatabaseConfigured() {
   return Boolean(process.env.DATABASE_URL);
 }
 
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether an id is a real UUID. Postgres uuid columns reject anything else, so
+ * a non-UUID id (e.g. the demo "team-1") can never match a row -- callers use
+ * this to 404 instead of letting a failed query fall back to mock data.
+ */
+export function isUuid(value: string) {
+  return uuidPattern.test(value);
+}
+
 export function getPool() {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not configured.");
