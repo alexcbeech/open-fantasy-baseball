@@ -1,0 +1,150 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { rowPoints } from "@/lib/fantasy/player-view";
+import type { LineupPlayer, LiveMatchupUpdate, MatchupDetails, RosterSlot } from "@/lib/fantasy/types";
+
+// Order starters the way the lineup is displayed so the two rosters line up
+// position-by-position; reserves are excluded from the head-to-head compare.
+const starterOrder: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL", "SP", "RP", "P"];
+
+function orderedStarters(lineup: LineupPlayer[]): LineupPlayer[] {
+  return lineup
+    .filter((entry) => starterOrder.includes(entry.slot))
+    .toSorted((left, right) => starterOrder.indexOf(left.slot) - starterOrder.indexOf(right.slot));
+}
+
+/**
+ * The Matchup tab. Server-rendered with the stored (nightly) category battle,
+ * then polls for live in-game recalculation: while games are in progress the
+ * category values, categories-won score, and each starter's points update from
+ * live boxscore lines. When nothing is live it simply shows the stored values.
+ */
+export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
+  const [update, setUpdate] = useState<LiveMatchupUpdate | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/v1/teams/${teamId}/matchup/live`);
+        if (!response.ok) {
+          return;
+        }
+        const result = (await response.json()) as { update?: LiveMatchupUpdate | null };
+        if (active) {
+          setUpdate(result.update ?? null);
+        }
+      } catch {
+        // Keep the last known values on a transient failure.
+      }
+    };
+
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [teamId]);
+
+  const isLive = Boolean(update?.live);
+  const userScore = isLive ? update!.userScore : matchup.userScore;
+  const opponentScore = isLive ? update!.opponentScore : matchup.opponentScore;
+  const categoryScores = isLive ? update!.categoryScores : matchup.categoryScores;
+  const livePoints = update?.livePoints ?? {};
+
+  const userStarters = orderedStarters(matchup.userLineup);
+  const opponentStarters = orderedStarters(matchup.opponentLineup);
+  const rowCount = Math.max(userStarters.length, opponentStarters.length);
+  const total = userScore + opponentScore;
+  const userShare = total > 0 ? Math.round((userScore / total) * 100) : 50;
+
+  return (
+    <div className="matchup-tab">
+      <section className="panel" aria-labelledby="matchup-heading">
+        <h2 id="matchup-heading" className="visually-hidden">
+          Matchup
+        </h2>
+        <div className="matchup-hero" aria-label={`${matchup.userTeam.teamName} score against ${matchup.opponentTeam.teamName}`}>
+          <div className="matchup-hero-scores">
+            <div className="matchup-hero-team">
+              <span className="score-name">{matchup.userTeam.teamName}</span>
+              <span className="matchup-hero-score">{userScore}</span>
+            </div>
+            <span className="versus">{isLive ? <span className="live-pill">Live</span> : matchup.periodLabel}</span>
+            <div className="matchup-hero-team right">
+              <span className="score-name">{matchup.opponentTeam.teamName}</span>
+              <span className="matchup-hero-score">{opponentScore}</span>
+            </div>
+          </div>
+          <div className="matchup-share" aria-hidden="true">
+            <span className="matchup-share-user" style={{ width: `${userShare}%` }} />
+          </div>
+        </div>
+
+        <div className="matchup-compare" aria-label="Starters head to head">
+          {Array.from({ length: rowCount }).map((_, index) => {
+            const user = userStarters[index];
+            const opponent = opponentStarters[index];
+            const slot = user?.slot ?? opponent?.slot ?? "";
+            return (
+              <div className="compare-row" key={`${slot}-${index}`}>
+                <CompareSide entry={user} livePoints={livePoints} align="left" />
+                <span className="compare-slot">{slot}</span>
+                <CompareSide entry={opponent} livePoints={livePoints} align="right" />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="category-heading">
+        <h3 id="category-heading">Category Breakdown</h3>
+        <div className="category-table">
+          <div className="category-row category-head">
+            <span>{matchup.userTeam.teamName}</span>
+            <span>Cat</span>
+            <span>{matchup.opponentTeam.teamName}</span>
+            <span>Result</span>
+          </div>
+          {categoryScores.map((score) => (
+            <div className="category-row" key={score.category}>
+              <strong>{score.userValue}</strong>
+              <span className="slot">{score.category}</span>
+              <strong>{score.opponentValue}</strong>
+              <span className={`pill result-${score.result}`}>{score.result.toUpperCase()}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CompareSide({
+  entry,
+  livePoints,
+  align,
+}: {
+  entry: LineupPlayer | undefined;
+  livePoints: Record<string, number>;
+  align: "left" | "right";
+}) {
+  if (!entry) {
+    return <span className={`compare-side ${align} empty`}>—</span>;
+  }
+  const live = livePoints[entry.player.id];
+  const points = live ?? rowPoints(entry.player).seasonPts;
+  return (
+    <span className={`compare-side ${align}`}>
+      <span className="compare-info">
+        <span className="player-name">{entry.player.name}</span>
+        <span className="player-meta">
+          {entry.player.mlbTeam} &ndash; {entry.player.positions.join(", ")}
+        </span>
+      </span>
+      <span className={live !== undefined ? "compare-pts is-live" : "compare-pts"}>{points}</span>
+    </span>
+  );
+}

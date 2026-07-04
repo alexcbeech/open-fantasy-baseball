@@ -87,6 +87,10 @@ export type Player = {
   newsHeadline?: string;
   seasonStats: Record<string, number | string>;
   projectedStats: Record<string, number | string>;
+  /** Season fantasy points to date (stored value); null in demo/mock mode. */
+  seasonPoints?: number | null;
+  /** The player's next scheduled MLB game, for row game-context lines. */
+  nextGame?: PlayerNextGame | null;
 };
 
 export type PlayerNewsItem = {
@@ -118,6 +122,17 @@ export type PlayerGameLog = {
   date: string;
   opponent?: string;
   stats: Record<string, number | string>;
+};
+
+export type LivePlayerStatus = {
+  /** True only when the player's team has a game in progress right now. */
+  live: boolean;
+  /** Inning/state label for a live game, e.g. "Bottom 7th"; null when not live. */
+  state: string | null;
+  /** The player's stat line so far in the live game (empty until they appear). */
+  stats: Record<string, number | string>;
+  /** Live fantasy points from the in-progress line; null when not live. */
+  points: number | null;
 };
 
 export type PlayerNextGame = {
@@ -176,6 +191,18 @@ export type MatchupDetails = {
   categoryScores: MatchupCategoryScore[];
   userLineup: LineupPlayer[];
   opponentLineup: LineupPlayer[];
+};
+
+export type LiveMatchupUpdate = {
+  /** True when at least one active player on either side has a game in progress. */
+  live: boolean;
+  /** Categories won by the viewing team / opponent, live-adjusted. */
+  userScore: number;
+  opponentScore: number;
+  /** Category battle recomputed from season stats plus live in-game lines. */
+  categoryScores: MatchupCategoryScore[];
+  /** Live fantasy points per player id, for the head-to-head rows. */
+  livePoints: Record<string, number>;
 };
 
 export type LeagueStanding = {

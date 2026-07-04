@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
+import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
 import { isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
@@ -15,7 +16,7 @@ type LineupEditorProps = {
   initialLineup: LineupPlayer[];
 };
 
-type SlotRow = { key: string; slot: RosterSlot; player: LineupPlayer["player"] | null };
+type SlotRow = { key: string; slot: RosterSlot; entry: LineupPlayer | null };
 type LineupGroup = { label: string; rows: SlotRow[] };
 
 const batterSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL"];
@@ -39,7 +40,7 @@ function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlo
       const occupants = occupantsBySlot.get(slot) ?? [];
       const rowCount = Math.max(rosterSlots[slot] ?? 0, occupants.length);
       for (let index = 0; index < rowCount; index += 1) {
-        rows.push({ key: `${slot}-${index}`, slot, player: occupants[index]?.player ?? null });
+        rows.push({ key: `${slot}-${index}`, slot, entry: occupants[index] ?? null });
       }
     }
     return rows;
@@ -60,7 +61,7 @@ function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlo
     if (occupants.length) {
       groups.push({
         label,
-        rows: occupants.map((entry, index) => ({ key: `${slot}-${index}`, slot, player: entry.player })),
+        rows: occupants.map((entry, index) => ({ key: `${slot}-${index}`, slot, entry })),
       });
     }
   }
@@ -76,6 +77,36 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
   const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
+  const [live, setLive] = useState<Record<string, { state: string | null; points: number }>>({});
+
+  // Live in-game overlay: while games are in progress, poll each rostered
+  // player's live line so the row's bold number becomes today's live points and
+  // the game line becomes the inning. Players with no game in progress are
+  // absent from the map and keep their season/next-game display.
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/v1/teams/${teamId}/live`);
+        if (!response.ok) {
+          return;
+        }
+        const result = (await response.json()) as { live?: Record<string, { state: string | null; points: number }> };
+        if (active && result.live) {
+          setLive(result.live);
+        }
+      } catch {
+        // Keep the last known live map on a transient failure.
+      }
+    };
+
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [teamId]);
 
   const currentLineup = useMemo<LineupPlayer[]>(
     () => initialLineup.map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
@@ -156,34 +187,63 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
         <div className="lineup-list">
           {groups.map((group) => (
             <div className="lineup-group" key={group.label}>
-              <div className="lineup-group-label">{group.label}</div>
+              <div className="lineup-group-label">
+                <span>{group.label}</span>
+                <span className="lineup-col-heads" aria-hidden="true">
+                  <span>Pts</span>
+                  <span>Proj</span>
+                </span>
+              </div>
               {group.rows.map((row) =>
-                row.player ? (
-                  <div className="row editable-row lineup-slot-row" key={row.key}>
-                    <button
-                      className="pos-badge-button"
-                      type="button"
-                      onClick={() => setMovingPlayerId(row.player!.id)}
-                      aria-label={`Move ${row.player.name} out of the ${row.slot} slot`}
-                    >
-                      <PositionBadge slot={row.slot} swap />
-                    </button>
-                    <PlayerAvatar mlbPlayerId={row.player.mlbPlayerId} name={row.player.name} />
-                    <button
-                      className="player-main player-info-button"
-                      type="button"
-                      onClick={() => setDetailPlayerId(row.player!.id)}
-                      aria-label={`View ${row.player.name} details`}
-                    >
-                      <span className="player-name">{row.player.name}</span>
-                      <span className="player-meta">
-                        {row.player.mlbTeam} &middot; {row.player.positions.join(", ")} &middot; {row.player.status}
-                      </span>
-                    </button>
-                    <span className="detail-chevron" aria-hidden="true">
-                      &rsaquo;
-                    </span>
-                  </div>
+                row.entry ? (
+                  (() => {
+                    const player = row.entry.player;
+                    const { seasonPts, projPts } = rowPoints(player);
+                    const liveEntry = live[player.id];
+                    const boldPts = liveEntry ? liveEntry.points : seasonPts;
+                    const injured = player.status === "injured" || player.status === "day-to-day";
+                    const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status);
+                    const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
+
+                    return (
+                      <div className="row editable-row lineup-slot-row" key={row.key}>
+                        <button
+                          className="pos-badge-button"
+                          type="button"
+                          onClick={() => setMovingPlayerId(player.id)}
+                          aria-label={`Move ${player.name} out of the ${row.slot} slot`}
+                        >
+                          <PositionBadge slot={row.slot} swap />
+                        </button>
+                        <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
+                        <button
+                          className="player-main player-info-button"
+                          type="button"
+                          onClick={() => setDetailPlayerId(player.id)}
+                          aria-label={`View ${player.name} details`}
+                        >
+                          <span className="player-name">{player.name}</span>
+                          <span className="player-meta">
+                            {player.mlbTeam} &ndash; {player.positions.join(", ")}
+                          </span>
+                          <span className={gameClass}>{gameLine}</span>
+                        </button>
+                        <button
+                          className="player-points"
+                          type="button"
+                          onClick={() => setDetailPlayerId(player.id)}
+                          aria-label={
+                            liveEntry
+                              ? `${player.name}: ${boldPts} live fantasy points, ${projPts} projected`
+                              : `${player.name}: ${seasonPts} season fantasy points, ${projPts} projected`
+                          }
+                        >
+                          <span className={liveEntry ? "points-live is-live" : "points-live"}>{boldPts}</span>
+                          <span className="points-proj">{projPts}</span>
+                        </button>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <button
                     className="row editable-row lineup-empty-row"

@@ -9,6 +9,7 @@ import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
+import { LiveMatchup } from "./live-matchup";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
@@ -106,7 +107,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
         {selectedTab === "Team" ? <TeamTab teamId={team.id} lineup={teamLineup} watchItems={watchItems} /> : null}
         {selectedTab === "Matchup" ? (
-          matchupDetails ? <MatchupTab matchup={matchupDetails} /> : <MatchupEmptyState teamName={team.teamName} />
+          matchupDetails ? <MatchupTab matchup={matchupDetails} teamId={team.id} /> : <MatchupEmptyState teamName={team.teamName} />
         ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
         {selectedTab === "League" && leagueOverview ? <LeagueTab overview={leagueOverview} /> : null}
@@ -126,57 +127,8 @@ function TeamTab({ teamId, lineup, watchItems }: { teamId: string; lineup: Lineu
   );
 }
 
-function MatchupTab({ matchup }: { matchup: MatchupDetails }) {
-  return (
-    <div className="content-grid">
-      <section className="panel" aria-labelledby="matchup-heading">
-        <h2 id="matchup-heading">Category Score</h2>
-        <div className="matchup-summary" aria-label={`${matchup.userTeam.teamName} score against ${matchup.opponentTeam.teamName}`}>
-          <div>
-            <span className="score-name">{matchup.userTeam.teamName}</span>
-            <span className="score-value">{matchup.userScore}</span>
-          </div>
-          <span className="versus">{matchup.periodLabel}</span>
-          <div>
-            <span className="score-name">{matchup.opponentTeam.teamName}</span>
-            <span className="score-value">{matchup.opponentScore}</span>
-          </div>
-        </div>
-        <div className="category-table">
-          <div className="category-row category-head">
-            <span>{matchup.userTeam.teamName}</span>
-            <span>Cat</span>
-            <span>{matchup.opponentTeam.teamName}</span>
-            <span>Result</span>
-          </div>
-          {matchup.categoryScores.map((score) => (
-            <div className="category-row" key={score.category}>
-              <strong>{score.userValue}</strong>
-              <span className="slot">{score.category}</span>
-              <strong>{score.opponentValue}</strong>
-              <span className={`pill result-${score.result}`}>{score.result.toUpperCase()}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <aside className="panel" aria-labelledby="totals-heading">
-        <h3 id="totals-heading">Active Totals</h3>
-        <div className="lineup-list">
-          {matchup.userLineup.slice(0, 6).map((entry) => (
-            <div className="row" key={entry.player.id}>
-              <span className="slot">{entry.slot}</span>
-              <span className="player-main">
-                <span className="player-name">{entry.player.name}</span>
-                <span className="player-meta">{entry.player.mlbTeam}</span>
-              </span>
-              <span className="player-total">{entry.matchupTotal}</span>
-            </div>
-          ))}
-        </div>
-      </aside>
-    </div>
-  );
+function MatchupTab({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
+  return <LiveMatchup matchup={matchup} teamId={teamId} />;
 }
 
 function MatchupEmptyState({ teamName }: { teamName: string }) {

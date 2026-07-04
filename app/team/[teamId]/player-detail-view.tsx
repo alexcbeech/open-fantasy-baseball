@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
+import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
 export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na";
@@ -74,18 +74,21 @@ export function PlayerDetailView({
   actionInFlight,
   statusBanner,
   onAction,
+  liveStatus,
   variant = "panel",
 }: {
   player: PlayerDetail;
   actionInFlight: boolean;
   statusBanner?: PlayerDetailStatusBanner | null;
   onAction: (action: PlayerAction) => void;
+  liveStatus?: LivePlayerStatus | null;
   variant?: "panel" | "card";
 }) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const tabbed = variant === "card";
   const health = healthBadges[player.status];
   const summary = seasonSummary(player);
+  const isLive = Boolean(liveStatus?.live);
 
   return (
     <>
@@ -100,7 +103,7 @@ export function PlayerDetailView({
             </span>
           </div>
         </div>
-        <span className={`health-badge ${health.className}`}>{health.label}</span>
+        {isLive ? <span className="live-pill">Live</span> : <span className={`health-badge ${health.className}`}>{health.label}</span>}
       </div>
 
       <PlayerValueRow value={player.value} />
@@ -147,7 +150,7 @@ export function PlayerDetailView({
       ) : null}
 
       {!tabbed || tab === "overview" ? (
-        <PlayerOverview player={player} health={health.label} summary={summary} />
+        <PlayerOverview player={player} health={health.label} summary={summary} liveStatus={liveStatus} />
       ) : null}
       {!tabbed || tab === "stats" ? <PlayerStatWindows windows={player.statWindows} fallbackPlayer={player} /> : null}
       {!tabbed || tab === "gamelog" ? <PlayerGameLogRows games={player.gameLog} /> : null}
@@ -206,14 +209,64 @@ function formatGameTime(iso: string) {
   });
 }
 
-function PlayerOverview({ player, health, summary }: { player: PlayerDetail; health: string; summary: string | null }) {
+// A compact live line, e.g. "1-3, 1 R, 1 HR, 2 RBI" for hitters or
+// "5.0 IP, 6 K, 1 ER" for pitchers, from whatever the boxscore has so far.
+function liveLineSummary(stats: Record<string, number | string>): string {
+  if (stats.IP !== undefined) {
+    const parts = [`${stats.IP} IP`];
+    if (stats.K !== undefined) parts.push(`${stats.K} K`);
+    if (stats.ER !== undefined) parts.push(`${stats.ER} ER`);
+    if (Number(stats.W) > 0) parts.push("W");
+    if (Number(stats.SV) > 0) parts.push("SV");
+    return parts.join(", ");
+  }
+
+  const parts: string[] = [];
+  if (stats.H !== undefined || stats.AB !== undefined) {
+    parts.push(`${stats.H ?? 0}-${stats.AB ?? 0}`);
+  }
+  if (Number(stats.R) > 0) parts.push(`${stats.R} R`);
+  if (Number(stats.HR) > 0) parts.push(`${stats.HR} HR`);
+  if (Number(stats.RBI) > 0) parts.push(`${stats.RBI} RBI`);
+  if (Number(stats.SB) > 0) parts.push(`${stats.SB} SB`);
+  return parts.length ? parts.join(", ") : "Not in yet";
+}
+
+function LiveGameCard({ status }: { status: LivePlayerStatus }) {
+  return (
+    <div className="live-game" aria-label="Live game">
+      <div className="live-game-head">
+        <span className="live-pill">Live</span>
+        <span className="live-state">{status.state}</span>
+      </div>
+      <div className="live-game-body">
+        <span className="live-line">{liveLineSummary(status.stats)}</span>
+        <span className="live-points">{status.points ?? 0} pts</span>
+      </div>
+    </div>
+  );
+}
+
+function PlayerOverview({
+  player,
+  health,
+  summary,
+  liveStatus,
+}: {
+  player: PlayerDetail;
+  health: string;
+  summary: string | null;
+  liveStatus?: LivePlayerStatus | null;
+}) {
   const stars = starRating(player.value);
 
   return (
     <section aria-labelledby="player-overview-heading">
       <h3 id="player-overview-heading">Overview</h3>
 
-      {player.nextGame ? (
+      {liveStatus?.live ? <LiveGameCard status={liveStatus} /> : null}
+
+      {!liveStatus?.live && player.nextGame ? (
         <div className="next-game">
           <span className="next-game-label">Next Game</span>
           <span className="next-game-value">
@@ -222,6 +275,10 @@ function PlayerOverview({ player, health, summary }: { player: PlayerDetail; hea
           </span>
         </div>
       ) : null}
+
+      {stars != null ? <StarRating stars={stars} /> : null}
+
+      {summary ? <p className="detail-summary">{summary}</p> : null}
 
       <div className="metric-grid">
         <div className="metric">
@@ -237,10 +294,6 @@ function PlayerOverview({ player, health, summary }: { player: PlayerDetail; hea
           <span className="metric-value">{player.positions.join(", ")}</span>
         </div>
       </div>
-
-      {stars != null ? <StarRating stars={stars} /> : null}
-
-      {summary ? <p className="detail-summary">{summary}</p> : null}
 
       <h4 className="detail-subheading">Latest News</h4>
       <div className="setting-list">

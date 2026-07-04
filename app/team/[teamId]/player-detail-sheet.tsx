@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { PlayerDetail } from "@/lib/fantasy/types";
+import type { LivePlayerStatus, PlayerDetail } from "@/lib/fantasy/types";
 import { PlayerDetailView, type PlayerAction, type PlayerDetailStatusBanner } from "./player-detail-view";
 
 type SheetState =
@@ -17,7 +17,38 @@ type PlayerDetailSheetProps = {
 
 export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailSheetProps) {
   const [state, setState] = useState<SheetState>({ kind: "loading", player: null, message: "Loading player..." });
+  const [live, setLive] = useState<LivePlayerStatus | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Live in-game line: poll while the sheet is open so today's stats and points
+  // tick up during the game without reopening. Falls back silently when the
+  // player's team has no game in progress (the route returns live: false).
+  useEffect(() => {
+    let active = true;
+    setLive(null);
+
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/v1/players/${playerId}/live`);
+        if (!response.ok) {
+          return;
+        }
+        const result = (await response.json()) as { status?: LivePlayerStatus };
+        if (active && result.status) {
+          setLive(result.status);
+        }
+      } catch {
+        // Leave the last known live status in place on a transient failure.
+      }
+    };
+
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [playerId]);
 
   useEffect(() => {
     let active = true;
@@ -121,6 +152,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
             actionInFlight={state.kind === "loading"}
             statusBanner={statusBanner}
             onAction={applyAction}
+            liveStatus={live}
             variant="card"
           />
         ) : (

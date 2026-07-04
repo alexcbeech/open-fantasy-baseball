@@ -1,4 +1,4 @@
-import type { LineupPlayer, Player, TeamSummary } from "@/lib/fantasy/types";
+import type { LineupPlayer, Player, PlayerNextGame, TeamSummary } from "@/lib/fantasy/types";
 
 export type DbTeamSummaryRow = {
   id: string;
@@ -25,6 +25,10 @@ export type DbPlayerRow = {
   news_headline?: string | null;
   season_stats?: Record<string, number | string> | null;
   projected_stats?: Record<string, number | string> | null;
+  season_fan_points?: string | number | null;
+  game_date?: Date | string | null;
+  home_away?: "home" | "away" | null;
+  opponent?: string | null;
 };
 
 export type DbLineupRow = DbPlayerRow & {
@@ -65,6 +69,15 @@ export function mapTeamSummary(row: DbTeamSummaryRow): TeamSummary {
 }
 
 export function mapPlayer(row: DbPlayerRow): Player {
+  const nextGame: PlayerNextGame | null = row.game_date
+    ? {
+        date: new Date(row.game_date).toISOString(),
+        opponent: row.opponent ?? null,
+        homeAway: row.home_away ?? "home",
+        venue: null,
+      }
+    : null;
+
   return {
     id: row.id,
     mlbPlayerId: row.mlb_player_id,
@@ -76,6 +89,8 @@ export function mapPlayer(row: DbPlayerRow): Player {
     newsHeadline: row.news_headline ?? undefined,
     seasonStats: row.season_stats ?? {},
     projectedStats: row.projected_stats ?? {},
+    seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points)) : null,
+    nextGame,
   };
 }
 
