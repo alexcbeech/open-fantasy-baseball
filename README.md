@@ -88,7 +88,11 @@ Domain processing — waiver resolution today, with scoring/matchup/notification
 npm.cmd run jobs:run
 ```
 
-`jobs:run` (`scripts/run-jobs.ts`) enqueues the day's recurring jobs — currently `nightly_processing` — with a per-day dedup key, then drains the queue: it reclaims any jobs a crashed runner left `running`, then claims and runs each due job. A handler that throws is retried with exponential backoff (30s, 60s, 120s… capped at an hour) up to `max_attempts`, after which the job is marked `dead` with its `last_error`. Handlers must be idempotent, since a retry re-runs the whole job; `runNightlyProcessing` is (it only touches `pending`, due waiver claims under `for update`).
+`jobs:run` (`scripts/run-jobs.ts`) enqueues the day's recurring jobs with per-day dedup keys and `priority` ordering, then drains the queue: it reclaims any jobs a crashed runner left `running`, then claims and runs each due job. A handler that throws is retried with exponential backoff (30s, 60s, 120s… capped at an hour) up to `max_attempts`, after which the job is marked `dead` with its `last_error`. Handlers must be idempotent, since a retry re-runs the whole job. The recurring jobs, in run order:
+
+1. `nightly_processing` — resolve due waiver claims (only touches `pending` claims under `for update`).
+2. `recompute_matchups` — recompute every active matchup's category battle from current lineups and fresh stats (upsert-only). Standings are read-derived from these scores, so this keeps them current too. (This replaced the standalone `sync:matchups` workflow step; the npm script remains for manual runs.)
+3. `finalize_ended_matchups` — snapshot and lock matchups whose scoring period has closed (`active → final`), so live recompute stops touching them.
 
 - **Scheduled:** the nightly workflow (`.github/workflows/nightly-sync.yml`) runs `jobs:run` as its final step, after the syncs, so processing sees fresh data. Its `concurrency` group prevents overlapping runs.
 - **On demand:** the admin Operations screen's "Run nightly" button (`POST /api/v1/admin/jobs/nightly`) enqueues a `nightly_processing` job and drains the queue, returning the drain summary; recent queue rows (type · status · attempts · error) show under **Job Queue** on that screen.

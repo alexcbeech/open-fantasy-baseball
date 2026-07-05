@@ -13,10 +13,20 @@ async function main() {
   }
 
   const now = new Date();
-  const nightly = await enqueue("nightly_processing", {
-    dedupKey: dedupKeyForDaily("nightly_processing", now),
-  });
-  console.log(`nightly_processing ${nightly.deduped ? "already queued" : "enqueued"} (${nightly.id})`);
+
+  // Priority orders the drain (lower runs first): resolve waivers, then
+  // recompute matchup scores on the resulting rosters, then snapshot/lock any
+  // scoring periods that have ended. Each is dedup-keyed per day.
+  const recurring = [
+    { jobType: "nightly_processing", priority: 0 },
+    { jobType: "recompute_matchups", priority: 5 },
+    { jobType: "finalize_ended_matchups", priority: 10 },
+  ];
+
+  for (const { jobType, priority } of recurring) {
+    const result = await enqueue(jobType, { dedupKey: dedupKeyForDaily(jobType, now), priority });
+    console.log(`${jobType} ${result.deduped ? "already queued" : "enqueued"} (${result.id})`);
+  }
 
   const summary = await drainQueue({ now });
   console.log(JSON.stringify(summary, null, 2));

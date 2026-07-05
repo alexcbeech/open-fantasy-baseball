@@ -41,7 +41,7 @@
 - [x] Add projections provider adapter. (ProjectionsProvider interface with a default derived rest-of-season model computed from season + trailing-30-day stat windows; syncProjections writes projection_ros lines with ingestion_run attribution. `npm run sync:projections`.)
 - [x] Add player news provider adapter. (PlayerNewsProvider interface with a default provider synthesizing news from roster status and probable-starter schedule; syncPlayerNews deduped writes to player_news with ingestion_run attribution. `npm run sync:news`.)
 - [x] Add ingestion freshness tracking and source attribution.
-- [ ] Add scoring recalculation and matchup snapshot jobs. (Matchup detail repository/API and seeded category snapshots started.)
+- [x] Add scoring recalculation and matchup snapshot jobs. (`recompute_matchups` and `finalize_ended_matchups` handlers on the durable job queue: recompute active category battles from fresh stats/lineups, then snapshot+lock scoring periods that have ended. Run nightly after waiver processing; matchup recompute moved off the standalone sync:matchups workflow step into the queue. Standings are read-derived from matchup scores, so no separate standings job is needed.)
 - [x] Add Postgres infrastructure, migrations, seed data, Neon connection support, and repository-backed reads.
 
 ## Quality

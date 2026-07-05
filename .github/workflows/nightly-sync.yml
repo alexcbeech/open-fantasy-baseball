@@ -46,11 +46,9 @@ jobs:
       - name: Sync player news
         run: npm run sync:news
 
-      - name: Recompute matchup category scores
-        run: npm run sync:matchups
-
-      # Run domain processing (waiver resolution, and future scoring/matchup/
-      # notification recomputes) last, on the freshly synced data. Enqueues the
-      # day's jobs (dedup-keyed) and drains the durable job queue.
+      # Run domain processing last, on the freshly synced data: waiver
+      # resolution, matchup score recompute, and end-of-period snapshot/lock.
+      # Enqueues the day's jobs (dedup-keyed) and drains the durable job queue.
+      # (Matchup recompute lives here now, not a standalone sync:matchups step.)
       - name: Process due jobs
         run: npm run jobs:run
