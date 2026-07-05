@@ -27,8 +27,8 @@
 - [ ] Add scoped OAuth tokens for owner API access. (Scoped personal bearer token create/list/revoke and route scope checks started; full OAuth authorization-code + PKCE flow still pending.)
 - [x] Publish OpenAPI docs for public API consumers.
 - [ ] Add MCP server after owner API scopes are stable. (First bearer-token protected JSON-RPC MCP tools endpoint started at /api/mcp.)
-- [ ] Add background worker process and Redis queue. (Runnable one-shot nightly job script started; durable queue still pending.)
-- [ ] Implement nightly waiver and scheduled-task processing. (Due waiver claim processing, background_job_run audit, CLI script, admin trigger endpoint, admin operations screen, and run history started.)
+- [x] Add a durable job runner. (Postgres-backed `job_queue` with `FOR UPDATE SKIP LOCKED` claiming, retry/backoff, dead-lettering, per-day dedup, and stale-job reclaim; `lib/jobs/queue.ts` + `runner.ts` + pure `queue-policy.ts`. Drained by `npm run jobs:run` from the nightly GitHub Actions workflow and the admin ops screen; job-queue rows surfaced in admin. Chose Postgres over Redis/BullMQ since there is no always-on worker. Redis queue still the path only if OFB later needs high-volume/on-demand fanout.)
+- [x] Implement nightly waiver and scheduled-task processing via the durable runner. (Waiver resolution runs as the `nightly_processing` handler on the job queue, scheduled nightly after the data syncs. Scoring recalc / matchup snapshots / notification dispatch are now trivial follow-on handlers.)
 - [x] Add Web Push notification subscriptions and preference controls. (VAPID-signed Web Push: service worker, per-device subscribe/unsubscribe/test controls on the profile screen, push_subscription persistence with gone-endpoint pruning, and /api/v1/profile/push routes.)
 - [x] Add first profile/preferences screen and make the home gear link to it.
 - [x] Persist editable profile and notification preferences in Postgres.

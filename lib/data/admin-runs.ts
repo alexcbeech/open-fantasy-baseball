@@ -1,4 +1,5 @@
 import { isDatabaseConfigured, query, tryDatabase } from "@/lib/db/client";
+import { listRecentJobs, type JobRow } from "@/lib/jobs/queue";
 
 export type IngestionRunSummary = {
   id: string;
@@ -25,6 +26,7 @@ export type AdminRunHistory = {
   freshness: AdminDataFreshness;
   ingestionRuns: IngestionRunSummary[];
   backgroundJobRuns: BackgroundJobRunSummary[];
+  jobQueue: JobRow[];
 };
 
 export type AdminDataFreshness = {
@@ -130,6 +132,7 @@ export async function listAdminRunHistory(limit = 6): Promise<AdminRunHistory> {
         query<CountRow>("select count(*) as count from player_news"),
         query<CountRow>("select count(*) as count from player_stat_line"),
       ]);
+      const jobQueue = await listRecentJobs(limit);
       const latestMlbSyncAt = latestMlbSyncResult.rows[0]?.finished_at
         ? toIsoString(latestMlbSyncResult.rows[0].finished_at)
         : null;
@@ -149,6 +152,7 @@ export async function listAdminRunHistory(limit = 6): Promise<AdminRunHistory> {
         },
         ingestionRuns: ingestionResult.rows.map(mapIngestionRun),
         backgroundJobRuns: backgroundResult.rows.map(mapBackgroundJobRun),
+        jobQueue,
       };
     },
     () => ({
@@ -156,6 +160,7 @@ export async function listAdminRunHistory(limit = 6): Promise<AdminRunHistory> {
       freshness: emptyFreshness,
       ingestionRuns: [],
       backgroundJobRuns: [],
+      jobQueue: [],
     }),
   );
 }
