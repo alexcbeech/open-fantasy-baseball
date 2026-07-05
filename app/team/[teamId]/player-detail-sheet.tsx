@@ -141,11 +141,6 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
         onClick={(event) => event.stopPropagation()}
       >
         <div className="move-sheet-grabber" aria-hidden="true" />
-        <div className="detail-sheet-close-row">
-          <button className="move-sheet-close" type="button" aria-label="Close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
         {player ? (
           <PlayerDetailView
             player={player}
@@ -154,9 +149,17 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
             onAction={applyAction}
             liveStatus={live}
             variant="card"
+            onClose={onClose}
           />
         ) : (
-          <div className={state.kind === "error" ? "status-banner bad" : "empty-state"}>{state.message}</div>
+          <>
+            <div className="detail-sheet-close-row">
+              <button className="move-sheet-close" type="button" aria-label="Close" onClick={onClose}>
+                &times;
+              </button>
+            </div>
+            <div className={state.kind === "error" ? "status-banner bad" : "empty-state"}>{state.message}</div>
+          </>
         )}
       </div>
     </div>

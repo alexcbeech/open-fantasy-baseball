@@ -4,6 +4,8 @@ export type AdpEntry = {
   espnPlayerId: number | null;
   fullName: string;
   adp: number;
+  /** Real-world roster ownership (0-100); null when the feed omits it. */
+  rosteredPercent: number | null;
 };
 
 /**
@@ -29,7 +31,7 @@ type EspnPlayerEntry = {
   player?: {
     id?: number;
     fullName?: string;
-    ownership?: { averageDraftPosition?: number };
+    ownership?: { averageDraftPosition?: number; percentOwned?: number };
   };
 };
 
@@ -55,10 +57,13 @@ export class EspnAdpProvider implements AdpProvider {
         continue;
       }
 
+      const percentOwned = entry.player.ownership?.percentOwned;
+
       entries.push({
         espnPlayerId: entry.player.id ?? null,
         fullName: entry.player.fullName,
         adp,
+        rosteredPercent: typeof percentOwned === "number" ? Math.round(percentOwned) : null,
       });
     }
 
@@ -166,6 +171,7 @@ export type MatchedAdp = {
   adp: number;
   adpRank: number;
   espnPlayerId: number | null;
+  rosteredPercent: number | null;
 };
 
 /**
@@ -213,6 +219,7 @@ export function matchAdpToPlayers(
       adp: entry.adp,
       adpRank: matched.length + 1,
       espnPlayerId: entry.espnPlayerId,
+      rosteredPercent: entry.rosteredPercent,
     });
   }
 
@@ -286,6 +293,7 @@ export async function syncAdp(
         adp: index + 1,
         adpRank: index + 1,
         espnPlayerId: null,
+        rosteredPercent: null,
       }));
       source = "ofb-derived";
     }
@@ -305,9 +313,9 @@ export async function syncAdp(
 
       for (const row of matched) {
         await client.query(
-          `insert into player_adp (player_id, adp, adp_rank, source, espn_player_id)
-           values ($1, $2, $3, $4, $5)`,
-          [row.playerId, row.adp, row.adpRank, source, row.espnPlayerId],
+          `insert into player_adp (player_id, adp, adp_rank, source, espn_player_id, rostered_percent)
+           values ($1, $2, $3, $4, $5, $6)`,
+          [row.playerId, row.adp, row.adpRank, source, row.espnPlayerId, row.rosteredPercent],
         );
       }
 

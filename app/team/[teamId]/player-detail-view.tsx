@@ -76,6 +76,7 @@ export function PlayerDetailView({
   onAction,
   liveStatus,
   variant = "panel",
+  onClose,
 }: {
   player: PlayerDetail;
   actionInFlight: boolean;
@@ -83,6 +84,8 @@ export function PlayerDetailView({
   onAction: (action: PlayerAction) => void;
   liveStatus?: LivePlayerStatus | null;
   variant?: "panel" | "card";
+  /** When provided, a close control is pinned in the sticky header (card variant). */
+  onClose?: () => void;
 }) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const tabbed = variant === "card";
@@ -103,7 +106,14 @@ export function PlayerDetailView({
             </span>
           </div>
         </div>
-        {isLive ? <span className="live-pill">Live</span> : <span className={`health-badge ${health.className}`}>{health.label}</span>}
+        <div className="player-detail-header-actions">
+          {isLive ? <span className="live-pill">Live</span> : <span className={`health-badge ${health.className}`}>{health.label}</span>}
+          {onClose ? (
+            <button className="move-sheet-close" type="button" aria-label="Close" onClick={onClose}>
+              &times;
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <PlayerValueRow value={player.value} />
@@ -322,9 +332,45 @@ function presentCategories(rows: Array<Record<string, number | string>>) {
 
 type GameLogColumn = { label: string; render: (stats: Record<string, number | string>) => string };
 
-// A game log shows per-game production. Rate stats (AVG/ERA/WHIP) are omitted
-// because the MLB feed reports them season-to-date, not per game; hitters get a
-// combined H/AB, pitchers get their line. Only columns with data are shown.
+// Month/day only -- the game log spans the current season, so the year is noise.
+function formatGameLogDate(value: string): string {
+  return new Date(value).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+}
+
+// Convert baseball innings-pitched notation (6.1 = 6 1/3, 6.2 = 6 2/3) to
+// decimal innings so a per-game ERA can be computed from earned runs.
+function inningsFromIp(ip: number): number {
+  if (!Number.isFinite(ip)) {
+    return 0;
+  }
+  const whole = Math.trunc(ip);
+  const outs = Math.min(2, Math.round((ip - whole) * 10));
+  return whole + outs / 3;
+}
+
+// Per-game ERA derived from that game's earned runs and innings. The MLB feed's
+// game-log ERA is season-to-date, so it is dropped upstream and recomputed here.
+function formatGameEra(er: number | string | undefined, ip: number | string | undefined): string {
+  const innings = inningsFromIp(Number(ip));
+  if (innings <= 0) {
+    return "-";
+  }
+  return ((Number(er) * 9) / innings).toFixed(2);
+}
+
+// Per-game WHIP -- walks plus hits allowed per inning -- recomputed for the same
+// reason as ERA (the feed's game-log WHIP is season-to-date).
+function formatGameWhip(bb: number | string | undefined, ha: number | string | undefined, ip: number | string | undefined): string {
+  const innings = inningsFromIp(Number(ip));
+  if (innings <= 0) {
+    return "-";
+  }
+  return (((Number(bb) || 0) + (Number(ha) || 0)) / innings).toFixed(2);
+}
+
+// A game log shows per-game production. Season-to-date rate stats (AVG/WHIP) are
+// omitted, but pitcher ERA is recomputed per game from ER and IP; hitters get a
+// combined H/AB. Only columns with data are shown.
 function gameLogColumns(games: PlayerGameLog[]): GameLogColumn[] {
   const present = (key: string) => games.some((game) => game.stats[key] !== undefined);
   const cell = (key: string): GameLogColumn["render"] => (stats) => (stats[key] !== undefined ? String(stats[key]) : "-");
@@ -334,7 +380,7 @@ function gameLogColumns(games: PlayerGameLog[]): GameLogColumn[] {
   const isPitching = present("IP") || present("ER");
 
   if (isPitching) {
-    return pick([
+    const columns = pick([
       { label: "IP", key: "IP" },
       { label: "H", key: "HA" },
       { label: "ER", key: "ER" },
@@ -343,6 +389,13 @@ function gameLogColumns(games: PlayerGameLog[]): GameLogColumn[] {
       { label: "W", key: "W" },
       { label: "SV", key: "SV" },
     ]);
+    if (present("IP") && present("ER")) {
+      columns.push({ label: "ERA", render: (stats) => formatGameEra(stats.ER, stats.IP) });
+    }
+    if (present("IP") && (present("BB") || present("HA"))) {
+      columns.push({ label: "WHIP", render: (stats) => formatGameWhip(stats.BB, stats.HA, stats.IP) });
+    }
+    return columns;
   }
 
   const columns: GameLogColumn[] = [];
@@ -381,7 +434,7 @@ function PlayerGameLogRows({ games }: { games: PlayerGameLog[] }) {
             <tbody>
               {games.map((game) => (
                 <tr key={game.id}>
-                  <th scope="row">{new Date(game.date).toLocaleDateString()}</th>
+                  <th scope="row">{formatGameLogDate(game.date)}</th>
                   {columns.map((column) => (
                     <td key={column.label}>{column.render(game.stats)}</td>
                   ))}

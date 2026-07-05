@@ -137,6 +137,7 @@ type PlayerValueRow = {
   total_ranked: string | number;
   rostered_teams: string | number;
   total_teams: string | number;
+  external_rostered_percent: string | number | null;
 };
 
 type PlayerNextGameRow = {
@@ -270,7 +271,8 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
              (select count(*) from player x where x.season_fan_points > p.season_fan_points) as rank_ahead,
              (select count(*) from player x where x.season_fan_points is not null) as total_ranked,
              (select count(distinct re.team_id) from roster_entry re where re.player_id = p.id and re.dropped_at is null) as rostered_teams,
-             (select count(*) from fantasy_team) as total_teams
+             (select count(*) from fantasy_team) as total_teams,
+             (select rostered_percent from player_adp where player_id = p.id) as external_rostered_percent
            from player p
            where p.id = $1`,
           [playerId],
@@ -282,6 +284,12 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
       const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
       const valueRow = valueResult.rows[0];
       const totalTeams = valueRow ? Number(valueRow.total_teams) : 0;
+      // Prefer real-world ownership from the ADP feed; fall back to this app's
+      // own team ownership only when a player isn't in the external set.
+      const externalRosteredPercent =
+        valueRow?.external_rostered_percent != null ? Math.round(Number(valueRow.external_rostered_percent)) : null;
+      const internalRosteredPercent =
+        valueRow && totalTeams > 0 ? Math.round((Number(valueRow.rostered_teams) / totalTeams) * 100) : null;
 
       return {
         ...player,
@@ -292,7 +300,7 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
           fanPoints,
           rank: fanPoints != null && valueRow ? Number(valueRow.rank_ahead) + 1 : null,
           totalRanked: valueRow ? Number(valueRow.total_ranked) : 0,
-          rosteredPercent: valueRow && totalTeams > 0 ? Math.round((Number(valueRow.rostered_teams) / totalTeams) * 100) : null,
+          rosteredPercent: externalRosteredPercent ?? internalRosteredPercent,
         },
         nextGame: nextGameRow
           ? {
