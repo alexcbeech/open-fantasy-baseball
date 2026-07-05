@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapMlbStat } from "./mlb-stats-sync";
+import { derivePitcherEligibility, mapMlbStat } from "./mlb-stats-sync";
 
 describe("mapMlbStat", () => {
   it("maps hitting fields to OFB categories with rate stats as strings", () => {
@@ -25,5 +25,44 @@ describe("mapMlbStat", () => {
 
   it("returns an empty map for missing stat objects", () => {
     expect(mapMlbStat(undefined, "hitting")).toEqual({});
+  });
+});
+
+describe("derivePitcherEligibility", () => {
+  it("tags a full-time starter SP only", () => {
+    // Paul Skenes: 32 GS / 32 G.
+    expect(derivePitcherEligibility(32, 32)).toEqual(["SP"]);
+  });
+
+  it("tags a full-time reliever RP only", () => {
+    // 0 GS / 60 relief appearances.
+    expect(derivePitcherEligibility(0, 60)).toEqual(["RP"]);
+  });
+
+  it("tags a swingman both SP and RP", () => {
+    // Nick Martinez: 26 GS / 40 G -> 14 relief appearances.
+    expect(derivePitcherEligibility(26, 40)).toEqual(["SP", "RP"]);
+  });
+
+  it("falls back to the dominant role on a small sample", () => {
+    // Two starts, one relief appearance: neither clears the threshold.
+    expect(derivePitcherEligibility(2, 3)).toEqual(["SP"]);
+    // One start, two relief appearances.
+    expect(derivePitcherEligibility(1, 3)).toEqual(["RP"]);
+  });
+
+  it("returns nothing for a pitcher with no appearances yet", () => {
+    expect(derivePitcherEligibility(0, 0)).toEqual([]);
+  });
+
+  it("coerces missing or non-finite inputs to zero", () => {
+    expect(derivePitcherEligibility(Number.NaN, Number.NaN)).toEqual([]);
+    // A start with a missing games count still counts as one appearance.
+    expect(derivePitcherEligibility(1, Number.NaN)).toEqual(["SP"]);
+  });
+
+  it("never returns RP when games played is fewer than starts (bad data)", () => {
+    // Guards against a negative relief count producing an RP tag.
+    expect(derivePitcherEligibility(5, 3)).toEqual(["SP"]);
   });
 });

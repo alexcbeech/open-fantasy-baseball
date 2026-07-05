@@ -96,6 +96,105 @@ function blockGroup(block: MlbStatBlock): "hitting" | "pitching" {
   return block.group?.displayName === "pitching" ? "pitching" : "hitting";
 }
 
+// A pitcher needs at least this many starts (or relief appearances) to gain
+// starter (or reliever) eligibility, mirroring the appearance-based rules
+// familiar fantasy platforms use.
+const PITCHER_ROLE_APPEARANCE_THRESHOLD = 3;
+
+/**
+ * Derive fantasy starter/reliever eligibility from a pitcher's season usage.
+ * The MLB roster feed only labels pitchers "P", so SP/RP roster slots would be
+ * unfillable without this. Starters and relievers each qualify once they clear
+ * the appearance threshold, so a swingman earns both; a small early-season
+ * sample falls back to the role the pitcher has been used in most. An empty
+ * result (no appearances yet) is left to the slot-eligibility backfill.
+ */
+export function derivePitcherEligibility(gamesStarted: number, gamesPlayed: number): Array<"SP" | "RP"> {
+  const starts = Number.isFinite(gamesStarted) ? Math.max(0, Math.trunc(gamesStarted)) : 0;
+  const rawGames = Number.isFinite(gamesPlayed) ? Math.max(0, Math.trunc(gamesPlayed)) : 0;
+  // A start is always an appearance, so treat games as at least the start
+  // count; this also guards against missing/contradictory games-played data.
+  const games = Math.max(rawGames, starts);
+  const reliefAppearances = games - starts;
+  const positions: Array<"SP" | "RP"> = [];
+
+  if (starts >= PITCHER_ROLE_APPEARANCE_THRESHOLD) {
+    positions.push("SP");
+  }
+
+  if (reliefAppearances >= PITCHER_ROLE_APPEARANCE_THRESHOLD) {
+    positions.push("RP");
+  }
+
+  if (positions.length === 0 && games > 0) {
+    positions.push(starts >= reliefAppearances ? "SP" : "RP");
+  }
+
+  return positions;
+}
+
+/**
+ * Write starter/reliever eligibility for one pitcher derived from a season
+ * pitching stat block. No-op for players with no pitching appearances yet.
+ */
+async function upsertPitcherEligibility(client: PoolClient, playerId: string, stat: Record<string, unknown> | undefined) {
+  if (!stat) {
+    return;
+  }
+
+  const positions = derivePitcherEligibility(Number(stat.gamesStarted ?? 0), Number(stat.gamesPlayed ?? 0));
+
+  for (const position of positions) {
+    await client.query(
+      `insert into player_position_eligibility (player_id, position, source, valid_from)
+       values ($1, $2, $3, current_date)
+       on conflict (player_id, position, valid_from) do nothing`,
+      [playerId, position, source],
+    );
+  }
+}
+
+/**
+ * Ensure every pitcher can fill a dedicated SP or RP slot even without season
+ * stats (non-qualified relievers, early-season/rookie arms). Probable starters
+ * gain SP; any remaining "P"-only pitcher gets RP so the slot is fillable.
+ * Idempotent, and run after any precise stats-based derivation so it only fills
+ * the gaps. Shared by the teams/rosters sync and the stats sync.
+ */
+export async function backfillPitcherSlotEligibility(client: PoolClient) {
+  // Scheduled starters are starters, even before they clear the start threshold.
+  await client.query(
+    `insert into player_position_eligibility (player_id, position, source, valid_from)
+     select distinct probable.player_id, 'SP', $1, current_date
+     from (
+       select home_probable_pitcher_player_id as player_id from mlb_game where home_probable_pitcher_player_id is not null
+       union
+       select away_probable_pitcher_player_id from mlb_game where away_probable_pitcher_player_id is not null
+     ) probable
+     where not exists (
+       select 1 from player_position_eligibility existing
+       where existing.player_id = probable.player_id and existing.position = 'SP' and existing.valid_to is null
+     )
+     on conflict (player_id, position, valid_from) do nothing`,
+    [source],
+  );
+
+  // Any pitcher still lacking a dedicated slot defaults to reliever.
+  await client.query(
+    `insert into player_position_eligibility (player_id, position, source, valid_from)
+     select distinct pitcher.player_id, 'RP', $1, current_date
+     from player_position_eligibility pitcher
+     where pitcher.position = 'P' and pitcher.valid_to is null
+       and not exists (
+         select 1 from player_position_eligibility dedicated
+         where dedicated.player_id = pitcher.player_id
+           and dedicated.position in ('SP', 'RP') and dedicated.valid_to is null
+       )
+     on conflict (player_id, position, valid_from) do nothing`,
+    [source],
+  );
+}
+
 async function detectCurrentSeason(baseUrl: string, today: Date): Promise<number> {
   try {
     const payload = await fetchJson<{ seasons?: Array<{ seasonId?: string }> }>(`/seasons/current?sportId=1`, baseUrl);
@@ -178,6 +277,9 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
                 playerId,
               ]);
             }
+            if (group === "pitching") {
+              await upsertPitcherEligibility(client, playerId, split.stat);
+            }
           }
 
           if (splits.length < limit) {
@@ -221,6 +323,11 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
           rowsSeen += 1;
         });
       }
+
+      // Fill SP/RP eligibility gaps for pitchers the leaderboard didn't cover
+      // (non-qualified relievers, early-season arms) so dedicated pitching
+      // slots are fillable across the whole player pool.
+      await backfillPitcherSlotEligibility(client);
 
       // Real data supersedes the seeded placeholder lines for the same
       // player+split, so the detail view stops interleaving fake games.
@@ -270,11 +377,15 @@ async function syncRosteredPlayer(
     baseUrl,
   );
   for (const block of seasonPayload.stats ?? []) {
-    const stats = mapMlbStat(block.splits?.[0]?.stat, blockGroup(block));
+    const group = blockGroup(block);
+    const stats = mapMlbStat(block.splits?.[0]?.stat, group);
     if (Object.keys(stats).length) {
       seen();
       await upsert(player.id, statDate, "season", stats);
       await client.query(`update player set season_fan_points = $1 where id = $2`, [calculateFantasyPoints(stats), player.id]);
+    }
+    if (group === "pitching") {
+      await upsertPitcherEligibility(client, player.id, block.splits?.[0]?.stat);
     }
   }
 

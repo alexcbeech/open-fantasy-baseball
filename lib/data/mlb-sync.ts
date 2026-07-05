@@ -1,4 +1,5 @@
 import { getPool } from "../db/client";
+import { backfillPitcherSlotEligibility } from "./mlb-stats-sync";
 
 type MlbTeam = {
   id: number;
@@ -170,6 +171,11 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
 
     const scheduleRowsSeen = await syncMlbSchedule(client, baseUrl);
     rowsSeen += scheduleRowsSeen;
+
+    // The roster feed labels every pitcher "P"; give each a fillable dedicated
+    // slot (SP for probable starters, RP otherwise) now that probable pitchers
+    // are known. The stats sync later refines this from real starts/relief use.
+    await backfillPitcherSlotEligibility(client);
 
     await client.query(
       `update ingestion_run
