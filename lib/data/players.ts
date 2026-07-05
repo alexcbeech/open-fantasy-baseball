@@ -1,4 +1,4 @@
-import { query, tryDatabase } from "@/lib/db/client";
+import { isUuid, query, tryDatabase } from "@/lib/db/client";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem } from "@/lib/fantasy/types";
@@ -169,7 +169,7 @@ type PlayerGameLogRow = {
   stats: Record<string, number | string>;
 };
 
-export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | null> {
+export async function getPlayerDetail(playerId: string, teamId?: string): Promise<PlayerDetail | null> {
   return tryDatabase(
     async () => {
       const playerResult = await query<PlayerDetailRow>(
@@ -218,7 +218,8 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
         return null;
       }
 
-      const [newsResult, statsResult, gameLogResult, nextGameResult, valueResult] = await Promise.all([
+      const [newsResult, statsResult, gameLogResult, nextGameResult, valueResult, rosterMembershipResult] =
+        await Promise.all([
         query<PlayerNewsRow>(
           `select id, source, source_url, headline, summary, published_at
            from player_news
@@ -277,8 +278,19 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
            where p.id = $1`,
           [playerId],
         ),
+        // Whether the player is on the *current* team's active roster. Drives
+        // the drop/IL/NA controls, which only apply to your own roster.
+        teamId && isUuid(teamId)
+          ? query<{ on_team: boolean }>(
+              `select exists (
+                 select 1 from roster_entry where team_id = $1 and player_id = $2 and dropped_at is null
+               ) as on_team`,
+              [teamId, playerId],
+            )
+          : Promise.resolve({ rows: [{ on_team: false }] as { on_team: boolean }[] }),
       ]);
 
+      const onCurrentTeam = rosterMembershipResult.rows[0]?.on_team ?? false;
       const player = mapPlayer(playerRow);
       const nextGameRow = nextGameResult.rows[0];
       const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
@@ -314,10 +326,13 @@ export async function getPlayerDetail(playerId: string): Promise<PlayerDetail | 
         statWindows: statsResult.rows.map(mapStatWindow),
         gameLog: gameLogResult.rows.map(mapGameLog),
         management: {
+          // Add a player only if they are unrostered (a free agent / on waivers).
+          // Drop, IL, and NA act on the current team's roster, so they require
+          // the player to actually be on it.
           canAdd: player.availability !== "rostered",
-          canDrop: player.availability === "rostered",
-          canMoveToIL: player.status === "injured" || player.status === "day-to-day",
-          canMoveToNA: player.status === "minors",
+          canDrop: onCurrentTeam,
+          canMoveToIL: onCurrentTeam && (player.status === "injured" || player.status === "day-to-day"),
+          canMoveToNA: onCurrentTeam && player.status === "minors",
         },
       };
     },
