@@ -93,6 +93,9 @@ npm.cmd run jobs:run
 1. `nightly_processing` — resolve due waiver claims (only touches `pending` claims under `for update`).
 2. `recompute_matchups` — recompute every active matchup's category battle from current lineups and fresh stats (upsert-only). Standings are read-derived from these scores, so this keeps them current too. (This replaced the standalone `sync:matchups` workflow step; the npm script remains for manual runs.)
 3. `finalize_ended_matchups` — snapshot and lock matchups whose scoring period has closed (`active → final`), so live recompute stops touching them.
+4. `send_notifications` — drain the notification outbox and deliver queued push notifications, so this runs after the jobs that produce them.
+
+Notifications use a durable outbox (`notification_outbox`, migration `0008`): a producer inserts a row **inside its own transaction** — e.g. waiver resolution queues a "claim won/lost" push via `enqueueNotificationForTeam` (bot teams are skipped) — and `send_notifications` later delivers each pending row through the existing `sendPushToUser` Web Push helper, marking it `sent`/`failed`. This decouples push latency and flakiness from the domain write; a manager with no subscribed devices is a successful no-op.
 
 - **Scheduled:** the nightly workflow (`.github/workflows/nightly-sync.yml`) runs `jobs:run` as its final step, after the syncs, so processing sees fresh data. Its `concurrency` group prevents overlapping runs.
 - **On demand:** the admin Operations screen's "Run nightly" button (`POST /api/v1/admin/jobs/nightly`) enqueues a `nightly_processing` job and drains the queue, returning the drain summary; recent queue rows (type · status · attempts · error) show under **Job Queue** on that screen.

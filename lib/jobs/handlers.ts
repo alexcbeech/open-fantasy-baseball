@@ -1,4 +1,5 @@
 import { finalizeEndedMatchups, recomputeMatchups } from "@/lib/data/matchup-scoring";
+import { drainNotifications } from "@/lib/data/notifications";
 import { runNightlyProcessing } from "./nightly-processing";
 
 /**
@@ -19,6 +20,9 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Snapshot + lock matchups whose scoring period has closed. Once a period is
   // final it is skipped, so re-running is a no-op.
   finalize_ended_matchups: async () => finalizeEndedMatchups(),
+  // Deliver queued push notifications (waiver results, etc.). Sent rows are no
+  // longer pending, so a retry only picks up anything left unsent.
+  send_notifications: async () => drainNotifications(),
 };
 
 export function getJobHandler(jobType: string): JobHandler | null {

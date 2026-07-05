@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured } from "@/lib/db/client";
+import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
 
 export const nightlyProcessingTasks = [
   "Lock previous scoring period and finalize matchup snapshots.",
@@ -179,6 +180,7 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
     for (const group of claimGroups) {
       const playerAvailable = await isPlayerAvailable(client, group[0].addPlayerId);
       const decisions = decideWaiverClaimsForPlayer(group, playerAvailable);
+      const playerName = await getPlayerName(client, group[0].addPlayerId);
 
       for (const decision of decisions) {
         const claim = group.find((candidate) => candidate.id === decision.claimId);
@@ -196,6 +198,15 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
         } else {
           waiverClaimsLost += 1;
         }
+
+        // Queue a push for the claiming manager (skipped for bot teams). Runs
+        // in this transaction so the notification commits with the result; the
+        // send_notifications job delivers it.
+        await enqueueNotificationForTeam(
+          client,
+          claim.teamId,
+          buildWaiverNotification(decision.status, playerName, claim.leagueId),
+        );
       }
     }
 
@@ -212,6 +223,11 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
     await client.query("rollback");
     throw error;
   }
+}
+
+async function getPlayerName(client: PoolClient, playerId: string): Promise<string> {
+  const result = await client.query<{ full_name: string }>(`select full_name from player where id = $1`, [playerId]);
+  return result.rows[0]?.full_name ?? "your claim";
 }
 
 async function isPlayerAvailable(client: PoolClient, playerId: string) {

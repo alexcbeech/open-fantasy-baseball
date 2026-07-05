@@ -21,6 +21,8 @@ async function main() {
     { jobType: "nightly_processing", priority: 0 },
     { jobType: "recompute_matchups", priority: 5 },
     { jobType: "finalize_ended_matchups", priority: 10 },
+    // Runs last so it delivers notifications the jobs above produced.
+    { jobType: "send_notifications", priority: 15 },
   ];
 
   for (const { jobType, priority } of recurring) {
