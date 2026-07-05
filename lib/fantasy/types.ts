@@ -8,6 +8,8 @@ export type LineupLockMode = "daily" | "weekly" | "first-game";
 
 export type DraftType = "snake" | "auction" | "offline";
 
+export type PlayerPool = "all" | "al" | "nl";
+
 export type StatCategory =
   | "R"
   | "HR"
@@ -52,6 +54,8 @@ export type LeagueSettings = {
   playoffTeamCount: number;
   lineupLockMode: LineupLockMode;
   draftType: DraftType;
+  playerPool: PlayerPool;
+  draftPickSeconds: number;
   allowILPlus: boolean;
   allowNA: boolean;
   addDropDeadlineDays: number[];

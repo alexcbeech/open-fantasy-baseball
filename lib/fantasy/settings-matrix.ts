@@ -1,4 +1,4 @@
-import type { DraftType, LeagueScoringType, LineupLockMode, RosterSlot, StatCategory, TradeReviewMode, WaiverMode } from "./types";
+import type { DraftType, LeagueScoringType, LineupLockMode, PlayerPool, RosterSlot, StatCategory, TradeReviewMode, WaiverMode } from "./types";
 
 export type CommissionerSettingKind =
   | "number"
@@ -35,6 +35,8 @@ export const waiverModes: WaiverMode[] = ["rolling", "faab"];
 export const tradeReviewModes: TradeReviewMode[] = ["league-vote", "commissioner", "none"];
 export const lineupLockModes: LineupLockMode[] = ["daily", "weekly", "first-game"];
 export const draftTypes: DraftType[] = ["snake", "auction", "offline"];
+export const playerPools: PlayerPool[] = ["all", "al", "nl"];
+export const draftPickSecondsOptions = [30, 60, 90, 120] as const;
 export const scoringPeriods = ["daily", "weekly"] as const;
 
 export const commissionerSettingsMatrix: CommissionerSettingDefinition[] = [
@@ -207,6 +209,28 @@ export const commissionerSettingsMatrix: CommissionerSettingDefinition[] = [
     defaultValue: "snake",
     options: draftTypes,
     description: "Draft format used to form initial rosters.",
+    commissionerEditable: true,
+    locksAfterDraft: true,
+  },
+  {
+    key: "playerPool",
+    label: "Player Pool",
+    kind: "enum",
+    appliesTo: allScoringTypes,
+    defaultValue: "all",
+    options: playerPools,
+    description: "Draftable player universe: all MLB players, AL-only, or NL-only.",
+    commissionerEditable: true,
+    locksAfterDraft: true,
+  },
+  {
+    key: "draftPickSeconds",
+    label: "Draft Pick Clock",
+    kind: "enum",
+    appliesTo: allScoringTypes,
+    defaultValue: 60,
+    options: draftPickSecondsOptions,
+    description: "Seconds each manager has to make a draft pick before auto-pick.",
     commissionerEditable: true,
     locksAfterDraft: true,
   },

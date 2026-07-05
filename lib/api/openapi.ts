@@ -515,6 +515,127 @@ export const openApiDocument = {
         },
       },
     },
+    "/leagues/{leagueId}/draft": {
+      get: {
+        tags: ["Draft"],
+        summary: "Read the live draft state",
+        description:
+          "Returns the draft's teams, picks, on-the-clock cursor, and server-authoritative pick deadline. Reading also lazily resolves any expired turns (bot picks and auto-picks), so the clock advances as long as anyone is polling.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:team",
+        parameters: [pathParameter("leagueId", "League id.")],
+        responses: {
+          "200": { description: "Current draft state." },
+          "404": { description: "League or draft not found.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/draft/players": {
+      get: {
+        tags: ["Draft"],
+        summary: "List available draft players",
+        description: "Undrafted players in the league's player pool (all/AL/NL), ranked by external ADP with a derived fallback.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:team",
+        parameters: [
+          pathParameter("leagueId", "League id."),
+          { name: "q", in: "query", required: false, schema: { type: "string" }, description: "Name search." },
+          { name: "position", in: "query", required: false, schema: { type: "string" }, description: "Position filter (C, 1B, ..., SP, RP)." },
+        ],
+        responses: {
+          "200": { description: "Ranked available players." },
+          "404": { description: "League not found.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/draft/setup": {
+      post: {
+        tags: ["Draft"],
+        summary: "Set up the draft (commissioner)",
+        description: "Creates the commissioner's team, fills open seats with bot teams, and writes the draft order and pick clock.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "write:draft",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["pickSeconds", "myTeamName"],
+          properties: {
+            pickSeconds: { type: "integer", minimum: 15, maximum: 300 },
+            randomizeOrder: { type: "boolean" },
+            order: { type: "array", items: { type: "string", format: "uuid" } },
+            fillWithBots: { type: "boolean" },
+            myTeamName: { type: "string", minLength: 3, maxLength: 40 },
+          },
+        }),
+        responses: {
+          "201": { description: "Draft created or updated; current state returned." },
+          "400": { description: "Invalid setup payload.", content: errorContent() },
+          "403": { description: "Only the commissioner can set up the draft.", content: errorContent() },
+          "409": { description: "The draft has already started.", content: errorContent() },
+          "503": { description: "Drafting requires a configured database.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/draft/start": {
+      post: {
+        tags: ["Draft"],
+        summary: "Start the draft (commissioner)",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "write:draft",
+        parameters: [pathParameter("leagueId", "League id.")],
+        responses: {
+          "200": { description: "Draft started; pick 1 is on the clock." },
+          "403": { description: "Only the commissioner can start the draft.", content: errorContent() },
+          "409": { description: "Seats are unfilled or the draft already started.", content: errorContent() },
+          "503": { description: "Drafting requires a configured database.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/draft/pause": {
+      post: {
+        tags: ["Draft"],
+        summary: "Pause or resume the draft (commissioner)",
+        description: "Pausing stores the clock remainder; resuming restores it.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "write:draft",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["action"],
+          properties: { action: { type: "string", enum: ["pause", "resume"] } },
+        }),
+        responses: {
+          "200": { description: "Draft paused or resumed." },
+          "403": { description: "Only the commissioner can pause or resume.", content: errorContent() },
+          "409": { description: "The draft is not in a pausable/resumable state.", content: errorContent() },
+          "503": { description: "Drafting requires a configured database.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/draft/pick": {
+      post: {
+        tags: ["Draft"],
+        summary: "Make the on-clock pick",
+        description:
+          "Drafts a player for the on-the-clock team. The caller must manage that team (or be commissioner). Completing the final pick activates the league and auto-assigns initial lineups.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "write:draft",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["playerId"],
+          properties: { playerId: { type: "string", format: "uuid" } },
+        }),
+        responses: {
+          "200": { description: "Pick recorded; refreshed draft state returned." },
+          "400": { description: "Invalid pick payload.", content: errorContent() },
+          "403": { description: "Not your turn or not your team.", content: errorContent() },
+          "409": { description: "Player already drafted or the draft is not in progress.", content: errorContent() },
+          "422": { description: "Player is outside the league's player pool.", content: errorContent() },
+          "503": { description: "Drafting requires a configured database.", content: errorContent() },
+        },
+      },
+    },
     "/leagues": {
       post: {
         tags: ["Leagues"],

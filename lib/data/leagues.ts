@@ -95,15 +95,26 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
   );
 }
 
-export async function createLeague(input: CreateLeagueInput) {
+export type LeagueCommissioner = {
+  email: string;
+  displayName: string;
+};
+
+// Draft setup and other commissioner-only actions check league_member.role,
+// so the creating session user must become the commissioner. The seed-user
+// fallback only remains for callers with no session (e.g. scripts).
+const fallbackCommissioner: LeagueCommissioner = { email: "alex@example.local", displayName: "Alex" };
+
+export async function createLeague(input: CreateLeagueInput, commissioner: LeagueCommissioner = fallbackCommissioner) {
   return tryDatabase(
     async () => {
       const settings = buildLeagueSettingsFromInput(input);
       const userResult = await query<{ id: string }>(
         `insert into app_user (email, display_name)
-         values ('alex@example.local', 'Alex')
+         values ($1, $2)
          on conflict (email) do update set display_name = excluded.display_name
          returning id`,
+        [commissioner.email, commissioner.displayName],
       );
       const userId = userResult.rows[0].id;
       const leagueResult = await query<{ id: string }>(

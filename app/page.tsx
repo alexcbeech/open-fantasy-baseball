@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { listDraftableLeagues } from "@/lib/data/draft";
 import { listTeamsForCurrentUser } from "@/lib/data/teams";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 
@@ -16,6 +17,7 @@ export default async function HomePage() {
   }
 
   const teams = await listTeamsForCurrentUser();
+  const draftableLeagues = currentUser ? await listDraftableLeagues(currentUser.userId) : [];
   // Lead with a live head-to-head if there is one, else the top-ranked team.
   const featured =
     teams.find((team) => team.scoringType !== "roto" && team.matchup.opponentName !== "Season Standings") ??
@@ -50,6 +52,31 @@ export default async function HomePage() {
       </header>
 
       <section className="page" aria-labelledby="teams-heading">
+        {draftableLeagues.length ? (
+          <>
+            <div className="section-title">
+              <h2 id="drafts-heading">Drafts</h2>
+            </div>
+            <div className="team-list draft-entry-list">
+              {draftableLeagues.map((league) => (
+                <Link className="team-card draft-entry-card" href={`/draft/${league.leagueId}`} key={league.leagueId}>
+                  <div className="team-card-header">
+                    <div>
+                      <div className="team-name">{league.leagueName}</div>
+                      <div className="league-name">
+                        {league.status === "drafting" ? "Draft in progress — join the room" : "Set up your draft"}
+                      </div>
+                    </div>
+                    <span className={league.status === "drafting" ? "pill draft-live-pill" : "pill"}>
+                      {league.status === "drafting" ? "● LIVE" : "Pre-draft"}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        ) : null}
+
         {featured ? (
           <>
             <div className="section-title">
