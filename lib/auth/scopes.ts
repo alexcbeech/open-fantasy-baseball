@@ -5,6 +5,7 @@ export const oauthScopes = [
   "write:lineup",
   "write:transactions",
   "write:trades",
+  "write:draft",
   "commissioner:league",
 ] as const;
 
@@ -17,6 +18,7 @@ export const scopeDescriptions: Record<OAuthScope, string> = {
   "write:lineup": "Set lineups and manage bench, IL, and NA assignments.",
   "write:transactions": "Add, drop, waiver, and FAAB bid on players.",
   "write:trades": "Create, accept, reject, and cancel trade offers.",
+  "write:draft": "Make draft picks and manage live drafts.",
   "commissioner:league": "Manage commissioner-controlled league settings and decisions.",
 };
 

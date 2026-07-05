@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import type { defaultCreateLeagueInput } from "@/lib/fantasy/league-create";
-import { draftTypes, lineupLockModes, tradeReviewModes, waiverModes } from "@/lib/fantasy/settings-matrix";
+import { draftPickSecondsOptions, draftTypes, lineupLockModes, playerPools, tradeReviewModes, waiverModes } from "@/lib/fantasy/settings-matrix";
+
+const playerPoolLabels: Record<string, string> = {
+  all: "All MLB",
+  al: "AL only",
+  nl: "NL only",
+};
 
 type LeagueCreateFormProps = {
   defaults: typeof defaultCreateLeagueInput;
@@ -34,6 +40,8 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
       tradeReviewDays: formData.get("tradeReviewDays"),
       lineupLockMode: formData.get("lineupLockMode"),
       draftType: formData.get("draftType"),
+      playerPool: formData.get("playerPool"),
+      draftPickSeconds: formData.get("draftPickSeconds"),
       allowNA: formData.has("allowNA"),
       allowILPlus: formData.has("allowILPlus"),
     };
@@ -144,6 +152,29 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
             {draftTypes.map((draftType) => (
               <option value={draftType} key={draftType}>
                 {draftType}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="field-grid">
+        <label className="field">
+          <span>Player Pool</span>
+          <select name="playerPool" defaultValue={defaults.playerPool}>
+            {playerPools.map((pool) => (
+              <option value={pool} key={pool}>
+                {playerPoolLabels[pool] ?? pool}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Pick Clock</span>
+          <select name="draftPickSeconds" defaultValue={defaults.draftPickSeconds}>
+            {draftPickSecondsOptions.map((seconds) => (
+              <option value={seconds} key={seconds}>
+                {seconds}s
               </option>
             ))}
           </select>

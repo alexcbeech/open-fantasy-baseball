@@ -20,6 +20,7 @@
     "sync:stats": "tsx scripts/sync-stats.ts",
     "sync:bios": "tsx scripts/sync-bios.ts",
     "sync:projections": "tsx scripts/sync-projections.ts",
+    "sync:adp": "tsx scripts/sync-adp.ts",
     "sync:news": "tsx scripts/sync-news.ts",
     "sync:matchups": "tsx scripts/sync-matchups.ts",
     "seed:opponent": "tsx scripts/seed-opponent.ts"

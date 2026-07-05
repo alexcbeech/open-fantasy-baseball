@@ -2201,3 +2201,311 @@ button.row {
     max-width: 74px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Draft room
+--------------------------------------------------------------------------- */
+
+.draft-room {
+  display: grid;
+  gap: 12px;
+}
+
+.draft-clock-banner {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px;
+  position: sticky;
+  top: 8px;
+  z-index: 3;
+}
+
+.draft-clock-banner.my-turn {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand) inset, var(--shadow);
+}
+
+.draft-clock-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.draft-clock-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.draft-clock-banner.my-turn .draft-clock-label {
+  color: var(--brand);
+}
+
+.draft-clock-team {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-clock-right {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.draft-clock-time {
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.draft-clock-time.urgent {
+  animation: draft-clock-pulse 1s ease-in-out infinite;
+  color: var(--loss);
+}
+
+@keyframes draft-clock-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.draft-pause-button {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.draft-ticker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.draft-ticker-chip {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.draft-ticker-pos {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.draft-tabbar .tab {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.draft-adp-rank {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  min-width: 28px;
+  text-align: center;
+}
+
+.draft-needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.draft-need-chip {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 10px;
+}
+
+.draft-board-scroll {
+  overflow-x: auto;
+}
+
+.draft-board {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.draft-board th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 4px;
+  text-transform: uppercase;
+}
+
+.draft-board-round,
+.draft-board-round-head {
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  left: 0;
+  min-width: 24px;
+  position: sticky;
+  text-align: center;
+  z-index: 1;
+}
+
+.draft-cell {
+  border: 1px solid var(--line);
+  font-size: 11px;
+  height: 44px;
+  min-width: 74px;
+  padding: 3px 5px;
+  vertical-align: middle;
+}
+
+.draft-cell.current {
+  animation: draft-clock-pulse 1.4s ease-in-out infinite;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand) inset;
+}
+
+.draft-cell-pick {
+  display: grid;
+  gap: 1px;
+}
+
+.draft-cell-pos {
+  color: var(--brand-strong);
+  font-weight: 900;
+}
+
+.draft-cell-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-cell-onclock {
+  color: var(--brand);
+  display: block;
+  text-align: center;
+}
+
+.draft-setup-actions {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.draft-setup-bots {
+  align-self: end;
+}
+
+.draft-order-list {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.draft-order-row {
+  align-items: center;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  padding: 8px 10px;
+}
+
+.draft-order-position {
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
+}
+
+.draft-order-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.draft-order-controls button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  min-height: 30px;
+  min-width: 30px;
+}
+
+.draft-order-controls button:disabled {
+  opacity: 0.4;
+}
+
+.draft-start-button {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.draft-complete-link {
+  display: inline-flex;
+  margin: 10px 0 16px;
+}
+
+.pick-sheet-player {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin: 12px 0;
+}
+
+.pick-sheet-stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+
+.pick-sheet-statline {
+  margin: 0 0 12px;
+}
+
+.pick-sheet-reason {
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+.draft-entry-list {
+  margin-bottom: 12px;
+}
+
+.draft-live-pill {
+  background: var(--good-bg);
+  color: var(--win);
+}

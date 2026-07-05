@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defaultLeagueSettings } from "./defaults";
-import { draftTypes, lineupLockModes, tradeReviewModes, waiverModes } from "./settings-matrix";
+import { draftTypes, lineupLockModes, playerPools, tradeReviewModes, waiverModes } from "./settings-matrix";
 
 export const createLeagueInputSchema = z.object({
   name: z.string().trim().min(3).max(80),
@@ -13,6 +13,8 @@ export const createLeagueInputSchema = z.object({
   tradeReviewDays: z.coerce.number().int().min(0).max(7),
   lineupLockMode: z.enum([lineupLockModes[0], lineupLockModes[1], lineupLockModes[2]]),
   draftType: z.enum([draftTypes[0], draftTypes[1], draftTypes[2]]),
+  playerPool: z.enum([playerPools[0], playerPools[1], playerPools[2]]).default(defaultLeagueSettings.playerPool),
+  draftPickSeconds: z.coerce.number().int().min(15).max(300).default(defaultLeagueSettings.draftPickSeconds),
   allowNA: z.coerce.boolean().default(defaultLeagueSettings.allowNA),
   allowILPlus: z.coerce.boolean().default(defaultLeagueSettings.allowILPlus),
 });
@@ -31,6 +33,8 @@ export function buildLeagueSettingsFromInput(input: CreateLeagueInput) {
     tradeReviewDays: input.tradeReviewDays,
     lineupLockMode: input.lineupLockMode,
     draftType: input.draftType,
+    playerPool: input.playerPool,
+    draftPickSeconds: input.draftPickSeconds,
     allowNA: input.allowNA,
     allowILPlus: input.allowILPlus,
   };
@@ -47,6 +51,8 @@ export const defaultCreateLeagueInput: CreateLeagueInput = {
   tradeReviewDays: defaultLeagueSettings.tradeReviewDays,
   lineupLockMode: defaultLeagueSettings.lineupLockMode,
   draftType: defaultLeagueSettings.draftType,
+  playerPool: defaultLeagueSettings.playerPool,
+  draftPickSeconds: defaultLeagueSettings.draftPickSeconds,
   allowNA: defaultLeagueSettings.allowNA,
   allowILPlus: defaultLeagueSettings.allowILPlus,
 };

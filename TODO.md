@@ -19,6 +19,7 @@
 - [x] Add Players tab search, filters, availability, projected stats, and rolling stat windows.
 - [x] Add League tab standings, team stats, settings, and commissioner tools.
 - [x] Add player detail sheet with news, game log, season stats, projections, and management actions.
+- [x] Add live snake draft: commissioner setup (seats, bots, order, pick clock), mobile draft room (clock banner, ADP-ranked player list, board grid, my-team needs), lazy server clock with auto-pick and bot picks, pause/resume, and post-draft lineup assignment. (Player pool setting supports All/AL-only/NL-only; external ADP via `npm run sync:adp` with derived fallback; auction/offline order strategies stubbed for later.)
 
 ## Platform
 

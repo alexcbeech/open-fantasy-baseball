@@ -68,7 +68,13 @@ Recompute each active matchup's category battle from the current lineups' real s
 npm.cmd run sync:matchups
 ```
 
-Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:schedule` → `sync:bios` → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news` → `sync:matchups`.
+Pull draft-market ADP (average draft position) from ESPN's public fantasy API, ID-matched to OFB players via the smartfantasybaseball player id map with a name-match fallback. If the external feed is unreachable, ranks are derived from season fan points instead, so the draft board always has an order:
+
+```bash
+npm.cmd run sync:adp
+```
+
+Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:schedule` → `sync:bios` → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news` → `sync:matchups` → `sync:adp`.
 
 `npm.cmd run seed:opponent` drafts a real lineup onto the seeded opponent team so the demo matchup has two full rosters to score.
 
@@ -83,6 +89,12 @@ While MLB games are in progress, the Team tab and the player detail sheet show l
 - `GET /api/v1/teams/{teamId}/matchup/live` recomputes the active matchup's category battle from each side's season stats plus live in-game lines, so the Matchup tab's category values, categories-won score, and per-player points move during games (`lib/data/live-matchup.ts`). The live line is appended as an extra stat entry per player so counting categories sum and rate categories (AVG/ERA/WHIP) are rebuilt from summed components.
 - The lineup rows, the open detail sheet, and the Matchup tab poll these every 30s; when no relevant game is in progress they simply show season points, the next scheduled game, and the stored nightly category battle. In demo/mock mode (blank `DATABASE_URL`) the routes return the not-live result. See `lib/data/mlb-live.ts`.
 - MLB reads go through a short-TTL, single-flight cache (`cachedFetchJson` in `lib/data/mlb-live.ts`): concurrent requests for the same schedule/boxscore/linescore share one upstream fetch, and repeats within the TTL (60s schedule, 15s boxscore/linescore) read the memoized value — so the polling fanout across routes, tabs, and users collapses to roughly one MLB request per URL per TTL. The cache is per server instance; a shared Redis cache is the path if OFB ever runs multi-instance under load.
+
+## Live Snake Draft
+
+Leagues start in `pre_draft`. From the home screen's Drafts card (or `/draft/{leagueId}`), the commissioner names their team, fills open seats with bots, sets the pick clock (30–120s), orders the seats, and starts the draft. The mobile draft room shows an on-the-clock banner with a server-authoritative countdown, a recent-picks ticker, an ADP-ranked available-player list (filtered to the league's player pool: All MLB, AL-only, or NL-only), a round-by-round board, and remaining roster needs.
+
+There is no background worker: the pick clock advances lazily. Every draft-state read (the room polls every 3s) and every pick attempt first resolves expired turns inside a row-locked transaction — bots pick ~5s after going on the clock, and a human whose clock runs out gets the best available player by ADP adjusted for roster needs (`lib/draft/`). Completing the final pick flips the league to `active` and auto-assigns each team's initial lineup (starters first, overflow to bench). In demo/mock mode the room renders a frozen sample draft read-only; picks require a configured database.
 
 ## Auth
 
