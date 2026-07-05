@@ -1,3 +1,4 @@
+import { finalizeEndedMatchups, recomputeMatchups } from "@/lib/data/matchup-scoring";
 import { runNightlyProcessing } from "./nightly-processing";
 
 /**
@@ -11,6 +12,13 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Waiver resolution + transaction audit. runNightlyProcessing already filters
   // to pending, due claims under `for update`, so a retry is safe.
   nightly_processing: async () => runNightlyProcessing(),
+  // Recompute every active matchup's category battle from current lineups and
+  // fresh stats; an upsert-only recompute, safe to repeat. Standings are
+  // read-derived from these scores, so this keeps them fresh too.
+  recompute_matchups: async () => recomputeMatchups(),
+  // Snapshot + lock matchups whose scoring period has closed. Once a period is
+  // final it is skipped, so re-running is a no-op.
+  finalize_ended_matchups: async () => finalizeEndedMatchups(),
 };
 
 export function getJobHandler(jobType: string): JobHandler | null {

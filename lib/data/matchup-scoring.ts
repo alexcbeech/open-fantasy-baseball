@@ -128,3 +128,46 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
     client.release();
   }
 }
+
+export type FinalizeMatchupsResult = {
+  periodsFinalized: number;
+  matchupsFinalized: number;
+};
+
+/**
+ * Lock scoring periods whose window has closed: recompute their matchups one
+ * last time so the snapshot reflects final stats, then flip the matchups and
+ * the period to 'final' so live recomputes stop touching them. Idempotent --
+ * once a period is 'final' it is no longer selected.
+ */
+export async function finalizeEndedMatchups(now = new Date()): Promise<FinalizeMatchupsResult> {
+  const pool = getPool();
+  const client = await pool.connect();
+
+  try {
+    const periods = await client.query<{ id: string; league_id: string }>(
+      `select id, league_id from scoring_period where status = 'active' and ends_at < $1`,
+      [now],
+    );
+
+    let matchupsFinalized = 0;
+
+    for (const period of periods.rows) {
+      // Freshen the category battle before snapshotting, independent of whether
+      // the recompute_matchups job already ran this drain.
+      await recomputeMatchups(period.league_id);
+
+      const locked = await client.query(
+        `update matchup set status = 'final' where scoring_period_id = $1 and status = 'active'`,
+        [period.id],
+      );
+      matchupsFinalized += locked.rowCount ?? 0;
+
+      await client.query(`update scoring_period set status = 'final' where id = $1`, [period.id]);
+    }
+
+    return { periodsFinalized: periods.rows.length, matchupsFinalized };
+  } finally {
+    client.release();
+  }
+}
