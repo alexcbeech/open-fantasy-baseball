@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { areSignupsEnabled } from "@/lib/auth/signups";
 import { SignInForm } from "./sign-in-form";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function SignInPage() {
         <div className="panel auth-page-panel">
           <h1>Sign in</h1>
           <p className="subtle">Use your Neon Auth account to manage teams, preferences, and owner API tokens.</p>
-          {isNeonAuthConfigured() ? <SignInForm /> : <AuthSetupNotice setup={setup} />}
+          {isNeonAuthConfigured() ? <SignInForm signupsEnabled={areSignupsEnabled()} /> : <AuthSetupNotice setup={setup} />}
         </div>
       </section>
     </main>
