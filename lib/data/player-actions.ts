@@ -60,7 +60,9 @@ export async function applyPlayerManagementAction(teamId: string, playerId: stri
     client.release();
   }
 
-  const player = await getPlayerDetail(playerId);
+  // Refresh with the team context so the returned management flags reflect the
+  // player's post-action membership on this team.
+  const player = await getPlayerDetail(playerId, teamId);
 
   if (!player) {
     throw new PlayerActionError("Player not found after action.", 404);

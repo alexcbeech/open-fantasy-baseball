@@ -16,7 +16,10 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   const { playerId } = await params;
-  const player = await getPlayerDetail(playerId);
+  // Optional team context so the response's management flags (drop/IL/NA) are
+  // scoped to that team's roster rather than the whole league.
+  const teamId = new URL(request.url).searchParams.get("teamId") ?? undefined;
+  const player = await getPlayerDetail(playerId, teamId);
 
   if (!player) {
     return NextResponse.json({ error: "Player not found" }, { status: 404 });

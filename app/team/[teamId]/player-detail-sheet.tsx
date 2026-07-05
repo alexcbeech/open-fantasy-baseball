@@ -56,7 +56,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
 
     (async () => {
       try {
-        const response = await fetch(`/api/v1/players/${playerId}`);
+        const response = await fetch(`/api/v1/players/${playerId}?teamId=${encodeURIComponent(teamId)}`);
         const result = (await response.json()) as { player?: PlayerDetail; error?: string };
 
         if (!active) {
@@ -79,7 +79,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
     return () => {
       active = false;
     };
-  }, [playerId]);
+  }, [playerId, teamId]);
 
   useEffect(() => {
     dialogRef.current?.focus();
