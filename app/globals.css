@@ -824,8 +824,38 @@ button.row {
   justify-content: flex-end;
 }
 
-.player-detail-sheet {
+/* No top padding so the sticky header can pin flush to the top edge. The
+   compound selector beats the later .move-sheet padding shorthand. */
+.move-sheet.player-detail-sheet {
   max-height: 90dvh;
+  padding-top: 0;
+  /* Constrain the single grid column so a wide game-log table scrolls inside
+     its own overflow-x wrapper instead of stretching the sheet (and the sticky
+     header) past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Keep the player name and close control visible while the sheet body scrolls. */
+.player-detail-sheet .player-detail-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* Let the name/positions block shrink and ellipsize so the close button always
+   fits on the row on narrow screens. */
+.player-detail-identity > div {
+  min-width: 0;
+}
+
+.player-detail-header-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 /* Move Player bottom sheet (Yahoo-style position picker). */
