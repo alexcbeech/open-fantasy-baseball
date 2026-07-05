@@ -90,7 +90,8 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
         },
         userScore: toNumber(isHome ? matchup.home_score : matchup.away_score),
         opponentScore: toNumber(isHome ? matchup.away_score : matchup.home_score),
-        categoryScores: categoryResult.rows.length ? categoryResult.rows.map((row) => mapCategoryScore(row, isHome)) : mockCategoryScores,
+        // A real matchup with no scored categories yet is empty, not mock.
+        categoryScores: categoryResult.rows.map((row) => mapCategoryScore(row, isHome)),
         userLineup,
         opponentLineup,
       };

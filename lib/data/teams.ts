@@ -28,7 +28,9 @@ export async function listTeamsForCurrentUser(): Promise<TeamSummary[]> {
   return tryDatabase(
     async () => {
       const result = await query<DbTeamSummaryRow>(`${teamSummarySql} order by ft.waiver_priority nulls last, ft.name`);
-      return result.rows.length ? result.rows.map(mapTeamSummary) : mockTeams;
+      // Empty is a valid result (a real user with no teams); only the
+      // tryDatabase fallback below serves mock data (demo mode / DB error).
+      return result.rows.map(mapTeamSummary);
     },
     () => mockTeams,
   );
@@ -38,7 +40,8 @@ export async function getTeamSummary(teamId: string): Promise<TeamSummary | unde
   return tryDatabase(
     async () => {
       const result = await query<DbTeamSummaryRow>(`${teamSummarySql} where ft.id = $1`, [teamId]);
-      return result.rows[0] ? mapTeamSummary(result.rows[0]) : mockTeams.find((team) => team.id === teamId);
+      // A missing team is undefined (callers 404), not a mock team.
+      return result.rows[0] ? mapTeamSummary(result.rows[0]) : undefined;
     },
     () => mockTeams.find((team) => team.id === teamId),
   );
@@ -97,7 +100,9 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
         [teamId],
       );
 
-      return result.rows.length ? result.rows.map(mapLineupPlayer) : mockLineup;
+      // An empty lineup (a real team that hasn't set one) renders as empty
+      // slots; only the tryDatabase fallback serves the mock lineup.
+      return result.rows.map(mapLineupPlayer);
     },
     () => mockLineup,
   );
