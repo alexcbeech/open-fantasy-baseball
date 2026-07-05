@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { areSignupsEnabled } from "@/lib/auth/signups";
 import { SignUpForm } from "./sign-up-form";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +30,29 @@ export default async function SignUpPage() {
         <div className="panel auth-page-panel">
           <h1>Create account</h1>
           <p className="subtle">Create a Neon Auth login for OFB team management and API access.</p>
-          {isNeonAuthConfigured() ? <SignUpForm /> : <AuthSetupNotice setup={setup} />}
+          {!isNeonAuthConfigured() ? (
+            <AuthSetupNotice setup={setup} />
+          ) : areSignupsEnabled() ? (
+            <SignUpForm />
+          ) : (
+            <SignupsClosedNotice />
+          )}
         </div>
       </section>
     </main>
+  );
+}
+
+function SignupsClosedNotice() {
+  return (
+    <div className="auth-form">
+      <div className="status-banner bad">
+        Account creation is temporarily closed while we finish building OFB. Check back soon.
+      </div>
+      <Link className="secondary-button" href="/auth/sign-in">
+        Back to sign in
+      </Link>
+    </div>
   );
 }
 

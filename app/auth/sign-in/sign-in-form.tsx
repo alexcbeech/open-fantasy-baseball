@@ -6,7 +6,7 @@ import { signInWithEmail, type AuthFormState } from "./actions";
 
 const initialState: AuthFormState = null;
 
-export function SignInForm() {
+export function SignInForm({ signupsEnabled }: { signupsEnabled: boolean }) {
   const [state, formAction, pending] = useActionState(signInWithEmail, initialState);
 
   return (
@@ -23,9 +23,11 @@ export function SignInForm() {
       <button className="primary-button" disabled={pending} type="submit">
         {pending ? "Signing in..." : "Sign in"}
       </button>
-      <Link className="secondary-button" href="/auth/sign-up">
-        Create account
-      </Link>
+      {signupsEnabled ? (
+        <Link className="secondary-button" href="/auth/sign-up">
+          Create account
+        </Link>
+      ) : null}
     </form>
   );
 }
