@@ -227,6 +227,22 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
             meta: summarizeJobDetails(run.details),
           }))}
         />
+
+        <div className="section-title admin-history-title">
+          <h2>Job Queue</h2>
+        </div>
+        <RunHistoryGroup
+          emptyLabel="No queued jobs yet"
+          rows={history.jobQueue.map((job) => ({
+            id: job.id,
+            title: job.jobType,
+            // Map the queue's richer states onto the three run-status pills.
+            status: job.status === "succeeded" ? "succeeded" : job.status === "failed" || job.status === "dead" ? "failed" : "started",
+            startedAt: job.createdAt,
+            finishedAt: job.status === "queued" || job.status === "running" ? null : job.updatedAt,
+            meta: `${job.status} · attempt ${job.attempts}/${job.maxAttempts}${job.lastError ? ` · ${job.lastError}` : ""}`,
+          }))}
+        />
       </section>
     </section>
   );

@@ -80,6 +80,20 @@ Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:sche
 
 The app uses Postgres automatically when `DATABASE_URL` is set. Without `DATABASE_URL`, it falls back to the bundled mock data so the UI remains usable.
 
+## Background Jobs
+
+Domain processing — waiver resolution today, with scoring/matchup/notification recomputes to follow — runs through a durable Postgres-backed job queue (`job_queue` table, migration `0007`). There is no always-on worker: jobs are claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so the queue is safe to drain from ephemeral CI runners (or many runners at once) with no extra infrastructure. This is deliberately separate from the data *syncs* above, which stay plain cron steps (ingestion, with their own `ingestion_run` audit); the queue owns *processing*.
+
+```bash
+npm.cmd run jobs:run
+```
+
+`jobs:run` (`scripts/run-jobs.ts`) enqueues the day's recurring jobs — currently `nightly_processing` — with a per-day dedup key, then drains the queue: it reclaims any jobs a crashed runner left `running`, then claims and runs each due job. A handler that throws is retried with exponential backoff (30s, 60s, 120s… capped at an hour) up to `max_attempts`, after which the job is marked `dead` with its `last_error`. Handlers must be idempotent, since a retry re-runs the whole job; `runNightlyProcessing` is (it only touches `pending`, due waiver claims under `for update`).
+
+- **Scheduled:** the nightly workflow (`.github/workflows/nightly-sync.yml`) runs `jobs:run` as its final step, after the syncs, so processing sees fresh data. Its `concurrency` group prevents overlapping runs.
+- **On demand:** the admin Operations screen's "Run nightly" button (`POST /api/v1/admin/jobs/nightly`) enqueues a `nightly_processing` job and drains the queue, returning the drain summary; recent queue rows (type · status · attempts · error) show under **Job Queue** on that screen.
+- **Add a handler:** register a `job_type → async fn` in `lib/jobs/handlers.ts`; enqueue with `enqueue(jobType, opts)` from `lib/jobs/queue.ts`. Pure scheduling logic (backoff, retry-vs-dead, dedup keys) lives in `lib/jobs/queue-policy.ts` and is unit-tested.
+
 ## Live In-Game Stats
 
 While MLB games are in progress, the Team tab and the player detail sheet show live fantasy points and the current inning, updating as the game plays. This is intentionally separate from the nightly sync: it reads directly from the free MLB Stats API on demand (`/schedule`, `/game/{pk}/boxscore`, `/game/{pk}/linescore`) rather than the database, so no poller or extra sync job is needed.
