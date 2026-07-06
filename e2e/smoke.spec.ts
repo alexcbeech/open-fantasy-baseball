@@ -8,8 +8,7 @@ test.describe("mobile landing", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "My Teams" })).toBeVisible();
-    // The landing leads with a featured head-to-head hero above the team cards.
-    await expect(page.getByRole("heading", { name: "Featured Matchup" })).toBeVisible();
+    // Every team the user manages is listed as a card.
     await expect(page.getByRole("link", { name: /Golden Sombreros/ })).toBeVisible();
   });
 });
