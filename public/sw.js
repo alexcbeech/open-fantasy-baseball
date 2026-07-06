@@ -22,8 +22,8 @@ self.addEventListener("push", (event) => {
     body: payload.body || "",
     tag: payload.tag || "ofb",
     data: { url: payload.url || "/" },
-    badge: "/icon.svg",
-    icon: "/icon.svg",
+    badge: "/brand/ofb-tile.svg",
+    icon: "/brand/ofb-tile.svg",
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

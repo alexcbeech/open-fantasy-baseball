@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listAdminRunHistory } from "@/lib/data/admin-runs";
+import { listRecentFeedback } from "@/lib/data/feedback";
 import { nightlyProcessingTasks, getNightlyProcessingWindow } from "@/lib/jobs/nightly-processing";
 import { AdminOperationsPanel } from "./operations-panel";
+import { AdminFeedbackList } from "./feedback-list";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,7 @@ export default async function AdminPage() {
 
   const window = getNightlyProcessingWindow();
   const history = await listAdminRunHistory();
+  const feedback = await listRecentFeedback();
 
   return (
     <main className="app-shell">
@@ -88,6 +91,15 @@ export default async function AdminPage() {
             </div>
           </aside>
         </div>
+
+        <section className="panel feedback-admin-panel" aria-labelledby="feedback-admin-heading">
+          <div className="section-title">
+            <h2 id="feedback-admin-heading">User Feedback</h2>
+            <span className="subtle">{feedback.length} total</span>
+          </div>
+
+          <AdminFeedbackList initialFeedback={feedback} />
+        </section>
       </section>
     </main>
   );
