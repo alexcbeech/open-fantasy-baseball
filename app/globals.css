@@ -179,6 +179,55 @@ select {
   gap: 8px;
 }
 
+/* Hover/focus tooltips for icon-only controls. The accessible name still
+   comes from aria-label; data-tooltip is the visual counterpart, so keep the
+   two in sync. Hover-gated so touch taps never leave a stuck bubble. */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  background: var(--ink);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  color: var(--bg);
+  content: attr(data-tooltip);
+  font-size: 12px;
+  font-weight: 600;
+  left: 50%;
+  letter-spacing: normal;
+  opacity: 0;
+  padding: 5px 9px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: none;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  transition: opacity 0.15s ease 0.15s;
+  visibility: hidden;
+  white-space: nowrap;
+  z-index: 30;
+}
+
+/* Keep the bubble on-screen for controls hugging the right edge. */
+.topbar-actions [data-tooltip]:last-child::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (hover: hover) {
+  [data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
 /* Reserves the width of a back button on the opposite side so a centered
    page title stays centered without needing a decorative icon. */
 .topbar-spacer {
@@ -759,10 +808,73 @@ button.row {
   color: var(--brand-strong);
 }
 
+/* Third row on a live lineup row: the player's in-game stat line so far,
+   e.g. "2-4, 1 R, 1 HR" or "5.1 IP, 6 K, 2 ER". */
+.player-live-line {
+  color: var(--brand-strong);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .player-game.is-live::before {
     animation: none;
   }
+}
+
+/* Game-locked lineup slot: the move affordance is disabled and badged with a
+   small padlock until the next daily rollover. */
+.pos-badge-button.is-locked {
+  cursor: not-allowed;
+  opacity: 0.65;
+  position: relative;
+}
+
+.slot-lock {
+  bottom: -4px;
+  font-size: 11px;
+  line-height: 1;
+  position: absolute;
+  right: -4px;
+}
+
+/* Inline confirmation step for roster transactions (add/drop) inside the
+   player detail sheet. */
+.confirm-panel {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 12px;
+}
+
+.confirm-panel h4 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.confirm-panel p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.confirm-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-panel-actions .primary-button,
+.confirm-panel-actions .secondary-button {
+  flex: 1;
 }
 
 /* Right-aligned stacked numbers (season points over projected), Yahoo-style. */
@@ -1592,6 +1704,129 @@ button.row {
 /* Yahoo-style stat + game-log tables: first column pinned, numbers scroll. */
 .stat-table-wrap {
   overflow-x: auto;
+}
+
+/* Yahoo-style Players tab table: horizontally scrollable stat grid with a
+   sticky header row and a sticky player column so wide category sets stay
+   navigable on narrow screens. */
+.players-table-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin: 10px 0 6px;
+}
+
+.players-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  max-height: min(72vh, 640px);
+  overflow: auto;
+}
+
+.players-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  min-width: 100%;
+  white-space: nowrap;
+}
+
+.players-table th,
+.players-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.players-table thead th {
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 0;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 2;
+}
+
+.players-sort {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 3px;
+  padding: 9px 10px;
+  text-transform: inherit;
+  width: 100%;
+}
+
+.players-sort.active {
+  color: var(--brand-strong);
+}
+
+.players-sort-arrow {
+  font-size: 9px;
+  min-width: 10px;
+}
+
+.players-col-player {
+  background: var(--surface);
+  left: 0;
+  min-width: 168px;
+  position: sticky;
+  z-index: 1;
+}
+
+.players-table thead th.players-col-player {
+  background: var(--surface-strong);
+  z-index: 3;
+}
+
+.players-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.players-table thead th:not(.players-col-player) .players-sort {
+  justify-content: flex-end;
+}
+
+.players-table tbody tr.is-rostered td {
+  opacity: 0.72;
+}
+
+.players-name-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 1px;
+  padding: 0;
+  text-align: left;
+}
+
+.players-name-button .player-name {
+  font-size: 13px;
+}
+
+.players-name-button .player-game {
+  font-size: 11px;
+}
+
+@media (hover: hover) {
+  .players-sort:hover {
+    color: var(--ink);
+  }
+
+  .players-name-button:hover .player-name {
+    color: var(--brand-strong);
+  }
 }
 
 .stat-table {

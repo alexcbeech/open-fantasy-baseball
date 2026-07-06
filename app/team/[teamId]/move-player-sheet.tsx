@@ -14,6 +14,8 @@ type MovePlayerSheetProps = {
   mover: LineupPlayer;
   lineup: LineupPlayer[];
   rosterSlots: Record<RosterSlot, number>;
+  /** Players whose game has started; they can't be displaced by a swap. */
+  lockedPlayerIds?: Set<string>;
   onSelect: (target: MoveTarget) => void;
   onClose: () => void;
 };
@@ -25,9 +27,15 @@ type MoveOption =
 /**
  * Build the list of legal destinations for the moving player: an open spot
  * where a slot has spare capacity, otherwise a swap with each current occupant
- * of an eligible slot (the occupant takes the mover's vacated slot).
+ * of an eligible slot (the occupant takes the mover's vacated slot). Occupants
+ * whose game has started are locked in place, so they're never offered as swaps.
  */
-function buildMoveOptions(mover: LineupPlayer, lineup: LineupPlayer[], rosterSlots: Record<RosterSlot, number>): MoveOption[] {
+function buildMoveOptions(
+  mover: LineupPlayer,
+  lineup: LineupPlayer[],
+  rosterSlots: Record<RosterSlot, number>,
+  lockedPlayerIds?: Set<string>,
+): MoveOption[] {
   const options: MoveOption[] = [];
 
   for (const slot of slotOrder) {
@@ -42,6 +50,9 @@ function buildMoveOptions(mover: LineupPlayer, lineup: LineupPlayer[], rosterSlo
       options.push({ kind: "open", slot });
     } else {
       for (const occupant of occupants) {
+        if (lockedPlayerIds?.has(occupant.player.id)) {
+          continue;
+        }
         options.push({ kind: "swap", slot, occupant });
       }
     }
@@ -50,7 +61,7 @@ function buildMoveOptions(mover: LineupPlayer, lineup: LineupPlayer[], rosterSlo
   return options;
 }
 
-export function MovePlayerSheet({ mover, lineup, rosterSlots, onSelect, onClose }: MovePlayerSheetProps) {
+export function MovePlayerSheet({ mover, lineup, rosterSlots, lockedPlayerIds, onSelect, onClose }: MovePlayerSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,7 +75,7 @@ export function MovePlayerSheet({ mover, lineup, rosterSlots, onSelect, onClose 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const options = buildMoveOptions(mover, lineup, rosterSlots);
+  const options = buildMoveOptions(mover, lineup, rosterSlots, lockedPlayerIds);
 
   return (
     <div className="sheet-overlay" role="presentation" onClick={onClose}>

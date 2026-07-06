@@ -1,6 +1,7 @@
 import { getPool } from "@/lib/db/client";
 import { getPlayerDetail } from "@/lib/data/players";
-import type { PlayerDetail } from "@/lib/fantasy/types";
+import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
+import type { PlayerDetail, RosterSlot } from "@/lib/fantasy/types";
 import type { PoolClient } from "pg";
 
 export type PlayerManagementAction = "add" | "drop" | "move-to-il" | "move-to-na";
@@ -33,7 +34,7 @@ export async function applyPlayerManagementAction(teamId: string, playerId: stri
 
     switch (action) {
       case "add":
-        await addPlayer(client, team, teamId, playerId);
+        await addPlayer(client, team, teamId, playerId, player);
         break;
       case "drop":
         await dropPlayer(client, team, teamId, playerId);
@@ -93,7 +94,7 @@ async function getPlayerContext(client: PoolClient, playerId: string): Promise<P
   return { status: player.status };
 }
 
-async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string) {
+async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string, player: PlayerContext) {
   const activeRoster = await client.query<{ team_id: string }>(
     "select team_id from roster_entry where player_id = $1 and dropped_at is null limit 1",
     [playerId],
@@ -108,7 +109,83 @@ async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, 
      values ($1, $2, 'free_agent')`,
     [teamId, playerId],
   );
-  await insertTransaction(client, team, teamId, "add", { playerId });
+  // An added player joins today's lineup immediately: the first open eligible
+  // active slot if one exists, otherwise the bench.
+  const slot = await assignLineupSlotForAdd(client, team, teamId, playerId, player);
+  await insertTransaction(client, team, teamId, "add", { playerId, slot });
+}
+
+// Active-slot fill order for a newly added player; bench is the fallback.
+const addSlotOrder: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP", "UTIL", "P"];
+
+/**
+ * Put a just-added player into the team's current lineup: the first eligible
+ * active slot with spare capacity, else BN. Skipped (roster-only add) when the
+ * league has no scoring period to attach a lineup row to.
+ */
+async function assignLineupSlotForAdd(
+  client: PoolClient,
+  team: TeamContext,
+  teamId: string,
+  playerId: string,
+  player: PlayerContext,
+): Promise<RosterSlot | null> {
+  const scoringPeriod = await client.query<{ id: string }>(
+    `select id
+     from scoring_period
+     where league_id = $1 and status = 'active'
+     order by starts_at desc
+     limit 1`,
+    [team.leagueId],
+  );
+  const scoringPeriodId = scoringPeriod.rows[0]?.id;
+
+  if (!scoringPeriodId) {
+    return null;
+  }
+
+  const [positionsResult, limitsResult, lineupDateResult] = await Promise.all([
+    client.query<{ position: RosterSlot }>(
+      "select position from player_position_eligibility where player_id = $1 and valid_to is null",
+      [playerId],
+    ),
+    client.query<{ slot: RosterSlot; count: number | string }>(
+      "select slot, count from league_roster_slot where league_id = $1",
+      [team.leagueId],
+    ),
+    client.query<{ lineup_date: Date | string }>(
+      "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
+      [teamId],
+    ),
+  ]);
+  const lineupDate = lineupDateResult.rows[0].lineup_date;
+  const usageResult = await client.query<{ slot: RosterSlot; used: number | string }>(
+    "select slot, count(*) as used from lineup_entry where team_id = $1 and lineup_date = $2 group by slot",
+    [teamId, lineupDate],
+  );
+
+  const eligibility = {
+    positions: positionsResult.rows.map((row) => row.position),
+    status: player.status,
+  };
+  const limits = new Map(limitsResult.rows.map((row) => [row.slot, Number(row.count)]));
+  const used = new Map(usageResult.rows.map((row) => [row.slot, Number(row.used)]));
+
+  const slot =
+    addSlotOrder.find(
+      (candidate) =>
+        isSlotEligibleForPlayer(eligibility, candidate) && (used.get(candidate) ?? 0) < (limits.get(candidate) ?? 0),
+    ) ?? "BN";
+
+  await client.query(
+    `insert into lineup_entry (team_id, player_id, scoring_period_id, lineup_date, slot)
+     values ($1, $2, $3, $4, $5)
+     on conflict (team_id, player_id, lineup_date)
+     do update set slot = excluded.slot`,
+    [teamId, playerId, scoringPeriodId, lineupDate, slot],
+  );
+
+  return slot;
 }
 
 async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string) {

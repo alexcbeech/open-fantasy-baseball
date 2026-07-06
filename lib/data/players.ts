@@ -72,8 +72,18 @@ export async function listPlayers(options: { query?: string; availability?: Play
             p.season_fan_points,
             next_game.game_date,
             next_game.home_away,
-            next_game.opponent
+            next_game.opponent,
+            -- Real-world ownership from the ADP feed when known, else the share
+            -- of this app's fantasy teams that roster the player.
+            coalesce(
+              adp.rostered_percent,
+              round(
+                100.0 * (select count(distinct re2.team_id) from roster_entry re2 where re2.player_id = p.id and re2.dropped_at is null)
+                / greatest((select count(*) from fantasy_team), 1)
+              )
+            ) as rostered_percent
           from player p
+          left join player_adp adp on adp.player_id = p.id
           left join mlb_team mt on mt.id = p.current_mlb_team_id
           left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
           left join (
@@ -105,7 +115,7 @@ export async function listPlayers(options: { query?: string; availability?: Play
           ) next_game on true
           ${filters.length ? `where ${filters.join(" and ")}` : ""}
           group by p.id, mt.abbreviation, active_roster.player_id, latest_news.headline, season_stats.stats, projection_stats.stats,
-            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent
+            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, adp.rostered_percent
           order by p.full_name
           limit 500
         `,

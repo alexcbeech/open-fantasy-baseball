@@ -95,6 +95,14 @@ export type Player = {
   seasonPoints?: number | null;
   /** The player's next scheduled MLB game, for row game-context lines. */
   nextGame?: PlayerNextGame | null;
+  /**
+   * Scheduled first pitch of the player's MLB game today (ISO), or null when
+   * their team doesn't play today. Once this time passes, the player's lineup
+   * slot is locked until the next daily roster rollover.
+   */
+  todaysGameStart?: string | null;
+  /** Percent of leagues where the player is rostered; null when unknown. */
+  rosteredPercent?: number | null;
 };
 
 export type PlayerNewsItem = {

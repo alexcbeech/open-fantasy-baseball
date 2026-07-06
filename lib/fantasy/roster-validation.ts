@@ -2,7 +2,7 @@ import { defaultRosterSlots } from "./defaults";
 import type { LineupPlayer, RosterSlot } from "./types";
 
 export type LineupValidationIssue = {
-  code: "duplicate-player" | "slot-overfilled" | "position-ineligible" | "player-status-ineligible";
+  code: "duplicate-player" | "slot-overfilled" | "position-ineligible" | "player-status-ineligible" | "player-locked";
   message: string;
   playerId?: string;
   slot?: RosterSlot;
@@ -47,6 +47,45 @@ export function isSlotEligibleForPlayer(player: SlotEligibilityPlayer, slot: Ros
 
 function canUseSlot(entry: LineupPlayer) {
   return isSlotEligibleForPlayer(entry.player, entry.slot);
+}
+
+/**
+ * Whether the player's lineup slot is locked right now: their MLB game today
+ * has started (first pitch time has passed), so they can't be moved, benched,
+ * or replaced until the next daily roster rollover. Players with no game today
+ * are never locked.
+ */
+export function isPlayerGameLocked(player: Pick<LineupPlayer["player"], "todaysGameStart">, now = new Date()): boolean {
+  return Boolean(player.todaysGameStart && new Date(player.todaysGameStart).getTime() <= now.getTime());
+}
+
+/**
+ * Slot changes that would move a game-locked player. Shared by the lineup
+ * editor (to reject a locked move with an inline notice) and the lineup API
+ * (so the lock is enforced server-side, not just in the UI).
+ */
+export function findLineupLockIssues(
+  currentLineup: LineupPlayer[],
+  proposedLineup: LineupPlayer[],
+  now = new Date(),
+): LineupValidationIssue[] {
+  const currentSlotByPlayer = new Map(currentLineup.map((entry) => [entry.player.id, entry.slot]));
+  const issues: LineupValidationIssue[] = [];
+
+  for (const entry of proposedLineup) {
+    const currentSlot = currentSlotByPlayer.get(entry.player.id);
+
+    if (currentSlot !== undefined && currentSlot !== entry.slot && isPlayerGameLocked(entry.player, now)) {
+      issues.push({
+        code: "player-locked",
+        message: `${entry.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`,
+        playerId: entry.player.id,
+        slot: entry.slot,
+      });
+    }
+  }
+
+  return issues;
 }
 
 export function validateLineup(lineup: LineupPlayer[], rosterSlots = defaultRosterSlots) {

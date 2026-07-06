@@ -1,6 +1,6 @@
-import { query, tryDatabase } from "@/lib/db/client";
+import { getPool, query, tryDatabase } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
-import type { LineupPlayer, TeamSummary } from "@/lib/fantasy/types";
+import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
 
 const teamSummarySql = `
@@ -67,6 +67,7 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
             next_game.game_date,
             next_game.home_away,
             next_game.opponent,
+            todays_game.first_pitch as todays_game_start,
             0 as matchup_total
           from lineup_entry le
           join player p on p.id = le.player_id
@@ -91,10 +92,19 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
             order by g.game_date asc
             limit 1
           ) next_game on true
+          left join lateral (
+            -- First pitch of the player's MLB game today (baseball's "today" is
+            -- the ET official date). Once this passes, the lineup slot locks.
+            select min(g.game_date) as first_pitch
+            from mlb_game g
+            where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
+              and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
+                = (now() at time zone 'America/New_York')::date
+          ) todays_game on true
           where le.team_id = $1
             and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
-            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent
+            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch
           order by le.lineup_date desc, le.id
         `,
         [teamId],
@@ -106,4 +116,77 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
     },
     () => mockLineup,
   );
+}
+
+export class LineupSaveError extends Error {
+  constructor(
+    message: string,
+    public status = 409,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Persist the team's current-day lineup slots. Entries are upserted against the
+ * team's latest lineup date, so a save is a full or partial slot assignment for
+ * today; validation (legality, game locks) happens in the API route before this
+ * runs.
+ */
+export async function saveLineupSlots(teamId: string, entries: Array<{ playerId: string; slot: RosterSlot }>): Promise<void> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+
+    const teamResult = await client.query<{ league_id: string }>("select league_id from fantasy_team where id = $1", [teamId]);
+    const leagueId = teamResult.rows[0]?.league_id;
+
+    if (!leagueId) {
+      throw new LineupSaveError("Team not found.", 404);
+    }
+
+    const scoringPeriod = await client.query<{ id: string }>(
+      `select id
+       from scoring_period
+       where league_id = $1 and status = 'active'
+       order by starts_at desc
+       limit 1`,
+      [leagueId],
+    );
+    const scoringPeriodId = scoringPeriod.rows[0]?.id;
+
+    if (!scoringPeriodId) {
+      throw new LineupSaveError("No active scoring period is available.");
+    }
+
+    const latestLineupDate = await client.query<{ lineup_date: Date | string }>(
+      "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
+      [teamId],
+    );
+    const lineupDate = latestLineupDate.rows[0].lineup_date;
+
+    for (const entry of entries) {
+      await client.query(
+        `insert into lineup_entry (team_id, player_id, scoring_period_id, lineup_date, slot)
+         values ($1, $2, $3, $4, $5)
+         on conflict (team_id, player_id, lineup_date)
+         do update set slot = excluded.slot`,
+        [teamId, entry.playerId, scoringPeriodId, lineupDate, entry.slot],
+      );
+    }
+
+    await client.query(
+      `insert into fantasy_transaction (league_id, team_id, type, status, payload, processed_at)
+       values ($1, $2, 'lineup_change', 'processed', $3::jsonb, now())`,
+      [leagueId, teamId, JSON.stringify({ entries })],
+    );
+
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { liveLineSummary } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
@@ -88,10 +89,20 @@ export function PlayerDetailView({
   onClose?: () => void;
 }) {
   const [tab, setTab] = useState<DetailTab>("overview");
+  // Add/drop are real roster transactions, so they confirm before executing.
+  const [confirmingAction, setConfirmingAction] = useState<"add" | "drop" | null>(null);
   const tabbed = variant === "card";
   const health = healthBadges[player.status];
   const summary = seasonSummary(player);
   const isLive = Boolean(liveStatus?.live);
+
+  function confirmAction() {
+    if (!confirmingAction) {
+      return;
+    }
+    onAction(confirmingAction);
+    setConfirmingAction(null);
+  }
 
   return (
     <>
@@ -120,11 +131,48 @@ export function PlayerDetailView({
 
       {statusBanner ? <div className={`status-banner ${statusBanner.kind}`}>{statusBanner.message}</div> : null}
 
+      {confirmingAction ? (
+        <div className="confirm-panel" role="alertdialog" aria-labelledby="confirm-action-heading" aria-describedby="confirm-action-detail">
+          <h4 id="confirm-action-heading">{confirmingAction === "add" ? "Add Player" : "Drop Player"}</h4>
+          <p id="confirm-action-detail">
+            {confirmingAction === "add" ? (
+              <>
+                Add <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) to your team?
+                They&apos;ll fill an open eligible lineup slot, or your bench if every slot is taken.
+              </>
+            ) : (
+              <>
+                Drop <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) from your team?
+                They&apos;ll leave your lineup immediately and become a free agent anyone can add.
+              </>
+            )}
+          </p>
+          <div className="confirm-panel-actions">
+            <button className="primary-button" type="button" disabled={actionInFlight} onClick={confirmAction}>
+              {confirmingAction === "add" ? "Confirm Add" : "Confirm Drop"}
+            </button>
+            <button className="secondary-button" type="button" onClick={() => setConfirmingAction(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="player-actions" aria-label="Player management actions">
-        <button className="secondary-button" type="button" disabled={actionInFlight || !player.management.canAdd} onClick={() => onAction("add")}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={actionInFlight || !player.management.canAdd}
+          onClick={() => setConfirmingAction("add")}
+        >
           Add
         </button>
-        <button className="secondary-button" type="button" disabled={actionInFlight || !player.management.canDrop} onClick={() => onAction("drop")}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={actionInFlight || !player.management.canDrop}
+          onClick={() => setConfirmingAction("drop")}
+        >
           Drop
         </button>
         <button
@@ -217,29 +265,6 @@ function formatGameTime(iso: string) {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-// A compact live line, e.g. "1-3, 1 R, 1 HR, 2 RBI" for hitters or
-// "5.0 IP, 6 K, 1 ER" for pitchers, from whatever the boxscore has so far.
-function liveLineSummary(stats: Record<string, number | string>): string {
-  if (stats.IP !== undefined) {
-    const parts = [`${stats.IP} IP`];
-    if (stats.K !== undefined) parts.push(`${stats.K} K`);
-    if (stats.ER !== undefined) parts.push(`${stats.ER} ER`);
-    if (Number(stats.W) > 0) parts.push("W");
-    if (Number(stats.SV) > 0) parts.push("SV");
-    return parts.join(", ");
-  }
-
-  const parts: string[] = [];
-  if (stats.H !== undefined || stats.AB !== undefined) {
-    parts.push(`${stats.H ?? 0}-${stats.AB ?? 0}`);
-  }
-  if (Number(stats.R) > 0) parts.push(`${stats.R} R`);
-  if (Number(stats.HR) > 0) parts.push(`${stats.HR} HR`);
-  if (Number(stats.RBI) > 0) parts.push(`${stats.RBI} RBI`);
-  if (Number(stats.SB) > 0) parts.push(`${stats.SB} SB`);
-  return parts.length ? parts.join(", ") : "Not in yet";
 }
 
 function LiveGameCard({ status }: { status: LivePlayerStatus }) {
@@ -368,6 +393,16 @@ function formatGameWhip(bb: number | string | undefined, ha: number | string | u
   return (((Number(bb) || 0) + (Number(ha) || 0)) / innings).toFixed(2);
 }
 
+// Per-game AVG from that game's hits and at-bats (the feed's game-log AVG is
+// season-to-date, so it is dropped upstream and recomputed here).
+function formatGameAvg(h: number | string | undefined, ab: number | string | undefined): string {
+  const atBats = Number(ab);
+  if (!Number.isFinite(atBats) || atBats <= 0) {
+    return "-";
+  }
+  return ((Number(h) || 0) / atBats).toFixed(3).replace(/^0/, "");
+}
+
 // A game log shows per-game production. Season-to-date rate stats (AVG/WHIP) are
 // omitted, but pitcher ERA is recomputed per game from ER and IP; hitters get a
 // combined H/AB. Only columns with data are shown.
@@ -401,6 +436,7 @@ function gameLogColumns(games: PlayerGameLog[]): GameLogColumn[] {
   const columns: GameLogColumn[] = [];
   if (present("H") || present("AB")) {
     columns.push({ label: "H/AB", render: (stats) => `${stats.H ?? 0}/${stats.AB ?? 0}` });
+    columns.push({ label: "AVG", render: (stats) => formatGameAvg(stats.H, stats.AB) });
   }
   return columns.concat(
     pick([

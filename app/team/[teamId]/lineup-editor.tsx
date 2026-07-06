@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
-import { isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
+import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
+import { findLineupLockIssues, isPlayerGameLocked, isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
@@ -15,6 +16,8 @@ type LineupEditorProps = {
   teamId: string;
   initialLineup: LineupPlayer[];
 };
+
+type LiveEntry = { state: string | null; points: number; stats?: Record<string, number | string> };
 
 type SlotRow = { key: string; slot: RosterSlot; entry: LineupPlayer | null };
 type LineupGroup = { label: string; rows: SlotRow[] };
@@ -69,20 +72,30 @@ function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlo
   return groups;
 }
 
+function slotsFromLineup(lineup: LineupPlayer[]): Record<string, RosterSlot> {
+  return Object.fromEntries(lineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>;
+}
+
 export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
-  const [slotByPlayerId, setSlotByPlayerId] = useState(() =>
-    Object.fromEntries(initialLineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>,
-  );
+  const router = useRouter();
+  const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
   const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
-  const [live, setLive] = useState<Record<string, { state: string | null; points: number }>>({});
+  const [live, setLive] = useState<Record<string, LiveEntry>>({});
+
+  // Resync when the server lineup changes underneath us (e.g. router.refresh()
+  // after an add/drop), so the editor never renders players that left the team.
+  useEffect(() => {
+    setSlotByPlayerId(slotsFromLineup(initialLineup));
+  }, [initialLineup]);
 
   // Live in-game overlay: while games are in progress, poll each rostered
   // player's live line so the row's bold number becomes today's live points and
-  // the game line becomes the inning. Players with no game in progress are
-  // absent from the map and keep their season/next-game display.
+  // the game line becomes the inning plus the in-game stat line. Players with
+  // no game in progress are absent from the map and keep their season/next-game
+  // display.
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -91,7 +104,7 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
         if (!response.ok) {
           return;
         }
-        const result = (await response.json()) as { live?: Record<string, { state: string | null; points: number }> };
+        const result = (await response.json()) as { live?: Record<string, LiveEntry> };
         if (active && result.live) {
           setLive(result.live);
         }
@@ -109,11 +122,25 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
   }, [teamId]);
 
   const currentLineup = useMemo<LineupPlayer[]>(
-    () => initialLineup.map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
+    () =>
+      initialLineup
+        .filter((entry) => slotByPlayerId[entry.player.id] !== undefined)
+        .map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
     [initialLineup, slotByPlayerId],
   );
 
   const groups = useMemo(() => buildLineupGroups(currentLineup, defaultRosterSlots), [currentLineup]);
+
+  // A player is locked once their MLB game today has started: the scheduled
+  // first pitch has passed, or the live overlay already sees them in a game.
+  const isEntryLocked = useCallback(
+    (entry: LineupPlayer) => isPlayerGameLocked(entry.player) || Boolean(live[entry.player.id]),
+    [live],
+  );
+  const lockedPlayerIds = useMemo(
+    () => new Set(currentLineup.filter(isEntryLocked).map((entry) => entry.player.id)),
+    [currentLineup, isEntryLocked],
+  );
 
   const movingEntry = movingPlayerId ? currentLineup.find((entry) => entry.player.id === movingPlayerId) : undefined;
 
@@ -126,11 +153,38 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
     return () => clearTimeout(timer);
   }, [error]);
 
+  /** Persist the committed slots; on rejection, roll back to the prior state. */
+  async function persistSlots(nextSlots: Record<string, RosterSlot>, previousSlots: Record<string, RosterSlot>) {
+    try {
+      const response = await fetch(`/api/v1/teams/${teamId}/lineup`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          entries: Object.entries(nextSlots).map(([playerId, slot]) => ({ playerId, slot })),
+        }),
+      });
+      const result = (await response.json()) as {
+        accepted?: boolean;
+        error?: string;
+        validation?: { issues?: Array<{ message: string }> };
+      };
+
+      if (!response.ok || !result.accepted) {
+        setSlotByPlayerId(previousSlots);
+        setError(result.validation?.issues?.[0]?.message ?? result.error ?? "Lineup change could not be saved.");
+      }
+    } catch {
+      setSlotByPlayerId(previousSlots);
+      setError("Lineup change could not be saved.");
+    }
+  }
+
   /**
    * Validate the proposed slot assignment before committing it. The move/fill
    * sheets only ever offer legal destinations, so this is a guard rail: a move
-   * that would produce an illegal lineup is rejected and surfaced inline rather
-   * than requiring a separate "validate" step.
+   * that would produce an illegal lineup (or touch a game-locked player) is
+   * rejected and surfaced inline. Legal moves apply optimistically and persist
+   * through the lineup API, rolling back if the server rejects them.
    */
   function commitSlots(nextSlots: Record<string, RosterSlot>) {
     const nextLineup = initialLineup.map((entry) => ({ ...entry, slot: nextSlots[entry.player.id] }));
@@ -141,8 +195,25 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
       return false;
     }
 
+    const lockIssues = findLineupLockIssues(currentLineup, nextLineup);
+    // The scheduled-start check misses games the schedule sync hasn't seen;
+    // the live overlay is the backstop for anyone already playing.
+    const liveLockedMove = nextLineup.find(
+      (entry) => live[entry.player.id] && slotByPlayerId[entry.player.id] !== entry.slot,
+    );
+
+    if (lockIssues.length || liveLockedMove) {
+      setError(
+        lockIssues[0]?.message ??
+          `${liveLockedMove?.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`,
+      );
+      return false;
+    }
+
     setError(null);
+    const previousSlots = slotByPlayerId;
     setSlotByPlayerId(nextSlots);
+    void persistSlots(nextSlots, previousSlots);
     return true;
   }
 
@@ -175,6 +246,14 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
     setFillingSlot(null);
   }
 
+  function startMove(entry: LineupPlayer) {
+    if (isEntryLocked(entry)) {
+      setError(`${entry.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`);
+      return;
+    }
+    setMovingPlayerId(entry.player.id);
+  }
+
   return (
     <>
       <section className="panel" aria-labelledby="lineup-heading">
@@ -197,23 +276,37 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
               {group.rows.map((row) =>
                 row.entry ? (
                   (() => {
-                    const player = row.entry.player;
+                    const entry = row.entry;
+                    const player = entry.player;
                     const { seasonPts, projPts } = rowPoints(player);
                     const liveEntry = live[player.id];
+                    const locked = isEntryLocked(entry);
                     const boldPts = liveEntry ? liveEntry.points : seasonPts;
                     const injured = player.status === "injured" || player.status === "day-to-day";
                     const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status);
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
+                    const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
 
                     return (
                       <div className="row editable-row lineup-slot-row" key={row.key}>
                         <button
-                          className="pos-badge-button"
+                          className={locked ? "pos-badge-button is-locked" : "pos-badge-button"}
                           type="button"
-                          onClick={() => setMovingPlayerId(player.id)}
-                          aria-label={`Move ${player.name} out of the ${row.slot} slot`}
+                          onClick={() => startMove(entry)}
+                          aria-disabled={locked}
+                          aria-label={
+                            locked
+                              ? `${player.name} is locked in the ${row.slot} slot until the next daily rollover`
+                              : `Move ${player.name} out of the ${row.slot} slot`
+                          }
+                          title={locked ? "Locked: game started" : undefined}
                         >
-                          <PositionBadge slot={row.slot} swap />
+                          <PositionBadge slot={row.slot} swap={!locked} />
+                          {locked ? (
+                            <span className="slot-lock" aria-hidden="true">
+                              &#128274;
+                            </span>
+                          ) : null}
                         </button>
                         <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
                         <button
@@ -227,6 +320,7 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
                             {player.mlbTeam} &ndash; {player.positions.join(", ")}
                           </span>
                           <span className={gameClass}>{gameLine}</span>
+                          {liveStatLine ? <span className="player-live-line">{liveStatLine}</span> : null}
                         </button>
                         <button
                           className="player-points"
@@ -273,17 +367,29 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
           mover={movingEntry}
           lineup={currentLineup}
           rosterSlots={defaultRosterSlots}
+          lockedPlayerIds={lockedPlayerIds}
           onSelect={applyMove}
           onClose={() => setMovingPlayerId(null)}
         />
       ) : null}
 
       {fillingSlot ? (
-        <FillSlotSheet slot={fillingSlot} lineup={currentLineup} onSelect={fillSlot} onClose={() => setFillingSlot(null)} />
+        <FillSlotSheet
+          slot={fillingSlot}
+          lineup={currentLineup}
+          lockedPlayerIds={lockedPlayerIds}
+          onSelect={fillSlot}
+          onClose={() => setFillingSlot(null)}
+        />
       ) : null}
 
       {detailPlayerId ? (
-        <PlayerDetailSheet playerId={detailPlayerId} teamId={teamId} onClose={() => setDetailPlayerId(null)} />
+        <PlayerDetailSheet
+          playerId={detailPlayerId}
+          teamId={teamId}
+          onClose={() => setDetailPlayerId(null)}
+          onRosterChange={() => router.refresh()}
+        />
       ) : null}
     </>
   );

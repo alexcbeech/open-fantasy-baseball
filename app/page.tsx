@@ -38,14 +38,14 @@ export default async function HomePage() {
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
           {currentUser?.isAdmin ? (
-            <Link className="icon-button" href="/admin" aria-label="Open admin operations">
+            <Link className="icon-button" href="/admin" aria-label="Open admin operations" data-tooltip="Admin operations">
               Ops
             </Link>
           ) : null}
-          <Link className="icon-button" href="/league/new" aria-label="Create league">
+          <Link className="icon-button" href="/league/new" aria-label="Create league" data-tooltip="New league">
             +
           </Link>
-          <Link className="icon-button" href="/profile" aria-label="Open profile and preferences">
+          <Link className="icon-button" href="/profile" aria-label="Open profile and preferences" data-tooltip="Profile & preferences">
             ⚙
           </Link>
         </div>
