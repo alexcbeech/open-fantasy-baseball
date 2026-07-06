@@ -18,34 +18,33 @@ export default async function HomePage() {
 
   const teams = await listTeamsForCurrentUser();
   const draftableLeagues = currentUser ? await listDraftableLeagues(currentUser.userId) : [];
-  // Lead with a live head-to-head if there is one, else the top-ranked team.
-  const featured =
-    teams.find((team) => team.scoringType !== "roto" && team.matchup.opponentName !== "Season Standings") ??
-    teams.toSorted((left, right) => left.rank - right.rank)[0];
-  const otherTeams = teams.filter((team) => team.id !== featured?.id);
   const shareFor = (team: (typeof teams)[number]) => {
     const total = team.matchup.userScore + team.matchup.opponentScore;
     return total > 0 ? Math.round((team.matchup.userScore / total) * 100) : 50;
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell app-shell--flush">
       <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-kicker">Open Fantasy</span>
-          <span className="brand-title">Baseball</span>
+        <div className="brand-lockup brand-lockup--logo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark" src="/brand/ofb-mark.svg" alt="" width={40} height={40} aria-hidden="true" />
+          <span className="brand-text">
+            <span className="brand-kicker">Open Fantasy</span>
+            <span className="brand-title">Baseball</span>
+          </span>
         </div>
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
           {currentUser?.isAdmin ? (
-            <Link className="icon-button" href="/admin" aria-label="Open admin operations">
+            <Link className="icon-button" href="/admin" aria-label="Open admin operations" data-tooltip="Admin operations">
               Ops
             </Link>
           ) : null}
-          <Link className="icon-button" href="/league/new" aria-label="Create league">
+          <Link className="icon-button" href="/league/new" aria-label="Create league" data-tooltip="New league">
             +
           </Link>
-          <Link className="icon-button" href="/profile" aria-label="Open profile and preferences">
+          <Link className="icon-button" href="/profile" aria-label="Open profile and preferences" data-tooltip="Profile & preferences">
             ⚙
           </Link>
         </div>
@@ -77,45 +76,13 @@ export default async function HomePage() {
           </>
         ) : null}
 
-        {featured ? (
-          <>
-            <div className="section-title">
-              <h2 id="featured-heading">Featured Matchup</h2>
-              <span className="subtle">{featured.matchup.periodLabel}</span>
-            </div>
-            <Link
-              className="featured-card"
-              href={`/team/${featured.id}`}
-              aria-label={`${featured.teamName} vs ${featured.matchup.opponentName}`}
-            >
-              <div className="featured-league">
-                {featured.leagueName} · {formatScoringType(featured.scoringType)}
-              </div>
-              <div className="matchup-hero-scores">
-                <div className="matchup-hero-team">
-                  <span className="score-name">{featured.teamName}</span>
-                  <span className="matchup-hero-score">{featured.matchup.userScore}</span>
-                </div>
-                <span className="versus">vs</span>
-                <div className="matchup-hero-team right">
-                  <span className="score-name">{featured.matchup.opponentName}</span>
-                  <span className="matchup-hero-score">{featured.matchup.opponentScore}</span>
-                </div>
-              </div>
-              <div className="matchup-share" aria-hidden="true">
-                <span className="matchup-share-user" style={{ width: `${shareFor(featured)}%` }} />
-              </div>
-            </Link>
-          </>
-        ) : null}
-
         <div className="section-title">
           <h2 id="teams-heading">My Teams</h2>
           <span className="subtle">{teams.length} total</span>
         </div>
 
         <div className="team-list">
-          {otherTeams.map((team) => {
+          {teams.map((team) => {
             const isWinning = team.matchup.userScore >= team.matchup.opponentScore;
 
             return (

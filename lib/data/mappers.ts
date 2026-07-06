@@ -29,6 +29,8 @@ export type DbPlayerRow = {
   game_date?: Date | string | null;
   home_away?: "home" | "away" | null;
   opponent?: string | null;
+  todays_game_start?: Date | string | null;
+  rostered_percent?: string | number | null;
 };
 
 export type DbLineupRow = DbPlayerRow & {
@@ -91,6 +93,8 @@ export function mapPlayer(row: DbPlayerRow): Player {
     projectedStats: row.projected_stats ?? {},
     seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points)) : null,
     nextGame,
+    todaysGameStart: row.todays_game_start ? new Date(row.todays_game_start).toISOString() : null,
+    rosteredPercent: row.rostered_percent != null ? Math.round(Number(row.rostered_percent)) : null,
   };
 }
 

@@ -1,13 +1,40 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { defaultCreateLeagueInput } from "@/lib/fantasy/league-create";
 import { draftPickSecondsOptions, draftTypes, lineupLockModes, playerPools, tradeReviewModes, waiverModes } from "@/lib/fantasy/settings-matrix";
+import type { WaiverMode } from "@/lib/fantasy/types";
+
+// Human-friendly labels for every dropdown value; raw setting keys like
+// "faab" or "league-vote" never render directly.
+const waiverModeLabels: Record<string, string> = {
+  rolling: "Rolling Waivers",
+  faab: "FAAB (Bid Budget)",
+};
+
+const tradeReviewLabels: Record<string, string> = {
+  "league-vote": "League Vote",
+  commissioner: "Commissioner Review",
+  none: "No Review",
+};
+
+const lineupLockLabels: Record<string, string> = {
+  daily: "Daily",
+  weekly: "Weekly",
+  "first-game": "Lock At First Game",
+};
+
+const draftTypeLabels: Record<string, string> = {
+  snake: "Snake",
+  auction: "Auction",
+  offline: "Offline",
+};
 
 const playerPoolLabels: Record<string, string> = {
   all: "All MLB",
-  al: "AL only",
-  nl: "NL only",
+  al: "AL Only",
+  nl: "NL Only",
 };
 
 type LeagueCreateFormProps = {
@@ -20,8 +47,10 @@ type SubmitState =
   | { kind: "error"; message: string };
 
 export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
+  const router = useRouter();
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [waiverMode, setWaiverMode] = useState<WaiverMode>(defaults.waiverMode);
 
   async function submitLeague(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,7 +64,9 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
       scoringType: formData.get("scoringType"),
       teamCount: formData.get("teamCount"),
       waiverMode: formData.get("waiverMode"),
-      faabBudget: formData.get("faabBudget"),
+      // Rolling waivers have no bid budget; the field is hidden, so submit the
+      // default rather than a stale value from a briefly-selected FAAB mode.
+      faabBudget: formData.get("faabBudget") ?? defaults.faabBudget,
       tradeReview: formData.get("tradeReview"),
       tradeReviewDays: formData.get("tradeReviewDays"),
       lineupLockMode: formData.get("lineupLockMode"),
@@ -54,17 +85,30 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
         },
         body: JSON.stringify(payload),
       });
-      const result = (await response.json()) as { error?: string; league?: { settings?: { name?: string } } };
+      const result = (await response.json()) as {
+        error?: string;
+        league?: { id?: string; settings?: { name?: string } };
+      };
 
       if (!response.ok) {
         setSubmitState({ kind: "error", message: result.error ?? "League settings need changes." });
         return;
       }
 
-      setSubmitState({
-        kind: "success",
-        message: `${result.league?.settings?.name ?? "League"} is ready to persist once database access is wired.`,
-      });
+      const leagueId = result.league?.id;
+      const leagueName = result.league?.settings?.name ?? "League";
+
+      if (!leagueId || leagueId === "pending-persistence") {
+        // Demo mode (no database): the settings validated but nothing was saved.
+        setSubmitState({
+          kind: "success",
+          message: `${leagueName} validated. Connect a database to save leagues in demo mode.`,
+        });
+        return;
+      }
+
+      setSubmitState({ kind: "success", message: `${leagueName} created! Heading to your draft room...` });
+      router.push(`/draft/${leagueId}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -104,18 +148,20 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
       <div className="field-grid">
         <label className="field">
           <span>Waivers</span>
-          <select name="waiverMode" defaultValue={defaults.waiverMode}>
+          <select name="waiverMode" value={waiverMode} onChange={(event) => setWaiverMode(event.target.value as WaiverMode)}>
             {waiverModes.map((mode) => (
               <option value={mode} key={mode}>
-                {mode}
+                {waiverModeLabels[mode] ?? mode}
               </option>
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>FAAB</span>
-          <input name="faabBudget" inputMode="numeric" defaultValue={defaults.faabBudget} />
-        </label>
+        {waiverMode === "faab" ? (
+          <label className="field">
+            <span>FAAB Budget ($)</span>
+            <input name="faabBudget" inputMode="numeric" defaultValue={defaults.faabBudget} />
+          </label>
+        ) : null}
       </div>
 
       <div className="field-grid">
@@ -124,7 +170,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
           <select name="tradeReview" defaultValue={defaults.tradeReview}>
             {tradeReviewModes.map((mode) => (
               <option value={mode} key={mode}>
-                {mode}
+                {tradeReviewLabels[mode] ?? mode}
               </option>
             ))}
           </select>
@@ -141,7 +187,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
           <select name="lineupLockMode" defaultValue={defaults.lineupLockMode}>
             {lineupLockModes.map((mode) => (
               <option value={mode} key={mode}>
-                {mode}
+                {lineupLockLabels[mode] ?? mode}
               </option>
             ))}
           </select>
@@ -151,7 +197,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
           <select name="draftType" defaultValue={defaults.draftType}>
             {draftTypes.map((draftType) => (
               <option value={draftType} key={draftType}>
-                {draftType}
+                {draftTypeLabels[draftType] ?? draftType}
               </option>
             ))}
           </select>
@@ -174,7 +220,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
           <select name="draftPickSeconds" defaultValue={defaults.draftPickSeconds}>
             {draftPickSecondsOptions.map((seconds) => (
               <option value={seconds} key={seconds}>
-                {seconds}s
+                {seconds} seconds
               </option>
             ))}
           </select>

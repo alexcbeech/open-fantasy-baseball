@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { authorizeApiRequest } from "@/lib/auth/bearer-token";
-import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
-import { validateLineup } from "@/lib/fantasy/roster-validation";
+import { getLineupForTeam, getTeamSummary, LineupSaveError, saveLineupSlots } from "@/lib/data/teams";
+import { isDatabaseConfigured } from "@/lib/db/client";
+import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 
 type RouteContext = {
@@ -49,12 +50,19 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  const body = (await request.json()) as {
+  let body: {
     entries?: Array<{
       playerId: string;
       slot: RosterSlot;
     }>;
   };
+
+  try {
+    body = await request.json();
+  } catch {
+    // Covers malformed JSON and requests aborted mid-body (e.g. navigation).
+    return NextResponse.json({ error: "A JSON body with lineup entries is required" }, { status: 400 });
+  }
 
   if (!body.entries?.length) {
     return NextResponse.json({ error: "Lineup entries are required" }, { status: 400 });
@@ -78,15 +86,59 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const validation = validateLineup(proposedLineup);
+  // A player whose MLB game has started is locked in place until the next
+  // daily rollover; the API enforces this so it can't be bypassed client-side.
+  const lockIssues = findLineupLockIssues(currentLineup, proposedLineup);
+
+  if (!validation.valid || lockIssues.length) {
+    return NextResponse.json(
+      {
+        accepted: false,
+        lineup: proposedLineup,
+        validation: {
+          ...validation,
+          valid: false,
+          issues: [...lockIssues, ...validation.issues],
+        },
+        next: "Fix lineup validation issues.",
+      },
+      { status: lockIssues.length ? 409 : 200 },
+    );
+  }
+
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json(
+      {
+        accepted: true,
+        lineup: proposedLineup,
+        validation,
+        next: "Demo mode: lineup validated but not persisted (no database configured).",
+      },
+      { status: 202 },
+    );
+  }
+
+  try {
+    await saveLineupSlots(
+      teamId,
+      body.entries.map((entry) => ({ playerId: entry.playerId, slot: entry.slot })),
+    );
+  } catch (error) {
+    if (error instanceof LineupSaveError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    throw error;
+  }
 
   return NextResponse.json(
     {
-      accepted: validation.valid,
+      accepted: true,
       lineup: proposedLineup,
       validation,
-      next: validation.valid ? "Persist lineup once database access is wired." : "Fix lineup validation issues.",
+      next: "Lineup saved.",
     },
-    { status: validation.valid ? 202 : 200 },
+    { status: 200 },
   );
 }
 
@@ -112,7 +164,7 @@ export async function POST(request: Request, context: RouteContext) {
         "content-type": "application/json",
         ...(request.headers.get("authorization") ? { authorization: request.headers.get("authorization") ?? "" } : {}),
       },
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify(entries.length ? { entries } : {}),
     }),
     context,
   );

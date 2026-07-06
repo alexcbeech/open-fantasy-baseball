@@ -11,11 +11,13 @@ const reserveSlots: RosterSlot[] = ["BN", "IL", "NA"];
 type FillSlotSheetProps = {
   slot: RosterSlot;
   lineup: LineupPlayer[];
+  /** Players whose game has started; they're locked and can't be promoted. */
+  lockedPlayerIds?: Set<string>;
   onSelect: (playerId: string) => void;
   onClose: () => void;
 };
 
-export function FillSlotSheet({ slot, lineup, onSelect, onClose }: FillSlotSheetProps) {
+export function FillSlotSheet({ slot, lineup, lockedPlayerIds, onSelect, onClose }: FillSlotSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,10 +31,11 @@ export function FillSlotSheet({ slot, lineup, onSelect, onClose }: FillSlotSheet
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  // Any player eligible for the slot who is not already in it. Reserve players
+  // Any player eligible for the slot who is not already in it and whose game
+  // hasn't started (started players are locked in place). Reserve players
   // (bench/IL/minors) surface first since they are the usual promotions.
   const candidates = lineup
-    .filter((entry) => entry.slot !== slot && isSlotEligibleForPlayer(entry.player, slot))
+    .filter((entry) => entry.slot !== slot && isSlotEligibleForPlayer(entry.player, slot) && !lockedPlayerIds?.has(entry.player.id))
     .sort((left, right) => {
       const leftReserve = reserveSlots.includes(left.slot) ? 0 : 1;
       const rightReserve = reserveSlots.includes(right.slot) ? 0 : 1;

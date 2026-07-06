@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { players } from "./mock-data";
-import { isSlotEligibleForPlayer, validateLineup } from "./roster-validation";
+import { findLineupLockIssues, isPlayerGameLocked, isSlotEligibleForPlayer, validateLineup } from "./roster-validation";
 import type { LineupPlayer } from "./types";
 
 describe("lineup validation", () => {
@@ -79,5 +79,45 @@ describe("isSlotEligibleForPlayer", () => {
     expect(rutschman.name).toBe("Adley Rutschman");
     expect(isSlotEligibleForPlayer(rutschman, "C")).toBe(true);
     expect(isSlotEligibleForPlayer(rutschman, "1B")).toBe(false);
+  });
+});
+
+describe("game-start lineup locks", () => {
+  const now = new Date("2026-07-05T23:30:00Z");
+  const beforeFirstPitch = "2026-07-06T00:10:00Z";
+  const afterFirstPitch = "2026-07-05T22:05:00Z";
+
+  it("locks a player once today's first pitch has passed", () => {
+    expect(isPlayerGameLocked({ todaysGameStart: afterFirstPitch }, now)).toBe(true);
+    expect(isPlayerGameLocked({ todaysGameStart: beforeFirstPitch }, now)).toBe(false);
+    expect(isPlayerGameLocked({ todaysGameStart: null }, now)).toBe(false);
+    expect(isPlayerGameLocked({}, now)).toBe(false);
+  });
+
+  it("rejects slot changes for locked players and allows everyone else", () => {
+    const lockedPlayer = { ...players[0], todaysGameStart: afterFirstPitch };
+    const freePlayer = { ...players[1], todaysGameStart: beforeFirstPitch };
+    const current: LineupPlayer[] = [
+      { slot: "OF", player: lockedPlayer, matchupTotal: 0 },
+      { slot: "BN", player: freePlayer, matchupTotal: 0 },
+    ];
+
+    // Benching the locked player is rejected; promoting the unlocked one is fine.
+    const proposed: LineupPlayer[] = [
+      { slot: "BN", player: lockedPlayer, matchupTotal: 0 },
+      { slot: "OF", player: freePlayer, matchupTotal: 0 },
+    ];
+
+    const issues = findLineupLockIssues(current, proposed, now);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].code).toBe("player-locked");
+    expect(issues[0].playerId).toBe(lockedPlayer.id);
+  });
+
+  it("does not flag a locked player who keeps their slot", () => {
+    const lockedPlayer = { ...players[0], todaysGameStart: afterFirstPitch };
+    const lineup: LineupPlayer[] = [{ slot: "OF", player: lockedPlayer, matchupTotal: 0 }];
+
+    expect(findLineupLockIssues(lineup, lineup, now)).toHaveLength(0);
   });
 });

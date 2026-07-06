@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 
 // Pages that intentionally render without a signed-in session even when Neon
-// Auth is configured: league creation isn't yet wired to the signed-in owner,
-// and the API docs are public reference material.
-const publicPagePaths = new Set(["/league/new", "/api-docs"]);
+// Auth is configured: the API docs are public reference material. League
+// creation requires a session -- the creator becomes the commissioner.
+const publicPagePaths = new Set(["/api-docs"]);
 
 const neonAuthConfigured = Boolean(process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_COOKIE_SECRET);
 
@@ -39,7 +39,11 @@ export async function middleware(request: NextRequest) {
   // Neon Auth's own middleware here performs that refresh legally before the
   // page renders. API routes are skipped: they're Route Handlers, where the
   // same write is already legal, so they don't hit this constraint.
-  if (runNeonAuthMiddleware && !request.nextUrl.pathname.startsWith("/api")) {
+  // Non-GET requests are skipped too: they're Server Action posts, where the
+  // cookie write is equally legal -- and the Neon Auth middleware forwards the
+  // incoming method and body to its upstream get-session check, so a POST
+  // makes that check fail and bounces a signed-in action to the login page.
+  if (runNeonAuthMiddleware && request.method === "GET" && !request.nextUrl.pathname.startsWith("/api")) {
     const authResponse = await runNeonAuthMiddleware(request);
     const isLoginRedirect = authResponse.headers.has("location");
 

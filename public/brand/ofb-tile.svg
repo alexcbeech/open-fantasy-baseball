@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Open Fantasy Baseball">
+  <rect x="8" y="8" width="104" height="104" rx="24" fill="#14213d" />
+  <path d="M32 32 H88 V62 L60 90 L32 62 Z" fill="#eef0f4" />
+  <text x="60" y="57" text-anchor="middle" font-family="'Arial Black', Arial, Helvetica, sans-serif" font-weight="900" font-size="21" fill="#14213d">OFB</text>
+  <path d="M43 70 H77" stroke="#e63946" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.5 6" />
+</svg>

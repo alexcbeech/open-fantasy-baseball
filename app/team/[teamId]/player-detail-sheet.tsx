@@ -9,13 +9,28 @@ type SheetState =
   | { kind: "success"; player: PlayerDetail; message: string }
   | { kind: "error"; player: PlayerDetail | null; message: string };
 
+function actionSuccessMessage(action: PlayerAction, player: PlayerDetail): string {
+  switch (action) {
+    case "add":
+      return `${player.name} was added to your roster.`;
+    case "drop":
+      return `${player.name} was dropped and is now a free agent.`;
+    case "move-to-il":
+      return `${player.name} was moved to an IL slot.`;
+    case "move-to-na":
+      return `${player.name} was moved to an NA slot.`;
+  }
+}
+
 type PlayerDetailSheetProps = {
   playerId: string;
   teamId: string;
   onClose: () => void;
+  /** Called after a successful add/drop/IL/NA so the surrounding view can refresh. */
+  onRosterChange?: (player: PlayerDetail) => void;
 };
 
-export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailSheetProps) {
+export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }: PlayerDetailSheetProps) {
   const [state, setState] = useState<SheetState>({ kind: "loading", player: null, message: "Loading player..." });
   const [live, setLive] = useState<LivePlayerStatus | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -113,7 +128,8 @@ export function PlayerDetailSheet({ playerId, teamId, onClose }: PlayerDetailShe
         return;
       }
 
-      setState({ kind: "success", player: result.player, message: "Player action applied." });
+      setState({ kind: "success", player: result.player, message: actionSuccessMessage(action, result.player) });
+      onRosterChange?.(result.player);
     } catch {
       setState({ kind: "error", player: current, message: "Player action could not be applied." });
     }
