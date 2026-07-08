@@ -1,4 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// The route handlers resolve a session via the Neon Auth SDK, which needs the
+// Next request context (next/headers) that vitest's node env lacks. Stub the
+// module with the same demo-mode behavior it has when auth is unconfigured.
+vi.mock("@/lib/auth/neon-auth", () => ({
+  getCurrentOfbUser: async () => ({
+    userId: "demo-user",
+    email: "alex@example.local",
+    displayName: "Alex",
+    avatarUrl: null,
+    authProvider: "demo",
+    providerSubject: null,
+    roles: ["admin"],
+    isAdmin: true,
+  }),
+}));
+
 import { GET as playersGet } from "./players/route";
 import { GET as lineupGet, PATCH as lineupPatch } from "./teams/[teamId]/lineup/route";
 import { POST as actionsPost } from "./teams/[teamId]/players/[playerId]/actions/route";

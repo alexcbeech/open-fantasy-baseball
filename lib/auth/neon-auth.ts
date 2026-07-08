@@ -57,6 +57,13 @@ export async function getCurrentOfbUser(): Promise<OfbCurrentUser | null> {
   const auth = getNeonAuth();
 
   if (!auth) {
+    // The demo fallback user is an admin. Handing it out in production would
+    // turn a missing env var into an auth bypass, so fail closed there and
+    // keep demo mode for local development and tests.
+    if (process.env.NODE_ENV === "production") {
+      return null;
+    }
+
     return getDemoCurrentUser();
   }
 
@@ -127,7 +134,7 @@ async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurr
           isAdmin: hasAdminRole(roles),
         };
       } catch (error) {
-        await client.query("rollback");
+        await client.query("rollback").catch(() => undefined);
         throw error;
       } finally {
         client.release();

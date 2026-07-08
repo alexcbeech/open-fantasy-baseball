@@ -368,7 +368,7 @@ async function main() {
     await client.query("commit");
     console.log("seeded OFB development data");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

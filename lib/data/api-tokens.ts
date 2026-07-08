@@ -120,7 +120,7 @@ export async function createApiToken(input: ApiTokenCreateInput, email = demoUse
           summary: mapToken(tokenResult.rows[0]),
         };
       } catch (error) {
-        await client.query("rollback");
+        await client.query("rollback").catch(() => undefined);
         throw error;
       } finally {
         client.release();

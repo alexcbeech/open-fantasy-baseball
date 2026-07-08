@@ -1,4 +1,5 @@
 import { getPool } from "../db/client";
+import { inningsFromIpNotation } from "@/lib/fantasy/scoring";
 
 type StatMap = Record<string, number | string>;
 
@@ -16,28 +17,41 @@ function num(value: number | string | undefined): number {
 /**
  * A team's total for a scoring category across its active players. Counting
  * stats sum; rate stats are recomputed from their components so a team AVG is
- * total hits / total at-bats rather than an average of averages.
+ * total hits / total at-bats rather than an average of averages. IP lines use
+ * baseball notation (6.2 = 6⅔), so innings are converted before summing.
+ * Returns null when a rate category has no denominator (no at-bats/innings):
+ * there is no value to compare, which scores as a tie rather than a perfect 0.
  */
-export function computeCategoryValue(category: string, stats: StatMap[]): number {
+export function computeCategoryValue(category: string, stats: StatMap[]): number | null {
   const sum = (key: string) => stats.reduce((total, line) => total + num(line[key]), 0);
+  const sumInnings = () => stats.reduce((total, line) => total + inningsFromIpNotation(line.IP), 0);
 
   if (category === "AVG") {
     const atBats = sum("AB");
-    return atBats ? sum("H") / atBats : 0;
+    return atBats ? sum("H") / atBats : null;
   }
   if (category === "ERA") {
-    const innings = sum("IP");
-    return innings ? (sum("ER") * 9) / innings : 0;
+    const innings = sumInnings();
+    return innings ? (sum("ER") * 9) / innings : null;
   }
   if (category === "WHIP") {
-    const innings = sum("IP");
-    return innings ? (sum("BB") + sum("HA")) / innings : 0;
+    const innings = sumInnings();
+    return innings ? (sum("BB") + sum("HA")) / innings : null;
+  }
+  if (category === "IP") {
+    return sumInnings();
   }
   return sum(category);
 }
 
-export function compareCategory(category: string, homeValue: number, awayValue: number): "win" | "loss" | "tie" {
-  if (homeValue === awayValue) {
+export function compareCategory(
+  category: string,
+  homeValue: number | null,
+  awayValue: number | null,
+): "win" | "loss" | "tie" {
+  // A side with no rate denominator has no value; the category is a
+  // no-contest tie rather than an automatic 0.00 ERA/WHIP win.
+  if (homeValue === null || awayValue === null || homeValue === awayValue) {
     return "tie";
   }
   const homeBetter = lowerIsBetter.has(category) ? homeValue < awayValue : homeValue > awayValue;
@@ -115,7 +129,13 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
              home_value = excluded.home_value,
              away_value = excluded.away_value,
              home_result = excluded.home_result`,
-          [matchup.id, category, Math.round(homeValue * 10000) / 10000, Math.round(awayValue * 10000) / 10000, result],
+          [
+            matchup.id,
+            category,
+            Math.round((homeValue ?? 0) * 10000) / 10000,
+            Math.round((awayValue ?? 0) * 10000) / 10000,
+            result,
+          ],
         );
         categoriesWritten += 1;
       }

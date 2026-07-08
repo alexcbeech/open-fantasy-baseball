@@ -32,7 +32,8 @@ type LinescoreResponse = { inningState?: string; currentInningOrdinal?: string }
 
 async function fetchJson<T>(path: string, baseUrl: string): Promise<T | null> {
   try {
-    const response = await fetch(`${baseUrl}${path}`, { cache: "no-store" });
+    // Timeout so a hung MLB request can't stall a user-facing route.
+    const response = await fetch(`${baseUrl}${path}`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
       return null;
     }
@@ -104,7 +105,14 @@ export function __clearLiveCache() {
 }
 
 function todayIso(now: Date) {
-  return now.toISOString().slice(0, 10);
+  // MLB schedule dates are ET official dates: a 10pm ET game is already
+  // "tomorrow" in UTC, so a UTC calendar day would go dark at 8pm ET.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
 /** The gamePk of the team's in-progress game today, or null if none is live. */

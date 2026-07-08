@@ -41,6 +41,7 @@ export class EspnAdpProvider implements AdpProvider {
   async fetchAdp(seasonYear: number): Promise<AdpEntry[]> {
     const response = await fetch(ESPN_ADP_URL(seasonYear), {
       headers: { "X-Fantasy-Filter": ESPN_FANTASY_FILTER, accept: "application/json" },
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {
@@ -88,7 +89,10 @@ export async function loadEspnToMlbamMap(fetchImpl: typeof fetch = fetch): Promi
     return idMapCache;
   }
 
-  const response = await fetchImpl(PLAYER_ID_MAP_URL, { headers: { accept: "text/csv" } });
+  const response = await fetchImpl(PLAYER_ID_MAP_URL, {
+    headers: { accept: "text/csv" },
+    signal: AbortSignal.timeout(30_000),
+  });
 
   if (!response.ok) {
     throw new Error(`Player id map request failed with status ${response.status}.`);

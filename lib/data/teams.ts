@@ -24,10 +24,21 @@ const teamSummarySql = `
   left join fantasy_team opponent on opponent.id = case when m.home_team_id = ft.id then m.away_team_id else m.home_team_id end
 `;
 
-export async function listTeamsForCurrentUser(): Promise<TeamSummary[]> {
+export async function listTeamsForCurrentUser(user?: { userId: string; email: string } | null): Promise<TeamSummary[]> {
   return tryDatabase(
     async () => {
-      const result = await query<DbTeamSummaryRow>(`${teamSummarySql} order by ft.waiver_priority nulls last, ft.name`);
+      if (!user) {
+        return [];
+      }
+
+      // Only teams the user manages. The demo user's id is not a UUID, so
+      // identity matches on id or email.
+      const result = await query<DbTeamSummaryRow>(
+        `${teamSummarySql}
+         where u.id::text = $1 or u.email = $2
+         order by ft.waiver_priority nulls last, ft.name`,
+        [user.userId, user.email],
+      );
       // Empty is a valid result (a real user with no teams); only the
       // tryDatabase fallback below serves mock data (demo mode / DB error).
       return result.rows.map(mapTeamSummary);
@@ -184,7 +195,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
 
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

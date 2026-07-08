@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamViewer } from "@/lib/auth/team-access";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { validateLineup } from "@/lib/fantasy/roster-validation";
 
@@ -10,13 +11,19 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(_request, "read:team", { allowMissingBearer: true });
+  const auth = await resolveApiIdentity(_request, "read:team");
 
   if (auth.response) {
     return auth.response;
   }
 
   const { teamId } = await params;
+  const accessDenied = await requireTeamViewer(teamId, auth.identity);
+
+  if (accessDenied) {
+    return accessDenied;
+  }
+
   const team = await getTeamSummary(teamId);
 
   if (!team) {

@@ -27,9 +27,19 @@ describe("computeCategoryValue", () => {
     expect(computeCategoryValue("WHIP", stats)).toBeCloseTo(0.9, 5);
   });
 
-  it("returns 0 for rate categories with no innings/at-bats", () => {
-    expect(computeCategoryValue("ERA", [{ HR: 5 }])).toBe(0);
-    expect(computeCategoryValue("AVG", [{ HR: 5 }])).toBe(0);
+  it("treats IP as baseball notation (6.2 = 6 and 2/3 innings) when summing", () => {
+    const stats = [
+      { IP: "6.2", ER: 2 },
+      { IP: "6.2", ER: 2 },
+    ];
+    // 13⅓ innings, not 12.4: ERA = (4 * 9) / 13.333... = 2.70
+    expect(computeCategoryValue("IP", stats)).toBeCloseTo(13.3333, 3);
+    expect(computeCategoryValue("ERA", stats)).toBeCloseTo(2.7, 5);
+  });
+
+  it("returns null for rate categories with no innings/at-bats", () => {
+    expect(computeCategoryValue("ERA", [{ HR: 5 }])).toBeNull();
+    expect(computeCategoryValue("AVG", [{ HR: 5 }])).toBeNull();
   });
 });
 
@@ -43,5 +53,12 @@ describe("compareCategory", () => {
   it("awards lower ERA and WHIP", () => {
     expect(compareCategory("ERA", 2.7, 3.4)).toBe("win");
     expect(compareCategory("WHIP", 1.3, 1.1)).toBe("loss");
+  });
+
+  it("ties rate categories when either side has no denominator", () => {
+    // No innings pitched is a no-contest, not an automatic 0.00 ERA win.
+    expect(compareCategory("ERA", null, 3.4)).toBe("tie");
+    expect(compareCategory("WHIP", 1.1, null)).toBe("tie");
+    expect(compareCategory("AVG", null, null)).toBe("tie");
   });
 });

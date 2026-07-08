@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const auth = await authorizeApiRequest(request, "read:profile", { allowMissingBearer: true });
+  const auth = await authorizeApiRequest(request, "write:profile", { allowMissingBearer: true });
 
   if (auth.response) {
     return auth.response;

@@ -10,8 +10,8 @@ import {
 } from "@/lib/data/push-subscriptions";
 import { getWebPushPublicKey, isWebPushConfigured } from "@/lib/notifications/web-push";
 
-async function resolveUser(request: Request) {
-  const auth = await authorizeApiRequest(request, "read:profile", { allowMissingBearer: true });
+async function resolveUser(request: Request, scope: "read:profile" | "write:profile" = "read:profile") {
+  const auth = await authorizeApiRequest(request, scope, { allowMissingBearer: true });
 
   if (auth.response) {
     return { user: null, response: auth.response };
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { user, response } = await resolveUser(request);
+  const { user, response } = await resolveUser(request, "write:profile");
 
   if (!user) {
     return response;
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { user, response } = await resolveUser(request);
+  const { user, response } = await resolveUser(request, "write:profile");
 
   if (!user) {
     return response;

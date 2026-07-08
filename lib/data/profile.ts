@@ -148,7 +148,7 @@ export async function updateProfilePreferences(input: ProfilePreferenceUpdate, e
           notification_settings: preferenceResult.rows[0].notification_settings,
         });
       } catch (error) {
-        await client.query("rollback");
+        await client.query("rollback").catch(() => undefined);
         throw error;
       } finally {
         client.release();

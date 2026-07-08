@@ -269,7 +269,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Update profile preferences",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         requestBody: jsonBody({ $ref: "#/components/schemas/ProfilePreferences" }),
         responses: {
           "200": { description: "Updated profile preferences." },
@@ -308,7 +308,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Register a Web Push subscription for the current device",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         requestBody: jsonBody({ $ref: "#/components/schemas/PushSubscription" }),
         responses: {
           "200": { description: "Subscription saved." },
@@ -321,7 +321,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Remove a Web Push subscription by endpoint",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         requestBody: jsonBody({
           type: "object",
           required: ["endpoint"],
@@ -339,7 +339,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Send a test Web Push notification to the current user's devices",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         responses: {
           "200": { description: "Test notification delivered." },
           "401": { description: "Sign in is required.", content: errorContent() },
@@ -375,7 +375,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Create a personal API token",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         requestBody: jsonBody({ $ref: "#/components/schemas/ApiTokenCreateInput" }),
         responses: {
           "201": {
@@ -390,7 +390,7 @@ export const openApiDocument = {
         tags: ["Profile"],
         summary: "Revoke a personal API token",
         security: bearerSecurity,
-        "x-ofb-required-scope": "read:profile",
+        "x-ofb-required-scope": "write:profile",
         parameters: [pathParameter("tokenId", "API token id.")],
         responses: {
           "200": { description: "Token revoked." },

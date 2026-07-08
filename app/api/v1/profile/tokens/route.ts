@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authorizeApiRequest(request, "read:profile", { allowMissingBearer: true });
+  const auth = await authorizeApiRequest(request, "write:profile", { allowMissingBearer: true });
 
   if (auth.response) {
     return auth.response;
@@ -41,6 +41,22 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  // A bearer token may only mint tokens with scopes it already holds;
+  // otherwise a leaked read-only token could self-escalate to full access.
+  // Session-authenticated users (no bearer) act with their full account.
+  const requestingPrincipal = auth.principal;
+
+  if (requestingPrincipal) {
+    const escalated = parsed.data.scopes.filter((scope) => !requestingPrincipal.scopes.includes(scope));
+
+    if (escalated.length) {
+      return NextResponse.json(
+        { error: `The requesting token does not hold: ${escalated.join(", ")}.` },
+        { status: 403 },
+      );
+    }
   }
 
   const currentUser = auth.principal ?? (await getCurrentOfbUser());

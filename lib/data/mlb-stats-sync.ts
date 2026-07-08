@@ -64,7 +64,9 @@ export type SyncPlayerStatsResult = {
 };
 
 async function fetchJson<T>(path: string, baseUrl: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`);
+  // Timeout so a hung upstream request fails the job instead of stalling it
+  // until the stale-job reclaimer burns an attempt.
+  const response = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(30_000) });
 
   if (!response.ok) {
     throw new Error(`MLB Stats API request failed: ${response.status} ${response.statusText} ${path}`);

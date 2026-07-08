@@ -1,5 +1,6 @@
 export const oauthScopes = [
   "read:profile",
+  "write:profile",
   "read:league",
   "read:team",
   "write:lineup",
@@ -13,6 +14,7 @@ export type OAuthScope = (typeof oauthScopes)[number];
 
 export const scopeDescriptions: Record<OAuthScope, string> = {
   "read:profile": "Read profile and notification preferences.",
+  "write:profile": "Update profile preferences, push subscriptions, and API tokens.",
   "read:league": "Read league settings, standings, teams, players, and matchups.",
   "read:team": "Read rosters, lineups, and team transaction history.",
   "write:lineup": "Set lineups and manage bench, IL, and NA assignments.",

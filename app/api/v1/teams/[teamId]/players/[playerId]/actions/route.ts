@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamManager } from "@/lib/auth/team-access";
 import {
   applyPlayerManagementAction,
   PlayerActionError,
@@ -25,7 +26,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const action = body.action as PlayerManagementAction;
   const requiredScope = action === "add" || action === "drop" ? "write:transactions" : "write:lineup";
-  const auth = await authorizeApiRequest(request, requiredScope, { allowMissingBearer: true });
+  const auth = await resolveApiIdentity(request, requiredScope);
 
   if (auth.response) {
     return auth.response;
@@ -36,6 +37,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const { teamId, playerId } = await params;
+  const accessDenied = await requireTeamManager(teamId, auth.identity);
+
+  if (accessDenied) {
+    return accessDenied;
+  }
 
   try {
     const player = await applyPlayerManagementAction(teamId, playerId, action);

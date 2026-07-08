@@ -509,7 +509,7 @@ export async function getDraftState(leagueId: string, viewerUserId: string): Pro
         const context = await lockDraftContext(client, leagueId);
 
         if (!context) {
-          await client.query("rollback");
+          await client.query("rollback").catch(() => undefined);
           return null;
         }
 
@@ -521,7 +521,7 @@ export async function getDraftState(leagueId: string, viewerUserId: string): Pro
 
         return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date());
       } catch (error) {
-        await client.query("rollback");
+        await client.query("rollback").catch(() => undefined);
         throw error;
       } finally {
         client.release();
@@ -604,7 +604,7 @@ export async function makePick(leagueId: string, playerId: string, viewerUserId:
 
     return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date());
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -740,7 +740,7 @@ export async function setupDraft(leagueId: string, viewerUserId: string, input: 
 
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -793,7 +793,7 @@ export async function startDraft(leagueId: string, viewerUserId: string): Promis
     await client.query(`update league set status = 'drafting', updated_at = now() where id = $1`, [leagueId]);
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -854,7 +854,7 @@ export async function pauseDraft(leagueId: string, viewerUserId: string, action:
 
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

@@ -36,11 +36,15 @@ export function getDatabasePoolConfig(): PoolConfig {
 
   const shouldUseSsl = connectionString.includes("sslmode=require") || connectionString.includes("neon.tech");
   const poolConnectionString = stripPgSslMode(connectionString);
+  // Verify the server certificate by default; skipping verification exposes
+  // the connection to MITM. DATABASE_SSL_NO_VERIFY=true is the escape hatch
+  // for endpoints with self-signed certs.
+  const sslConfig = process.env.DATABASE_SSL_NO_VERIFY === "true" ? { rejectUnauthorized: false } : true;
 
   return {
     connectionString: poolConnectionString,
     max: Number.parseInt(process.env.DATABASE_POOL_MAX ?? "10", 10),
-    ssl: shouldUseSsl ? { rejectUnauthorized: false } : undefined,
+    ssl: shouldUseSsl ? sslConfig : undefined,
   };
 }
 
@@ -56,6 +60,11 @@ function stripPgSslMode(connectionString: string) {
 
 export async function query<T extends QueryResultRow>(sql: string, values: unknown[] = []) {
   return getPool().query<T>(sql, values);
+}
+
+/** Postgres unique-violation (23505), e.g. from a concurrent duplicate insert. */
+export function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "23505");
 }
 
 export async function tryDatabase<T>(operation: () => Promise<T>, fallback: () => T | Promise<T>) {

@@ -1,4 +1,4 @@
-import { query, tryDatabase } from "@/lib/db/client";
+import { getPool, query, tryDatabase } from "@/lib/db/client";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
@@ -109,61 +109,76 @@ export async function createLeague(input: CreateLeagueInput, commissioner: Leagu
   return tryDatabase(
     async () => {
       const settings = buildLeagueSettingsFromInput(input);
-      const userResult = await query<{ id: string }>(
-        `insert into app_user (email, display_name)
-         values ($1, $2)
-         on conflict (email) do update set display_name = excluded.display_name
-         returning id`,
-        [commissioner.email, commissioner.displayName],
-      );
-      const userId = userResult.rows[0].id;
-      const leagueResult = await query<{ id: string }>(
-        `insert into league (name, scoring_type, season_year, commissioner_user_id, status, settings)
-         values ($1, $2, $3, $4, 'pre_draft', $5)
-         returning id`,
-        [input.name, input.scoringType, input.seasonYear, userId, JSON.stringify(settings)],
-      );
-      const leagueId = leagueResult.rows[0].id;
+      // One transaction: a league without its commissioner membership, roster
+      // slots, or stat categories permanently breaks draft setup and scoring.
+      const client = await getPool().connect();
 
-      await query(
-        `insert into league_member (league_id, user_id, role)
-         values ($1, $2, 'commissioner')
-         on conflict (league_id, user_id) do update set role = excluded.role`,
-        [leagueId, userId],
-      );
+      try {
+        await client.query("begin");
 
-      for (const [slot, count] of Object.entries(settings.rosterSlots)) {
-        await query(
-          `insert into league_roster_slot (league_id, slot, count)
-           values ($1, $2, $3)
-           on conflict (league_id, slot) do update set count = excluded.count`,
-          [leagueId, slot, count],
+        const userResult = await client.query<{ id: string }>(
+          `insert into app_user (email, display_name)
+           values ($1, $2)
+           on conflict (email) do update set display_name = excluded.display_name
+           returning id`,
+          [commissioner.email, commissioner.displayName],
         );
-      }
-
-      for (const [index, category] of settings.hitterCategories.entries()) {
-        await query(
-          `insert into league_stat_category (league_id, category, side, sort_order)
-           values ($1, $2, 'hitting', $3)
-           on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
-          [leagueId, category, index],
+        const userId = userResult.rows[0].id;
+        const leagueResult = await client.query<{ id: string }>(
+          `insert into league (name, scoring_type, season_year, commissioner_user_id, status, settings)
+           values ($1, $2, $3, $4, 'pre_draft', $5)
+           returning id`,
+          [input.name, input.scoringType, input.seasonYear, userId, JSON.stringify(settings)],
         );
-      }
+        const leagueId = leagueResult.rows[0].id;
 
-      for (const [index, category] of settings.pitcherCategories.entries()) {
-        await query(
-          `insert into league_stat_category (league_id, category, side, sort_order)
-           values ($1, $2, 'pitching', $3)
-           on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
-          [leagueId, category, index],
+        await client.query(
+          `insert into league_member (league_id, user_id, role)
+           values ($1, $2, 'commissioner')
+           on conflict (league_id, user_id) do update set role = excluded.role`,
+          [leagueId, userId],
         );
-      }
 
-      return {
-        id: leagueId,
-        seasonYear: input.seasonYear,
-        settings: { ...settings, id: leagueId },
-      };
+        for (const [slot, count] of Object.entries(settings.rosterSlots)) {
+          await client.query(
+            `insert into league_roster_slot (league_id, slot, count)
+             values ($1, $2, $3)
+             on conflict (league_id, slot) do update set count = excluded.count`,
+            [leagueId, slot, count],
+          );
+        }
+
+        for (const [index, category] of settings.hitterCategories.entries()) {
+          await client.query(
+            `insert into league_stat_category (league_id, category, side, sort_order)
+             values ($1, $2, 'hitting', $3)
+             on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
+            [leagueId, category, index],
+          );
+        }
+
+        for (const [index, category] of settings.pitcherCategories.entries()) {
+          await client.query(
+            `insert into league_stat_category (league_id, category, side, sort_order)
+             values ($1, $2, 'pitching', $3)
+             on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
+            [leagueId, category, index],
+          );
+        }
+
+        await client.query("commit");
+
+        return {
+          id: leagueId,
+          seasonYear: input.seasonYear,
+          settings: { ...settings, id: leagueId },
+        };
+      } catch (error) {
+        await client.query("rollback").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
     },
     async () => ({
       id: "pending-persistence",

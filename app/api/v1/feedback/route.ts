@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
 import { feedbackSubmissionSchema, submitFeedback } from "@/lib/data/feedback";
+import { clientKeyForRequest, isRateLimited } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  // Feedback intake is intentionally open to signed-out users, so throttle it:
+  // it writes to a PII table and feeds the admin triage queue.
+  if (isRateLimited(`feedback:${clientKeyForRequest(request)}`, { limit: 5, windowMs: 10 * 60 * 1000 })) {
+    return NextResponse.json({ error: "Too many feedback submissions. Please try again later." }, { status: 429 });
+  }
+
   let body: unknown;
 
   try {

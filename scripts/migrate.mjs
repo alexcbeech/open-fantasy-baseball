@@ -39,7 +39,7 @@ async function main() {
       await client.query("commit");
       console.log(`applied ${filename}`);
     } catch (error) {
-      await client.query("rollback");
+      await client.query("rollback").catch(() => undefined);
       throw error;
     } finally {
       client.release();

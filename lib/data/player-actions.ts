@@ -1,4 +1,4 @@
-import { getPool } from "@/lib/db/client";
+import { getPool, isUniqueViolation } from "@/lib/db/client";
 import { getPlayerDetail } from "@/lib/data/players";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { PlayerDetail, RosterSlot } from "@/lib/fantasy/types";
@@ -55,7 +55,7 @@ export async function applyPlayerManagementAction(teamId: string, playerId: stri
 
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -96,19 +96,33 @@ async function getPlayerContext(client: PoolClient, playerId: string): Promise<P
 
 async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string, player: PlayerContext) {
   const activeRoster = await client.query<{ team_id: string }>(
-    "select team_id from roster_entry where player_id = $1 and dropped_at is null limit 1",
-    [playerId],
+    `select re.team_id
+     from roster_entry re
+     join fantasy_team ft on ft.id = re.team_id
+     where re.player_id = $1 and re.dropped_at is null and ft.league_id = $2
+     limit 1`,
+    [playerId, team.leagueId],
   );
 
   if (activeRoster.rows.length) {
     throw new PlayerActionError("Player is already rostered.", 409);
   }
 
-  await client.query(
-    `insert into roster_entry (team_id, player_id, acquisition_type)
-     values ($1, $2, 'free_agent')`,
-    [teamId, playerId],
-  );
+  try {
+    await client.query(
+      `insert into roster_entry (team_id, player_id, acquisition_type)
+       values ($1, $2, 'free_agent')`,
+      [teamId, playerId],
+    );
+  } catch (error) {
+    // Unique-violation from idx_roster_entry_active_player_per_league: a
+    // concurrent transaction rostered the player between our check and insert.
+    if (isUniqueViolation(error)) {
+      throw new PlayerActionError("Player is already rostered.", 409);
+    }
+
+    throw error;
+  }
   // An added player joins today's lineup immediately: the first open eligible
   // active slot if one exists, otherwise the bench.
   const slot = await assignLineupSlotForAdd(client, team, teamId, playerId, player);
