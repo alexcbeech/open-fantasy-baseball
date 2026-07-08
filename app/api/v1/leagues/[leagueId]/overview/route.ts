@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireLeagueViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getLeagueOverview } from "@/lib/data/leagues";
 
 type RouteContext = {
@@ -10,20 +11,22 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const auth = await resolveApiIdentity(request, "read:league");
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(request, "read:league");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { leagueId } = await params;
-  const accessDenied = await requireLeagueViewer(leagueId, auth.identity);
+    const { leagueId } = await params;
+    const accessDenied = await requireLeagueViewer(leagueId, auth.identity);
 
-  if (accessDenied) {
-    return accessDenied;
-  }
+    if (accessDenied) {
+      return accessDenied;
+    }
 
-  const overview = await getLeagueOverview(leagueId);
+    const overview = await getLeagueOverview(leagueId);
 
-  return NextResponse.json({ overview });
+    return NextResponse.json({ overview });
+  });
 }

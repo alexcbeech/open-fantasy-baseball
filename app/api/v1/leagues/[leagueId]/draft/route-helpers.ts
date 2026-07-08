@@ -55,5 +55,11 @@ export function draftErrorResponse(error: unknown): NextResponse {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
 
-  throw error;
+  // An unexpected failure (e.g. the database is unreachable — draft reads no
+  // longer fall back to a fake draft) becomes a clean 503 rather than a 500.
+  console.error("Draft route failed; data is temporarily unavailable.", error);
+  return NextResponse.json(
+    { error: "The draft is temporarily unavailable. Please try again shortly." },
+    { status: 503 },
+  );
 }

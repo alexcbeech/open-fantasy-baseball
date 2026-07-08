@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamManager, requireTeamViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getLineupForTeam, getTeamSummary, LineupSaveError, saveLineupSlots } from "@/lib/data/teams";
 import { isDatabaseConfigured } from "@/lib/db/client";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
@@ -19,27 +20,29 @@ function findTeam(teamId: string) {
 }
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const auth = await resolveApiIdentity(_request, "read:team");
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(_request, "read:team");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { teamId } = await params;
-  const accessDenied = await requireTeamViewer(teamId, auth.identity);
+    const { teamId } = await params;
+    const accessDenied = await requireTeamViewer(teamId, auth.identity);
 
-  if (accessDenied) {
-    return accessDenied;
-  }
+    if (accessDenied) {
+      return accessDenied;
+    }
 
-  if (!(await findTeam(teamId))) {
-    return NextResponse.json({ error: "Team not found" }, { status: 404 });
-  }
-  const lineup = await getLineupForTeam(teamId);
+    if (!(await findTeam(teamId))) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+    const lineup = await getLineupForTeam(teamId);
 
-  return NextResponse.json({
-    lineup,
-    validation: validateLineup(lineup),
+    return NextResponse.json({
+      lineup,
+      validation: validateLineup(lineup),
+    });
   });
 }
 
