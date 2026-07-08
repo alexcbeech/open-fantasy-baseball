@@ -5,7 +5,7 @@ import { sendPushToUser } from "@/lib/data/push-subscriptions";
 import { isWebPushConfigured } from "@/lib/notifications/web-push";
 
 export async function POST(request: Request) {
-  const auth = await authorizeApiRequest(request, "read:profile", { allowMissingBearer: true });
+  const auth = await authorizeApiRequest(request, "write:profile", { allowMissingBearer: true });
 
   if (auth.response) {
     return auth.response;

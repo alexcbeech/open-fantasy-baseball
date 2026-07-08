@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamManager, requireTeamViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getLineupForTeam, getTeamSummary, LineupSaveError, saveLineupSlots } from "@/lib/data/teams";
 import { isDatabaseConfigured } from "@/lib/db/client";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
@@ -18,33 +20,45 @@ function findTeam(teamId: string) {
 }
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(_request, "read:team", { allowMissingBearer: true });
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(_request, "read:team");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { teamId } = await params;
+    const { teamId } = await params;
+    const accessDenied = await requireTeamViewer(teamId, auth.identity);
 
-  if (!(await findTeam(teamId))) {
-    return NextResponse.json({ error: "Team not found" }, { status: 404 });
-  }
-  const lineup = await getLineupForTeam(teamId);
+    if (accessDenied) {
+      return accessDenied;
+    }
 
-  return NextResponse.json({
-    lineup,
-    validation: validateLineup(lineup),
+    if (!(await findTeam(teamId))) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+    const lineup = await getLineupForTeam(teamId);
+
+    return NextResponse.json({
+      lineup,
+      validation: validateLineup(lineup),
+    });
   });
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(request, "write:lineup", { allowMissingBearer: true });
+  const auth = await resolveApiIdentity(request, "write:lineup");
 
   if (auth.response) {
     return auth.response;
   }
 
   const { teamId } = await params;
+  const accessDenied = await requireTeamManager(teamId, auth.identity);
+
+  if (accessDenied) {
+    return accessDenied;
+  }
 
   if (!(await findTeam(teamId))) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -68,8 +82,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Lineup entries are required" }, { status: 400 });
   }
 
-  const proposedLineup: LineupPlayer[] = [];
   const currentLineup = await getLineupForTeam(teamId);
+  const proposedSlots = new Map<string, RosterSlot>();
 
   for (const entry of body.entries) {
     const currentEntry = currentLineup.find((candidate) => candidate.player.id === entry.playerId);
@@ -78,12 +92,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: "Invalid player or slot" }, { status: 400 });
     }
 
-    proposedLineup.push({
-      slot: entry.slot,
-      player: currentEntry.player,
-      matchupTotal: currentEntry.matchupTotal,
-    });
+    proposedSlots.set(entry.playerId, entry.slot);
   }
+
+  // Validate the whole resulting lineup, not just the submitted entries:
+  // unmentioned players keep their current slot, so a partial save can't
+  // sneak a duplicate or overfilled slot past validation.
+  const proposedLineup: LineupPlayer[] = currentLineup.map((current) => ({
+    slot: proposedSlots.get(current.player.id) ?? current.slot,
+    player: current.player,
+    matchupTotal: current.matchupTotal,
+  }));
 
   const validation = validateLineup(proposedLineup);
   // A player whose MLB game has started is locked in place until the next
@@ -143,12 +162,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await authorizeApiRequest(request, "write:lineup", { allowMissingBearer: true });
-
-  if (auth.response) {
-    return auth.response;
-  }
-
+  // Auth (identity + team ownership) happens in PATCH, which this delegates to.
   const formData = await request.formData();
   const entries = Array.from(formData.entries())
     .filter(([key]) => key.startsWith("slot:"))

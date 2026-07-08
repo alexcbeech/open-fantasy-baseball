@@ -113,6 +113,8 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
       if (response.ok && result.history) {
         setHistory(result.history);
       }
+    } catch {
+      // Keep the last-known history when the refresh fetch fails (offline).
     } finally {
       setIsRefreshingHistory(false);
     }

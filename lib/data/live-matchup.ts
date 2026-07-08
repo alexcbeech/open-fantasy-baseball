@@ -10,8 +10,11 @@ const notLive: LiveMatchupUpdate = { live: false, userScore: 0, opponentScore: 0
 
 // Match the stored matchup_category_score display: counting totals stay
 // integers, rate categories render as three decimals with the leading 0 dropped
-// (".271", "3.64").
-function formatValue(value: number): number | string {
+// (".271", "3.64"). A null (rate category with no denominator) renders as "-".
+function formatValue(value: number | null): number | string {
+  if (value === null) {
+    return "-";
+  }
   return Number.isInteger(value) ? value : value.toFixed(3).replace(/^0/, "");
 }
 

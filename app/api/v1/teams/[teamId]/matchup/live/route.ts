@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { computeLiveMatchup } from "@/lib/data/live-matchup";
 
 export const dynamic = "force-dynamic";
@@ -11,14 +13,22 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(request, "read:league", { allowMissingBearer: true });
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(request, "read:league");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { teamId } = await params;
-  const update = await computeLiveMatchup(teamId);
+    const { teamId } = await params;
+    const accessDenied = await requireTeamViewer(teamId, auth.identity);
 
-  return NextResponse.json({ update });
+    if (accessDenied) {
+      return accessDenied;
+    }
+
+    const update = await computeLiveMatchup(teamId);
+
+    return NextResponse.json({ update });
+  });
 }

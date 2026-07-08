@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { getPool, isDatabaseConfigured } from "@/lib/db/client";
+import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
 
 export const nightlyProcessingTasks = [
@@ -118,7 +118,7 @@ export async function runNightlyProcessing(now = new Date()): Promise<NightlyPro
     jobRunId = jobRun.rows[0].id;
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     client.release();
     throw error;
   }
@@ -178,7 +178,7 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
     let transactionsCreated = 0;
 
     for (const group of claimGroups) {
-      const playerAvailable = await isPlayerAvailable(client, group[0].addPlayerId);
+      const playerAvailable = await isPlayerAvailable(client, group[0].leagueId, group[0].addPlayerId);
       const decisions = decideWaiverClaimsForPlayer(group, playerAvailable);
       const playerName = await getPlayerName(client, group[0].addPlayerId);
 
@@ -190,11 +190,29 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
         }
 
         await client.query(`update waiver_claim set status = $2 where id = $1`, [claim.id, decision.status]);
+        let finalStatus = decision.status;
 
         if (decision.status === "won") {
-          await applyWinningWaiverClaim(client, claim, jobRunId);
-          waiverClaimsWon += 1;
-          transactionsCreated += 1;
+          // A concurrent user "add" can roster the player between our
+          // availability check and this insert; the roster-exclusivity index
+          // rejects the duplicate. Roll back just this claim and mark it lost
+          // instead of failing the whole waiver run.
+          await client.query("savepoint apply_claim");
+
+          try {
+            await applyWinningWaiverClaim(client, claim, jobRunId);
+            waiverClaimsWon += 1;
+            transactionsCreated += 1;
+          } catch (error) {
+            if (!isUniqueViolation(error)) {
+              throw error;
+            }
+
+            await client.query("rollback to savepoint apply_claim");
+            await client.query(`update waiver_claim set status = 'lost' where id = $1`, [claim.id]);
+            finalStatus = "lost";
+            waiverClaimsLost += 1;
+          }
         } else {
           waiverClaimsLost += 1;
         }
@@ -205,7 +223,7 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
         await enqueueNotificationForTeam(
           client,
           claim.teamId,
-          buildWaiverNotification(decision.status, playerName, claim.leagueId),
+          buildWaiverNotification(finalStatus, playerName, claim.leagueId),
         );
       }
     }
@@ -220,7 +238,7 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
       transactionsCreated,
     };
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   }
 }
@@ -230,13 +248,15 @@ async function getPlayerName(client: PoolClient, playerId: string): Promise<stri
   return result.rows[0]?.full_name ?? "your claim";
 }
 
-async function isPlayerAvailable(client: PoolClient, playerId: string) {
+async function isPlayerAvailable(client: PoolClient, leagueId: string, playerId: string) {
   const result = await client.query<{ exists: boolean }>(
     `select exists (
-       select 1 from roster_entry
-       where player_id = $1 and dropped_at is null
+       select 1
+       from roster_entry re
+       join fantasy_team ft on ft.id = re.team_id
+       where re.player_id = $1 and re.dropped_at is null and ft.league_id = $2
      )`,
-    [playerId],
+    [playerId, leagueId],
   );
 
   return !result.rows[0].exists;

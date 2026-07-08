@@ -1,57 +1,13 @@
-import { getPool, query, tryDatabase } from "@/lib/db/client";
+import type { QueryResult, QueryResultRow } from "pg";
+import { getPool, query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
+import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
 
-const teamSummarySql = `
-  select
-    ft.id,
-    ft.league_id,
-    l.name as league_name,
-    ft.name as team_name,
-    u.display_name as manager_name,
-    l.scoring_type,
-    ft.waiver_priority as rank,
-    sp.label as matchup_label,
-    opponent.name as opponent_name,
-    case when m.home_team_id = ft.id then m.home_score else m.away_score end as user_score,
-    case when m.home_team_id = ft.id then m.away_score else m.home_score end as opponent_score
-  from fantasy_team ft
-  join league l on l.id = ft.league_id
-  join app_user u on u.id = ft.manager_user_id
-  left join matchup m on (m.home_team_id = ft.id or m.away_team_id = ft.id) and m.status = 'active'
-  left join scoring_period sp on sp.id = m.scoring_period_id
-  left join fantasy_team opponent on opponent.id = case when m.home_team_id = ft.id then m.away_team_id else m.home_team_id end
-`;
+type Executor = { query: <T extends QueryResultRow>(sql: string, values?: unknown[]) => Promise<QueryResult<T>> };
 
-export async function listTeamsForCurrentUser(): Promise<TeamSummary[]> {
-  return tryDatabase(
-    async () => {
-      const result = await query<DbTeamSummaryRow>(`${teamSummarySql} order by ft.waiver_priority nulls last, ft.name`);
-      // Empty is a valid result (a real user with no teams); only the
-      // tryDatabase fallback below serves mock data (demo mode / DB error).
-      return result.rows.map(mapTeamSummary);
-    },
-    () => mockTeams,
-  );
-}
-
-export async function getTeamSummary(teamId: string): Promise<TeamSummary | undefined> {
-  return tryDatabase(
-    async () => {
-      const result = await query<DbTeamSummaryRow>(`${teamSummarySql} where ft.id = $1`, [teamId]);
-      // A missing team is undefined (callers 404), not a mock team.
-      return result.rows[0] ? mapTeamSummary(result.rows[0]) : undefined;
-    },
-    () => mockTeams.find((team) => team.id === teamId),
-  );
-}
-
-export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> {
-  return tryDatabase(
-    async () => {
-      const result = await query<DbLineupRow>(
-        `
+const lineupRowsSql = `
           select
             le.slot,
             p.id,
@@ -106,14 +62,73 @@ export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> 
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch
           order by le.lineup_date desc, le.id
-        `,
-        [teamId],
-      );
+`;
 
-      // An empty lineup (a real team that hasn't set one) renders as empty
-      // slots; only the tryDatabase fallback serves the mock lineup.
-      return result.rows.map(mapLineupPlayer);
+async function queryLineupRows(executor: Executor, teamId: string): Promise<LineupPlayer[]> {
+  const result = await executor.query<DbLineupRow>(lineupRowsSql, [teamId]);
+  return result.rows.map(mapLineupPlayer);
+}
+
+const teamSummarySql = `
+  select
+    ft.id,
+    ft.league_id,
+    l.name as league_name,
+    ft.name as team_name,
+    u.display_name as manager_name,
+    l.scoring_type,
+    ft.waiver_priority as rank,
+    sp.label as matchup_label,
+    opponent.name as opponent_name,
+    case when m.home_team_id = ft.id then m.home_score else m.away_score end as user_score,
+    case when m.home_team_id = ft.id then m.away_score else m.home_score end as opponent_score
+  from fantasy_team ft
+  join league l on l.id = ft.league_id
+  join app_user u on u.id = ft.manager_user_id
+  left join matchup m on (m.home_team_id = ft.id or m.away_team_id = ft.id) and m.status = 'active'
+  left join scoring_period sp on sp.id = m.scoring_period_id
+  left join fantasy_team opponent on opponent.id = case when m.home_team_id = ft.id then m.away_team_id else m.home_team_id end
+`;
+
+export async function listTeamsForCurrentUser(user?: { userId: string; email: string } | null): Promise<TeamSummary[]> {
+  return withDemoFallback(
+    async () => {
+      if (!user) {
+        return [];
+      }
+
+      // Only teams the user manages. The demo user's id is not a UUID, so
+      // identity matches on id or email.
+      const result = await query<DbTeamSummaryRow>(
+        `${teamSummarySql}
+         where u.id::text = $1 or u.email = $2
+         order by ft.waiver_priority nulls last, ft.name`,
+        [user.userId, user.email],
+      );
+      // Empty is a valid result (a real user with no teams); the demo fallback
+      // below serves mock data only when no database is configured.
+      return result.rows.map(mapTeamSummary);
     },
+    () => mockTeams,
+  );
+}
+
+export async function getTeamSummary(teamId: string): Promise<TeamSummary | undefined> {
+  return withDemoFallback(
+    async () => {
+      const result = await query<DbTeamSummaryRow>(`${teamSummarySql} where ft.id = $1`, [teamId]);
+      // A missing team is undefined (callers 404), not a mock team.
+      return result.rows[0] ? mapTeamSummary(result.rows[0]) : undefined;
+    },
+    () => mockTeams.find((team) => team.id === teamId),
+  );
+}
+
+export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> {
+  return withDemoFallback(
+    // An empty lineup (a real team that hasn't set one) renders as empty
+    // slots; the demo fallback serves the mock lineup only in demo mode.
+    () => queryLineupRows({ query }, teamId),
     () => mockLineup,
   );
 }
@@ -130,20 +145,57 @@ export class LineupSaveError extends Error {
 /**
  * Persist the team's current-day lineup slots. Entries are upserted against the
  * team's latest lineup date, so a save is a full or partial slot assignment for
- * today; validation (legality, game locks) happens in the API route before this
- * runs.
+ * today.
+ *
+ * The API route pre-validates for fast user feedback, but that check reads the
+ * lineup outside this transaction. To stop two concurrent saves from each
+ * passing against the same snapshot and committing an illegal lineup, this
+ * serializes saves per team with an advisory lock and re-validates the full
+ * resulting lineup (legality + game locks) against rows read inside the lock.
  */
 export async function saveLineupSlots(teamId: string, entries: Array<{ playerId: string; slot: RosterSlot }>): Promise<void> {
   const client = await getPool().connect();
 
   try {
     await client.query("begin");
+    // Serialize concurrent saves for this team; released automatically at commit
+    // or rollback. hashtext maps the team id to the int the lock function takes.
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [teamId]);
 
     const teamResult = await client.query<{ league_id: string }>("select league_id from fantasy_team where id = $1", [teamId]);
     const leagueId = teamResult.rows[0]?.league_id;
 
     if (!leagueId) {
       throw new LineupSaveError("Team not found.", 404);
+    }
+
+    // Re-read the current lineup inside the lock and validate the whole
+    // resulting lineup, so a save that raced the route's pre-check can't
+    // persist a duplicate, overfilled, ineligible, or locked-player slot.
+    const currentLineup = await queryLineupRows(client, teamId);
+    const currentById = new Map(currentLineup.map((entry) => [entry.player.id, entry]));
+    const proposedSlots = new Map(entries.map((entry) => [entry.playerId, entry.slot]));
+
+    for (const entry of entries) {
+      if (!currentById.has(entry.playerId)) {
+        throw new LineupSaveError("A lineup entry references a player who is not on this team.", 409);
+      }
+    }
+
+    const proposedLineup: LineupPlayer[] = currentLineup.map((entry) => ({
+      slot: proposedSlots.get(entry.player.id) ?? entry.slot,
+      player: entry.player,
+      matchupTotal: entry.matchupTotal,
+    }));
+    const validation = validateLineup(proposedLineup);
+    const lockIssues = findLineupLockIssues(currentLineup, proposedLineup);
+
+    if (lockIssues.length) {
+      throw new LineupSaveError(lockIssues[0].message, 409);
+    }
+
+    if (!validation.valid) {
+      throw new LineupSaveError(validation.issues[0]?.message ?? "The lineup is invalid.", 409);
     }
 
     const scoringPeriod = await client.query<{ id: string }>(
@@ -184,7 +236,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
 
     await client.query("commit");
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

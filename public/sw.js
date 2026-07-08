@@ -31,14 +31,27 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || "/";
+  const rawUrl = (event.notification.data && event.notification.data.url) || "/";
+
+  // Only navigate within our own origin: push payloads are server-controlled
+  // today, but a foreign URL should never be able to steer an open tab.
+  let targetUrl = "/";
+  try {
+    const resolved = new URL(rawUrl, self.location.origin);
+    if (resolved.origin === self.location.origin) {
+      targetUrl = resolved.href;
+    }
+  } catch {
+    targetUrl = "/";
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ("focus" in client) {
-          client.navigate(targetUrl);
-          return client.focus();
+          return Promise.resolve(client.navigate(targetUrl))
+            .catch(() => undefined)
+            .then(() => client.focus());
         }
       }
 

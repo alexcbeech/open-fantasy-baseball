@@ -60,7 +60,7 @@ async function main() {
     await client.query("commit");
     console.log(`drafted ${picked.length} players onto Warning Track Power`);
   } catch (error) {
-    await client.query("rollback");
+    await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();

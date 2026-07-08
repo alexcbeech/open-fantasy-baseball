@@ -1,4 +1,4 @@
-import { getPool } from "@/lib/db/client";
+import { getPool, isUniqueViolation } from "@/lib/db/client";
 import { nextAttemptState, type JobStatus } from "./queue-policy";
 
 export type JobRow = {
@@ -80,19 +80,30 @@ export type EnqueueResult = { id: string; deduped: boolean };
 export async function enqueue(jobType: string, options: EnqueueOptions = {}): Promise<EnqueueResult> {
   const { payload = {}, dedupKey = null, runAt, maxAttempts, priority } = options;
 
-  const inserted = await getPool().query<{ id: string }>(
-    `insert into job_queue (job_type, payload, dedup_key, run_at, max_attempts, priority)
-     select $1, $2::jsonb, $3, coalesce($4, now()), coalesce($5, 3), coalesce($6, 0)
-     where $3::text is null or not exists (
-       select 1 from job_queue
-       where dedup_key = $3 and status in ('queued', 'running')
-     )
-     returning id`,
-    [jobType, JSON.stringify(payload), dedupKey, runAt ?? null, maxAttempts ?? null, priority ?? null],
-  );
+  let insertedId: string | null = null;
 
-  if (inserted.rows[0]) {
-    return { id: inserted.rows[0].id, deduped: false };
+  try {
+    const inserted = await getPool().query<{ id: string }>(
+      `insert into job_queue (job_type, payload, dedup_key, run_at, max_attempts, priority)
+       select $1, $2::jsonb, $3, coalesce($4, now()), coalesce($5, 3), coalesce($6, 0)
+       where $3::text is null or not exists (
+         select 1 from job_queue
+         where dedup_key = $3 and status in ('queued', 'running')
+       )
+       returning id`,
+      [jobType, JSON.stringify(payload), dedupKey, runAt ?? null, maxAttempts ?? null, priority ?? null],
+    );
+    insertedId = inserted.rows[0]?.id ?? null;
+  } catch (error) {
+    // Two concurrent enqueues can both pass the NOT EXISTS guard; the partial
+    // dedup index rejects the loser. Treat that as a normal dedup, not a crash.
+    if (!isUniqueViolation(error)) {
+      throw error;
+    }
+  }
+
+  if (insertedId) {
+    return { id: insertedId, deduped: false };
   }
 
   // The insert was skipped: an active job already holds this dedup key.
@@ -164,17 +175,39 @@ export async function failJob(job: Pick<JobRow, "id" | "attempts" | "maxAttempts
  */
 export async function reclaimStaleJobs(now = new Date(), staleMs = 30 * 60 * 1000): Promise<number> {
   const cutoff = new Date(now.getTime() - staleMs);
-  const stale = await getPool().query<DbJobRow>(
-    `select * from job_queue where status = 'running' and locked_at is not null and locked_at < $1 for update skip locked`,
-    [cutoff],
-  );
+  // Runs in an explicit transaction: FOR UPDATE SKIP LOCKED only keeps rows
+  // locked until commit, so via autocommit two concurrent reclaimers would
+  // both select (and double-fail) the same jobs.
+  const client = await getPool().connect();
 
-  for (const row of stale.rows) {
-    const job = mapJob(row);
-    await failJob(job, `Reclaimed after running longer than ${Math.round(staleMs / 60000)}m`, now);
+  try {
+    await client.query("begin");
+    const stale = await client.query<DbJobRow>(
+      `select * from job_queue where status = 'running' and locked_at is not null and locked_at < $1 for update skip locked`,
+      [cutoff],
+    );
+
+    for (const row of stale.rows) {
+      const job = mapJob(row);
+      const { status, runAt } = nextAttemptState(job.attempts, job.maxAttempts, now);
+
+      await client.query(
+        `update job_queue
+         set status = $2, run_at = coalesce($3, run_at), last_error = $4, locked_at = null, locked_by = null, updated_at = now()
+         where id = $1`,
+        [job.id, status, runAt, `Reclaimed after running longer than ${Math.round(staleMs / 60000)}m`],
+      );
+    }
+
+    await client.query("commit");
+
+    return stale.rows.length;
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return stale.rows.length;
 }
 
 export async function getJob(id: string): Promise<JobRow | null> {

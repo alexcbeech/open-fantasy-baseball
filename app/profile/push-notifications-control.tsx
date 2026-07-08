@@ -43,17 +43,22 @@ export function PushNotificationsControl() {
   const [banner, setBanner] = useState<Banner>({ kind: "idle", message: "" });
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/v1/profile/push");
+    try {
+      const response = await fetch("/api/v1/profile/push");
 
-    if (response.ok) {
-      const data = (await response.json()) as ServerStatus;
-      setStatus(data);
-    }
+      if (response.ok) {
+        const data = (await response.json()) as ServerStatus;
+        setStatus(data);
+      }
 
-    if (isPushSupported()) {
-      const registration = await navigator.serviceWorker.getRegistration();
-      const existing = registration ? await registration.pushManager.getSubscription() : null;
-      setSubscribed(Boolean(existing));
+      if (isPushSupported()) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const existing = registration ? await registration.pushManager.getSubscription() : null;
+        setSubscribed(Boolean(existing));
+      }
+    } catch {
+      // A refresh failure (offline, server restart) keeps the current state;
+      // it must not surface as an unhandled rejection from the mount effect.
     }
   }, []);
 

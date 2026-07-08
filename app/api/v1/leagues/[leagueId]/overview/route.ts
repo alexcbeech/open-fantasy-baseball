@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireLeagueViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getLeagueOverview } from "@/lib/data/leagues";
 
 type RouteContext = {
@@ -9,14 +11,22 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(request, "read:league", { allowMissingBearer: true });
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(request, "read:league");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { leagueId } = await params;
-  const overview = await getLeagueOverview(leagueId);
+    const { leagueId } = await params;
+    const accessDenied = await requireLeagueViewer(leagueId, auth.identity);
 
-  return NextResponse.json({ overview });
+    if (accessDenied) {
+      return accessDenied;
+    }
+
+    const overview = await getLeagueOverview(leagueId);
+
+    return NextResponse.json({ overview });
+  });
 }

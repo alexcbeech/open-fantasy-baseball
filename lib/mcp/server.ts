@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { parseBearerToken, verifyBearerToken } from "@/lib/auth/bearer-token";
+import { parseBearerToken, verifyBearerToken, type ApiPrincipal } from "@/lib/auth/bearer-token";
+import { getTeamAccess } from "@/lib/auth/team-access";
+import { isDatabaseConfigured } from "@/lib/db/client";
 import { listPlayers } from "@/lib/data/players";
 import { getProfilePreferences } from "@/lib/data/profile";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
@@ -179,7 +181,7 @@ async function callTool(id: JsonRpcId, params: unknown, authorizationHeader: str
       case "ofb_search_players":
         return searchPlayersTool(id, parsedParams.data.arguments);
       case "ofb_get_team_roster":
-        return teamRosterTool(id, parsedParams.data.arguments);
+        return teamRosterTool(id, parsedParams.data.arguments, principal.principal);
     }
   } catch (error) {
     return jsonRpcError(id, -32603, error instanceof Error ? error.message : "Tool execution failed.");
@@ -225,11 +227,24 @@ async function searchPlayersTool(id: JsonRpcId, rawArguments: unknown) {
   });
 }
 
-async function teamRosterTool(id: JsonRpcId, rawArguments: unknown) {
+async function teamRosterTool(id: JsonRpcId, rawArguments: unknown, principal: ApiPrincipal) {
   const parsed = teamRosterInputSchema.safeParse(rawArguments ?? {});
 
   if (!parsed.success) {
     return jsonRpcError(id, -32602, "Invalid ofb_get_team_roster arguments.");
+  }
+
+  // Rosters are league-private: the token's user must belong to the team's league.
+  if (isDatabaseConfigured()) {
+    const access = await getTeamAccess(parsed.data.teamId, { userId: principal.userId, email: principal.email });
+
+    if (access === "not-found") {
+      return toolExecutionError(id, `Team not found: ${parsed.data.teamId}.`);
+    }
+
+    if (access === "none") {
+      return jsonRpcError(id, -32003, "The token's user is not a member of this team's league.");
+    }
   }
 
   const [team, roster] = await Promise.all([getTeamSummary(parsed.data.teamId), getLineupForTeam(parsed.data.teamId)]);

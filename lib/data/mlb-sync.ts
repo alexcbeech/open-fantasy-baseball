@@ -64,7 +64,9 @@ const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.m
 const rosterTypes = ["active", "40Man"] as const;
 
 async function fetchJson<T>(path: string, baseUrl = defaultBaseUrl): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`);
+  // Timeout so a hung upstream request fails the sync instead of pinning a
+  // pool connection (and its transaction) indefinitely.
+  const response = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(30_000) });
 
   if (!response.ok) {
     throw new Error(`MLB Stats API request failed: ${response.status} ${response.statusText} ${path}`);
@@ -118,10 +120,28 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
   let rowsSeen = 0;
 
   try {
+    // Fetch everything up front: ~60 roster requests plus the schedule must
+    // not run inside the write transaction, where a slow upstream would hold
+    // row locks and a pool connection for the whole crawl.
     const teamsPayload = await fetchJson<MlbTeamsResponse>("/teams?sportId=1&activeStatus=Y", baseUrl);
+    const teams = teamsPayload.teams ?? [];
+    const rostersByTeam = new Map<number, MlbRosterResponse[]>();
+
+    for (const team of teams) {
+      const rosters: MlbRosterResponse[] = [];
+
+      for (const rosterType of rosterTypes) {
+        rosters.push(await fetchJson<MlbRosterResponse>(`/teams/${team.id}/roster?rosterType=${rosterType}`, baseUrl));
+      }
+
+      rostersByTeam.set(team.id, rosters);
+    }
+
+    const schedulePayload = await fetchSchedulePayload(baseUrl);
+
     await client.query("begin");
 
-    for (const team of teamsPayload.teams ?? []) {
+    for (const team of teams) {
       rowsSeen += 1;
       await client.query(
         `insert into mlb_team (id, abbreviation, name, league, division)
@@ -134,9 +154,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
         [team.id, team.abbreviation, team.name, team.league?.name, team.division?.name],
       );
 
-      for (const rosterType of rosterTypes) {
-        const rosterPayload = await fetchJson<MlbRosterResponse>(`/teams/${team.id}/roster?rosterType=${rosterType}`, baseUrl);
-
+      for (const rosterPayload of rostersByTeam.get(team.id) ?? []) {
         for (const rosterEntry of rosterPayload.roster ?? []) {
           rowsSeen += 1;
           const person = rosterEntry.person;
@@ -169,7 +187,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
       }
     }
 
-    const scheduleRowsSeen = await syncMlbSchedule(client, baseUrl);
+    const scheduleRowsSeen = await writeMlbSchedule(client, schedulePayload);
     rowsSeen += scheduleRowsSeen;
 
     // The roster feed labels every pitcher "P"; give each a fillable dedicated
@@ -205,12 +223,23 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
   }
 }
 
-export async function syncMlbSchedule(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, baseUrl = defaultBaseUrl) {
+async function fetchSchedulePayload(baseUrl = defaultBaseUrl) {
   const { startDate, endDate } = getDefaultScheduleWindow();
-  const schedulePayload = await fetchJson<MlbScheduleResponse>(
+
+  return fetchJson<MlbScheduleResponse>(
     `/schedule?sportId=1&hydrate=probablePitcher&startDate=${startDate}&endDate=${endDate}`,
     baseUrl,
   );
+}
+
+export async function syncMlbSchedule(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, baseUrl = defaultBaseUrl) {
+  return writeMlbSchedule(client, await fetchSchedulePayload(baseUrl));
+}
+
+async function writeMlbSchedule(
+  client: { query: (sql: string, values?: unknown[]) => Promise<unknown> },
+  schedulePayload: MlbScheduleResponse,
+) {
   let rowsSeen = 0;
 
   for (const scheduleDate of schedulePayload.dates ?? []) {

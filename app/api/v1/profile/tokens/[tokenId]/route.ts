@@ -12,7 +12,7 @@ type RouteContext = {
 };
 
 export async function DELETE(_request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(_request, "read:profile", { allowMissingBearer: true });
+  const auth = await authorizeApiRequest(_request, "write:profile", { allowMissingBearer: true });
 
   if (auth.response) {
     return auth.response;

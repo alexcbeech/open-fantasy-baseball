@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 
 type RouteContext = {
@@ -9,18 +11,26 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(request, "read:team", { allowMissingBearer: true });
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(request, "read:team");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { teamId } = await params;
-  const matchup = await getMatchupDetailsForTeam(teamId);
+    const { teamId } = await params;
+    const accessDenied = await requireTeamViewer(teamId, auth.identity);
 
-  if (!matchup) {
-    return NextResponse.json({ error: "Matchup not found" }, { status: 404 });
-  }
+    if (accessDenied) {
+      return accessDenied;
+    }
 
-  return NextResponse.json({ matchup });
+    const matchup = await getMatchupDetailsForTeam(teamId);
+
+    if (!matchup) {
+      return NextResponse.json({ error: "Matchup not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ matchup });
+  });
 }

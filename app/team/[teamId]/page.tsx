@@ -5,6 +5,7 @@ import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { getTeamAccess } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
@@ -41,6 +42,16 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   // still serves the mock team ids.
   if (isDatabaseConfigured() && !isUuid(teamId)) {
     notFound();
+  }
+
+  // Team pages are league-private: only members of the team's league (or its
+  // commissioner) may view them. The API routes enforce the same rule.
+  if (isDatabaseConfigured() && currentUser) {
+    const access = await getTeamAccess(teamId, currentUser);
+
+    if (access === "not-found" || access === "none") {
+      notFound();
+    }
   }
 
   const team = await getTeamSummary(teamId);

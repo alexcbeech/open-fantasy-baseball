@@ -16,7 +16,7 @@ export default async function HomePage() {
     redirect("/auth/sign-in");
   }
 
-  const teams = await listTeamsForCurrentUser();
+  const teams = await listTeamsForCurrentUser(currentUser);
   const draftableLeagues = currentUser ? await listDraftableLeagues(currentUser.userId) : [];
   const shareFor = (team: (typeof teams)[number]) => {
     const total = team.matchup.userScore + team.matchup.opponentScore;

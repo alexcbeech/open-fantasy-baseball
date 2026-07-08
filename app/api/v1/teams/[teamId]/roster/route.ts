@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { authorizeApiRequest } from "@/lib/auth/bearer-token";
+import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { requireTeamViewer } from "@/lib/auth/team-access";
+import { readRoute } from "@/lib/api/read-route";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { validateLineup } from "@/lib/fantasy/roster-validation";
 
@@ -10,27 +12,35 @@ type RouteContext = {
 };
 
 export async function GET(_request: Request, { params }: RouteContext) {
-  const auth = await authorizeApiRequest(_request, "read:team", { allowMissingBearer: true });
+  return readRoute(async () => {
+    const auth = await resolveApiIdentity(_request, "read:team");
 
-  if (auth.response) {
-    return auth.response;
-  }
+    if (auth.response) {
+      return auth.response;
+    }
 
-  const { teamId } = await params;
-  const team = await getTeamSummary(teamId);
+    const { teamId } = await params;
+    const accessDenied = await requireTeamViewer(teamId, auth.identity);
 
-  if (!team) {
-    return NextResponse.json({ error: "Team not found" }, { status: 404 });
-  }
-  const lineup = await getLineupForTeam(teamId);
+    if (accessDenied) {
+      return accessDenied;
+    }
 
-  return NextResponse.json({
-    team,
-    roster: lineup,
-    validation: validateLineup(lineup),
-    lineupLocks: {
-      mode: "daily",
-      nextLockAt: null,
-    },
+    const team = await getTeamSummary(teamId);
+
+    if (!team) {
+      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    }
+    const lineup = await getLineupForTeam(teamId);
+
+    return NextResponse.json({
+      team,
+      roster: lineup,
+      validation: validateLineup(lineup),
+      lineupLocks: {
+        mode: "daily",
+        nextLockAt: null,
+      },
+    });
   });
 }
