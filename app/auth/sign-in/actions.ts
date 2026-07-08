@@ -27,5 +27,8 @@ export async function signInWithEmail(_previousState: AuthFormState, formData: F
     return { error: result.error.message || "Failed to sign in." };
   }
 
-  redirect("/");
+  // Only league-invite landings may override the post-sign-in destination;
+  // the "/join/" prefix check prevents an open redirect.
+  const next = formData.get("next")?.toString() ?? "";
+  redirect(next.startsWith("/join/") ? next : "/");
 }

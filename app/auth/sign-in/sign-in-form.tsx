@@ -6,12 +6,13 @@ import { signInWithEmail, type AuthFormState } from "./actions";
 
 const initialState: AuthFormState = null;
 
-export function SignInForm({ signupsEnabled }: { signupsEnabled: boolean }) {
+export function SignInForm({ signupsEnabled, next }: { signupsEnabled: boolean; next?: string }) {
   const [state, formAction, pending] = useActionState(signInWithEmail, initialState);
 
   return (
     <form action={formAction} className="auth-form">
       {state?.error ? <div className="status-banner bad">{state.error}</div> : null}
+      {next ? <input name="next" type="hidden" value={next} /> : null}
       <label className="field">
         Email
         <input autoComplete="email" name="email" required type="email" />
