@@ -1,4 +1,4 @@
-import { isUuid, query, tryDatabase } from "@/lib/db/client";
+import { isUuid, query, withDemoFallback } from "@/lib/db/client";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem } from "@/lib/fantasy/types";
@@ -16,7 +16,7 @@ function mockPlayerWatch(): PlayerWatchItem[] {
  * headlines in demo mode.
  */
 export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatchItem[]> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const result = await query<{ id: string; full_name: string; status: Player["status"]; headline: string }>(
         `select p.id, p.full_name, p.status, latest_news.headline
@@ -46,7 +46,7 @@ export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatch
 }
 
 export async function listPlayers(options: { query?: string; availability?: Player["availability"] } = {}): Promise<Player[]> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const values: unknown[] = [];
       const filters: string[] = [];
@@ -180,7 +180,7 @@ type PlayerGameLogRow = {
 };
 
 export async function getPlayerDetail(playerId: string, teamId?: string): Promise<PlayerDetail | null> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const playerResult = await query<PlayerDetailRow>(
         `

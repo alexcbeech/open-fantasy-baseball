@@ -7,6 +7,7 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock("@/lib/db/client", () => ({
   isDatabaseConfigured: () => true,
   tryDatabase: async (op: () => unknown) => op(),
+  withDemoFallback: async (op: () => unknown) => op(),
   query,
 }));
 

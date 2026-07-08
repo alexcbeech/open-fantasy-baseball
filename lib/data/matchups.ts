@@ -1,4 +1,4 @@
-import { query, tryDatabase } from "@/lib/db/client";
+import { query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import type { MatchupCategoryResult, MatchupCategoryScore, MatchupDetails } from "@/lib/fantasy/types";
 import { getLineupForTeam } from "./teams";
@@ -35,7 +35,7 @@ const mockCategoryScores: MatchupCategoryScore[] = [
 ];
 
 export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupDetails | null> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const matchupResult = await query<ActiveMatchupRow>(
         `select

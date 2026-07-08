@@ -67,6 +67,13 @@ export function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "23505");
 }
 
+/**
+ * Run a database operation with a graceful fallback. Use this ONLY when the
+ * fallback is a safe empty/neutral state (no data, not authenticated, no live
+ * game) — never fabricated sample data. In demo mode (no DATABASE_URL) the
+ * fallback stands in for the whole feature; with a database configured, a
+ * failure degrades to the same neutral state rather than erroring.
+ */
 export async function tryDatabase<T>(operation: () => Promise<T>, fallback: () => T | Promise<T>) {
   if (!isDatabaseConfigured()) {
     return fallback();
@@ -75,7 +82,22 @@ export async function tryDatabase<T>(operation: () => Promise<T>, fallback: () =
   try {
     return await operation();
   } catch (error) {
-    console.warn("Database operation failed; falling back to mock data.", error);
+    console.warn("Database operation failed; falling back to neutral state.", error);
     return fallback();
   }
+}
+
+/**
+ * Run a database operation whose fallback is fabricated demo/sample data. The
+ * demo fallback is served ONLY when no database is configured. When a database
+ * IS configured, a failure propagates so the caller surfaces an error (e.g.
+ * 503) — a transient outage must never masquerade as real data to a signed-in
+ * user.
+ */
+export async function withDemoFallback<T>(operation: () => Promise<T>, demoFallback: () => T | Promise<T>) {
+  if (!isDatabaseConfigured()) {
+    return demoFallback();
+  }
+
+  return operation();
 }

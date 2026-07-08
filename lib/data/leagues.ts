@@ -1,4 +1,4 @@
-import { getPool, query, tryDatabase } from "@/lib/db/client";
+import { getPool, query, withDemoFallback } from "@/lib/db/client";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
@@ -24,7 +24,7 @@ type LeagueTeamOverviewRow = {
 };
 
 export async function getLeagueSettings(leagueId: string): Promise<LeagueSettings> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const result = await query<LeagueSettingsRow>("select id, name, settings from league where id = $1", [leagueId]);
       return result.rows[0]?.settings ? { ...result.rows[0].settings, id: leagueId, name: result.rows[0].name } : defaultLeagueSettings;
@@ -34,7 +34,7 @@ export async function getLeagueSettings(leagueId: string): Promise<LeagueSetting
 }
 
 export async function getLeagueOverview(leagueId: string): Promise<LeagueOverview> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const leagueResult = await query<LeagueSettingsRow>(
         `select id, name, scoring_type, season_year, status, settings
@@ -106,7 +106,7 @@ export type LeagueCommissioner = {
 const fallbackCommissioner: LeagueCommissioner = { email: "alex@example.local", displayName: "Alex" };
 
 export async function createLeague(input: CreateLeagueInput, commissioner: LeagueCommissioner = fallbackCommissioner) {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const settings = buildLeagueSettingsFromInput(input);
       // One transaction: a league without its commissioner membership, roster

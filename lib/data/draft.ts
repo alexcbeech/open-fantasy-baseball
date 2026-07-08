@@ -14,7 +14,7 @@ import {
 } from "@/lib/draft/types";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import type { DraftType, LeagueSettings, PlayerPool, RosterSlot } from "@/lib/fantasy/types";
-import { getPool, isDatabaseConfigured, tryDatabase } from "@/lib/db/client";
+import { getPool, isDatabaseConfigured, tryDatabase, withDemoFallback } from "@/lib/db/client";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 import { sendPushToUser } from "./push-subscriptions";
 
@@ -499,7 +499,7 @@ async function listPicks(client: PoolClient, draftId: string): Promise<DraftPick
  * Returns null when the league has no draft yet (setup not run).
  */
 export async function getDraftState(leagueId: string, viewerUserId: string): Promise<DraftState | null> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const client = await getPool().connect();
       const notifications: PendingNotification[] = [];
@@ -530,6 +530,10 @@ export async function getDraftState(leagueId: string, viewerUserId: string): Pro
     () => mockDraftState(),
   );
 }
+
+// From here the fabricated-mock fallbacks use withDemoFallback: they stand in
+// for the feature only in demo mode (no DATABASE_URL). With a database
+// configured, a failure propagates so a signed-in user never sees a fake draft.
 
 /** A human (or the commissioner acting for a team) makes the on-clock pick. */
 export async function makePick(leagueId: string, playerId: string, viewerUserId: string): Promise<DraftState> {
@@ -877,7 +881,7 @@ export async function listDraftPlayers(
   leagueId: string,
   options: { query?: string; position?: RosterSlot; limit?: number } = {},
 ): Promise<DraftPlayer[]> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const client = await getPool().connect();
 
@@ -967,7 +971,7 @@ export type DraftLobby = {
  * whether the viewer can run setup. Works before any draft row exists.
  */
 export async function getDraftLobby(leagueId: string, viewerUserId: string): Promise<DraftLobby | null> {
-  return tryDatabase(
+  return withDemoFallback(
     async () => {
       const client = await getPool().connect();
 
