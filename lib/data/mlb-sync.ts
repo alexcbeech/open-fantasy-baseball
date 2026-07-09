@@ -1,5 +1,13 @@
 import { getPool } from "../db/client";
+import { chunk, mapWithConcurrency } from "./batching";
 import { backfillPitcherSlotEligibility } from "./mlb-stats-sync";
+
+// The MLB Stats API has no published rate limit but throttles aggressive
+// clients; a small pool keeps the sync fast without hammering it.
+const fetchConcurrency = 8;
+// Rows per multi-row insert. Well under the 65,535-parameter limit at our
+// column counts; mainly bounds statement size.
+const writeChunkSize = 500;
 
 type MlbTeam = {
   id: number;
@@ -128,7 +136,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
     const teams = teamsPayload.teams ?? [];
     const rostersByTeam = new Map<number, MlbRosterResponse[]>();
 
-    for (const team of teams) {
+    await mapWithConcurrency(teams, fetchConcurrency, async (team) => {
       const rosters: MlbRosterResponse[] = [];
 
       for (const rosterType of rosterTypes) {
@@ -136,25 +144,39 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
       }
 
       rostersByTeam.set(team.id, rosters);
-    }
+    });
 
     const schedulePayload = await fetchSchedulePayload(baseUrl);
 
     await client.query("begin");
 
-    for (const team of teams) {
-      rowsSeen += 1;
+    rowsSeen += teams.length;
+    if (teams.length) {
       await client.query(
         `insert into mlb_team (id, abbreviation, name, league, division)
-         values ($1, $2, $3, $4, $5)
+         select * from unnest($1::integer[], $2::text[], $3::text[], $4::text[], $5::text[])
          on conflict (id) do update set
            abbreviation = excluded.abbreviation,
            name = excluded.name,
            league = excluded.league,
            division = excluded.division`,
-        [team.id, team.abbreviation, team.name, team.league?.name, team.division?.name],
+        [
+          teams.map((team) => team.id),
+          teams.map((team) => team.abbreviation),
+          teams.map((team) => team.name),
+          teams.map((team) => team.league?.name ?? null),
+          teams.map((team) => team.division?.name ?? null),
+        ],
       );
+    }
 
+    // A player can appear on more than one roster (active + 40-man, or two
+    // teams mid-trade); a multi-row upsert can't touch the same key twice, so
+    // dedupe with the last occurrence winning like the sequential upserts did.
+    const playerByMlbId = new Map<number, { fullName: string; teamId: number }>();
+    const eligibilityByKey = new Map<string, { mlbPlayerId: number; position: string }>();
+
+    for (const team of teams) {
       for (const rosterPayload of rostersByTeam.get(team.id) ?? []) {
         for (const rosterEntry of rosterPayload.roster ?? []) {
           rowsSeen += 1;
@@ -165,27 +187,51 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
             continue;
           }
 
-          const playerResult = await client.query<{ id: string }>(
-            `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
-             values ($1, $2, 'active', $3)
-             on conflict (mlb_player_id) do update set
-               full_name = excluded.full_name,
-               current_mlb_team_id = excluded.current_mlb_team_id,
-               updated_at = now()
-             returning id`,
-            [person.id, person.fullName, team.id],
-          );
+          playerByMlbId.set(person.id, { fullName: person.fullName, teamId: team.id });
 
           if (position) {
-            await client.query(
-              `insert into player_position_eligibility (player_id, position, source, valid_from)
-               values ($1, $2, 'mlb-stats-api', current_date)
-               on conflict (player_id, position, valid_from) do nothing`,
-              [playerResult.rows[0].id, position],
-            );
+            eligibilityByKey.set(`${person.id}|${position}`, { mlbPlayerId: person.id, position });
           }
         }
       }
+    }
+
+    const idByMlbId = new Map<number, string>();
+    for (const batch of chunk([...playerByMlbId.entries()], writeChunkSize)) {
+      const result = await client.query<{ id: string; mlb_player_id: number }>(
+        `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
+         select t.mlb_player_id, t.full_name, 'active', t.team_id
+         from unnest($1::integer[], $2::text[], $3::integer[]) as t(mlb_player_id, full_name, team_id)
+         on conflict (mlb_player_id) do update set
+           full_name = excluded.full_name,
+           current_mlb_team_id = excluded.current_mlb_team_id,
+           updated_at = now()
+         returning id, mlb_player_id`,
+        [
+          batch.map(([mlbPlayerId]) => mlbPlayerId),
+          batch.map(([, player]) => player.fullName),
+          batch.map(([, player]) => player.teamId),
+        ],
+      );
+
+      for (const row of result.rows) {
+        idByMlbId.set(row.mlb_player_id, row.id);
+      }
+    }
+
+    const eligibilityRows = [...eligibilityByKey.values()].flatMap(({ mlbPlayerId, position }) => {
+      const playerId = idByMlbId.get(mlbPlayerId);
+      return playerId ? [{ playerId, position }] : [];
+    });
+
+    for (const batch of chunk(eligibilityRows, writeChunkSize)) {
+      await client.query(
+        `insert into player_position_eligibility (player_id, position, source, valid_from)
+         select t.player_id, t.position, 'mlb-stats-api', current_date
+         from unnest($1::uuid[], $2::text[]) as t(player_id, position)
+         on conflict (player_id, position, valid_from) do nothing`,
+        [batch.map((row) => row.playerId), batch.map((row) => row.position)],
+      );
     }
 
     const scheduleRowsSeen = await writeMlbSchedule(client, schedulePayload);
@@ -255,6 +301,9 @@ async function writeMlbSchedule(
   schedulePayload: MlbScheduleResponse,
 ) {
   let rowsSeen = 0;
+  // A postponed game can appear under two dates with the same gamePk; the
+  // batched upsert can't touch a row twice, so keep the last occurrence.
+  const gameByPk = new Map<number, MlbScheduleGame>();
 
   for (const scheduleDate of schedulePayload.dates ?? []) {
     for (const game of scheduleDate.games ?? []) {
@@ -264,78 +313,102 @@ async function writeMlbSchedule(
         continue;
       }
 
-      const awayTeamId = game.teams?.away?.team?.id ?? null;
-      const homeTeamId = game.teams?.home?.team?.id ?? null;
-      const awayPitcherId = await upsertProbablePitcher(client, game.teams?.away?.probablePitcher, awayTeamId);
-      const homePitcherId = await upsertProbablePitcher(client, game.teams?.home?.probablePitcher, homeTeamId);
-
-      await client.query(
-        `insert into mlb_game (
-           game_pk, game_date, official_date, status, detailed_state, abstract_game_state,
-           home_mlb_team_id, away_mlb_team_id, home_probable_pitcher_player_id,
-           away_probable_pitcher_player_id, venue_name
-         )
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         on conflict (game_pk) do update set
-           game_date = excluded.game_date,
-           official_date = excluded.official_date,
-           status = excluded.status,
-           detailed_state = excluded.detailed_state,
-           abstract_game_state = excluded.abstract_game_state,
-           home_mlb_team_id = excluded.home_mlb_team_id,
-           away_mlb_team_id = excluded.away_mlb_team_id,
-           home_probable_pitcher_player_id = excluded.home_probable_pitcher_player_id,
-           away_probable_pitcher_player_id = excluded.away_probable_pitcher_player_id,
-           venue_name = excluded.venue_name,
-           updated_at = now()`,
-        [
-          game.gamePk,
-          game.gameDate,
-          game.officialDate ?? null,
-          game.status?.abstractGameState ?? null,
-          game.status?.detailedState ?? null,
-          game.status?.abstractGameState ?? null,
-          homeTeamId,
-          awayTeamId,
-          homePitcherId,
-          awayPitcherId,
-          game.venue?.name ?? null,
-        ],
-      );
+      gameByPk.set(game.gamePk, game);
     }
+  }
+
+  const games = [...gameByPk.values()];
+
+  // Upsert probable pitchers first so game rows can reference their ids. A
+  // pitcher can be probable for two starts in the window; keep the first
+  // non-null team so the end state matches the old per-game coalesce upserts.
+  const pitcherByMlbId = new Map<number, { fullName: string; teamId: number | null }>();
+  for (const game of games) {
+    for (const side of [game.teams?.away, game.teams?.home]) {
+      const pitcher = side?.probablePitcher;
+      if (!pitcher?.id || !pitcher.fullName) {
+        continue;
+      }
+      const existing = pitcherByMlbId.get(pitcher.id);
+      pitcherByMlbId.set(pitcher.id, {
+        fullName: pitcher.fullName,
+        teamId: existing?.teamId ?? side?.team?.id ?? null,
+      });
+    }
+  }
+
+  const pitcherIdByMlbId = new Map<number, string>();
+  for (const batch of chunk([...pitcherByMlbId.entries()], writeChunkSize)) {
+    const result = await client.query(
+      `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
+       select t.mlb_player_id, t.full_name, 'active', t.team_id
+       from unnest($1::integer[], $2::text[], $3::integer[]) as t(mlb_player_id, full_name, team_id)
+       on conflict (mlb_player_id) do update set
+         full_name = excluded.full_name,
+         current_mlb_team_id = coalesce(player.current_mlb_team_id, excluded.current_mlb_team_id),
+         updated_at = now()
+       returning id, mlb_player_id`,
+      [
+        batch.map(([mlbPlayerId]) => mlbPlayerId),
+        batch.map(([, pitcher]) => pitcher.fullName),
+        batch.map(([, pitcher]) => pitcher.teamId),
+      ],
+    );
+
+    for (const row of getRows<{ id: string; mlb_player_id: number }>(result)) {
+      pitcherIdByMlbId.set(row.mlb_player_id, row.id);
+    }
+  }
+
+  const probablePitcherId = (side: MlbScheduleTeam | undefined) =>
+    side?.probablePitcher?.id != null ? (pitcherIdByMlbId.get(side.probablePitcher.id) ?? null) : null;
+
+  for (const batch of chunk(games, writeChunkSize)) {
+    await client.query(
+      `insert into mlb_game (
+         game_pk, game_date, official_date, status, detailed_state, abstract_game_state,
+         home_mlb_team_id, away_mlb_team_id, home_probable_pitcher_player_id,
+         away_probable_pitcher_player_id, venue_name
+       )
+       select * from unnest(
+         $1::integer[], $2::timestamptz[], $3::date[], $4::text[], $5::text[], $6::text[],
+         $7::integer[], $8::integer[], $9::uuid[], $10::uuid[], $11::text[]
+       )
+       on conflict (game_pk) do update set
+         game_date = excluded.game_date,
+         official_date = excluded.official_date,
+         status = excluded.status,
+         detailed_state = excluded.detailed_state,
+         abstract_game_state = excluded.abstract_game_state,
+         home_mlb_team_id = excluded.home_mlb_team_id,
+         away_mlb_team_id = excluded.away_mlb_team_id,
+         home_probable_pitcher_player_id = excluded.home_probable_pitcher_player_id,
+         away_probable_pitcher_player_id = excluded.away_probable_pitcher_player_id,
+         venue_name = excluded.venue_name,
+         updated_at = now()`,
+      [
+        batch.map((game) => game.gamePk),
+        batch.map((game) => game.gameDate),
+        batch.map((game) => game.officialDate ?? null),
+        batch.map((game) => game.status?.abstractGameState ?? null),
+        batch.map((game) => game.status?.detailedState ?? null),
+        batch.map((game) => game.status?.abstractGameState ?? null),
+        batch.map((game) => game.teams?.home?.team?.id ?? null),
+        batch.map((game) => game.teams?.away?.team?.id ?? null),
+        batch.map((game) => probablePitcherId(game.teams?.home)),
+        batch.map((game) => probablePitcherId(game.teams?.away)),
+        batch.map((game) => game.venue?.name ?? null),
+      ],
+    );
   }
 
   return rowsSeen;
 }
 
-async function upsertProbablePitcher(
-  client: { query: (sql: string, values?: unknown[]) => Promise<{ rows?: Array<{ id: string }> } | unknown> },
-  pitcher: MlbScheduleTeam["probablePitcher"] | undefined,
-  teamId: number | null,
-) {
-  if (!pitcher?.id || !pitcher.fullName) {
-    return null;
-  }
-
-  const result = await client.query(
-    `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
-     values ($1, $2, 'active', $3)
-     on conflict (mlb_player_id) do update set
-       full_name = excluded.full_name,
-       current_mlb_team_id = coalesce(player.current_mlb_team_id, excluded.current_mlb_team_id),
-       updated_at = now()
-     returning id`,
-    [pitcher.id, pitcher.fullName, teamId],
-  );
-
-  return getFirstRowId(result);
-}
-
-function getFirstRowId(result: { rows?: Array<{ id: string }> } | unknown) {
+function getRows<T>(result: unknown): T[] {
   if (typeof result === "object" && result && "rows" in result) {
-    const rows = (result as { rows?: Array<{ id: string }> }).rows;
-    return rows?.[0]?.id ?? null;
+    return (result as { rows?: T[] }).rows ?? [];
   }
 
-  return null;
+  return [];
 }
