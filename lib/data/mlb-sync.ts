@@ -35,6 +35,7 @@ type MlbScheduleResponse = {
 
 type MlbScheduleGame = {
   gamePk?: number;
+  gameType?: string;
   gameDate?: string;
   officialDate?: string;
   status?: {
@@ -243,6 +244,12 @@ export async function syncMlbSchedule(client: { query: (sql: string, values?: un
   return writeMlbSchedule(client, await fetchSchedulePayload(baseUrl));
 }
 
+// Regular season and postseason only. All-Star (A), exhibition (E), and
+// spring (S) games involve pseudo-teams like the AL/NL All-Star squads
+// (ids 159/160) that aren't in mlb_team, so writing them violates the
+// team foreign keys — and they shouldn't drive lineup locks anyway.
+const realGameTypes = new Set(["R", "F", "D", "L", "W"]);
+
 async function writeMlbSchedule(
   client: { query: (sql: string, values?: unknown[]) => Promise<unknown> },
   schedulePayload: MlbScheduleResponse,
@@ -253,7 +260,7 @@ async function writeMlbSchedule(
     for (const game of scheduleDate.games ?? []) {
       rowsSeen += 1;
 
-      if (!game.gamePk || !game.gameDate) {
+      if (!game.gamePk || !game.gameDate || !game.gameType || !realGameTypes.has(game.gameType)) {
         continue;
       }
 
