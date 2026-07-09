@@ -1,8 +1,8 @@
 import type { PoolClient } from "pg";
 import { computeExpiredTurns, deadlineForTurn } from "@/lib/draft/advancement";
-import { computeRosterNeeds, selectAutoPick, type DraftCandidate } from "@/lib/draft/auto-pick";
+import { computeRosterNeeds, filterCandidatesWithRoom, selectAutoPick, type DraftCandidate } from "@/lib/draft/auto-pick";
 import { draftRounds, orderStrategyFor, roundForPick } from "@/lib/draft/engine";
-import { planInitialLineup, type AssignablePlayer } from "@/lib/draft/lineup-assignment";
+import { planInitialLineup, rosterFits, type AssignablePlayer } from "@/lib/draft/lineup-assignment";
 import { mockDraftPlayers, mockDraftState } from "@/lib/draft/mock-draft";
 import {
   DraftError,
@@ -193,22 +193,40 @@ async function getQueueForTeam(client: PoolClient, draftId: string, teamId: stri
  * minors, and inside the league's player pool. Returns null when the queue has
  * no usable player, so auto-pick falls back to best-available.
  */
-async function firstAvailableQueuedPlayer(client: PoolClient, context: DraftContext, teamId: string): Promise<string | null> {
-  const result = await client.query<{ player_id: string }>(
-    `select dq.player_id
+/**
+ * The team's highest-priority queued player that is still available and that
+ * the roster has room for; queued players who could only overfill the bench
+ * are skipped (they stay queued for other teams' boards, but this team will
+ * never draft them).
+ */
+async function firstAvailableQueuedPlayer(
+  client: PoolClient,
+  context: DraftContext,
+  teamId: string,
+  draftedPositions: RosterSlot[][],
+): Promise<string | null> {
+  const result = await client.query<{ player_id: string; positions: RosterSlot[] | null }>(
+    `select dq.player_id,
+       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
      from draft_queue dq
      join player p on p.id = dq.player_id
      left join mlb_team mt on mt.id = p.current_mlb_team_id
+     left join player_position_eligibility ppe on ppe.player_id = dq.player_id and ppe.valid_to is null
      where dq.draft_id = $1 and dq.team_id = $2
        and p.status <> 'minors'
        and dq.player_id not in (select player_id from draft_pick where draft_id = $1)
        ${poolFilterSql(context.league.settings.playerPool)}
-     order by dq.priority
-     limit 1`,
+     group by dq.player_id, dq.priority
+     order by dq.priority`,
     [context.draft.id, teamId],
   );
 
-  return result.rows[0]?.player_id ?? null;
+  const slotCounts = context.league.settings.rosterSlots;
+  const fitting = result.rows.find((row) =>
+    rosterFits([...draftedPositions, row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[])], slotCounts),
+  );
+
+  return fitting?.player_id ?? null;
 }
 
 /**
@@ -338,13 +356,14 @@ async function makePickInternal(
  */
 async function autoPickForTurn(client: PoolClient, context: DraftContext, overallPick: number): Promise<void> {
   const team = teamForPick(context, overallPick);
-  let playerId = await firstAvailableQueuedPlayer(client, context, team.team_id);
+  const drafted = await draftedPositionsForTeam(client, context.draft.id, team.team_id);
+  let playerId = await firstAvailableQueuedPlayer(client, context, team.team_id, drafted);
 
   if (!playerId) {
+    const slotCounts = context.league.settings.rosterSlots;
     const candidates = await listAutoPickCandidates(client, context);
-    const drafted = await draftedPositionsForTeam(client, context.draft.id, team.team_id);
-    const needs = computeRosterNeeds(context.league.settings.rosterSlots, drafted);
-    const pick = selectAutoPick(candidates, needs);
+    const needs = computeRosterNeeds(slotCounts, drafted);
+    const pick = selectAutoPick(filterCandidatesWithRoom(candidates, drafted, slotCounts), needs);
 
     if (!pick) {
       throw new DraftError("No draftable players remain in the pool.", 409);
@@ -699,17 +718,29 @@ export async function makePick(leagueId: string, playerId: string, viewerUserId:
       );
     }
 
-    const eligible = await client.query(
-      `select 1
+    const eligible = await client.query<{ positions: RosterSlot[] | null }>(
+      `select coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
        from player p
        left join mlb_team mt on mt.id = p.current_mlb_team_id
+       left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
        where p.id = $1 ${poolFilterSql(context.league.settings.playerPool)}
+       group by p.id
        limit 1`,
       [playerId],
     );
 
     if (!eligible.rows.length) {
       throw new DraftError("That player is not in this league's player pool.", 422);
+    }
+
+    // Refuse picks the roster can never fit: once every slot (including the
+    // bench) that this player could occupy is committed, drafting them would
+    // overfill the bench at completion and block all lineup saves for the team.
+    const pickPositions = eligible.rows[0].positions?.length ? eligible.rows[0].positions : (["UTIL"] as RosterSlot[]);
+    const drafted = await draftedPositionsForTeam(client, context.draft.id, onClock.team_id);
+
+    if (!rosterFits([...drafted, pickPositions], context.league.settings.rosterSlots)) {
+      throw new DraftError("Your roster has no open slot for that player. Draft a position you still need.", 409);
     }
 
     const overallPick = context.draft.current_overall_pick;

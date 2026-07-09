@@ -1,5 +1,6 @@
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { RosterSlot } from "@/lib/fantasy/types";
+import { rosterFits } from "./lineup-assignment";
 
 export type DraftCandidate = {
   playerId: string;
@@ -50,6 +51,21 @@ export function computeRosterNeeds(
   }
 
   return needs;
+}
+
+/**
+ * Drops candidates the team has no roster room for — players who could only
+ * land on an already-full bench and overfill it at draft completion. Falls
+ * back to the unfiltered list when nothing in the pool fits (the draft must
+ * never stall), matching the initial-lineup assigner's park-on-bench fallback.
+ */
+export function filterCandidatesWithRoom(
+  candidates: DraftCandidate[],
+  draftedPositions: RosterSlot[][],
+  slotCounts: Record<RosterSlot, number>,
+): DraftCandidate[] {
+  const withRoom = candidates.filter((candidate) => rosterFits([...draftedPositions, candidate.positions], slotCounts));
+  return withRoom.length ? withRoom : candidates;
 }
 
 /**

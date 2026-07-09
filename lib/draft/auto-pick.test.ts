@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import type { RosterSlot } from "@/lib/fantasy/types";
-import { computeRosterNeeds, selectAutoPick, type DraftCandidate } from "./auto-pick";
+import { computeRosterNeeds, filterCandidatesWithRoom, selectAutoPick, type DraftCandidate } from "./auto-pick";
 
 function candidate(playerId: string, adpRank: number, positions: RosterSlot[]): DraftCandidate {
   return { playerId, adpRank, positions };
@@ -92,5 +92,73 @@ describe("selectAutoPick", () => {
 
   it("returns null when no candidates remain", () => {
     expect(selectAutoPick([], computeRosterNeeds(defaultRosterSlots, []))).toBeNull();
+  });
+});
+
+describe("filterCandidatesWithRoom", () => {
+  // 15 hitters = every batter slot (C/1B/2B/3B/SS/OF×3/UTIL×2) plus the
+  // 5-slot bench. Only pitcher slots remain open.
+  const hitterFullRoster: RosterSlot[][] = [
+    ["C"], ["1B"], ["2B"], ["3B"], ["SS"], ["OF"], ["OF"], ["OF"],
+    ["1B"], ["2B"], ["3B"], ["SS"], ["OF"], ["OF"], ["OF"],
+  ];
+
+  it("excludes hitters once only pitcher room remains", () => {
+    const filtered = filterCandidatesWithRoom(
+      [candidate("hitter", 1, ["OF"]), candidate("pitcher", 50, ["SP"])],
+      hitterFullRoster,
+      defaultRosterSlots,
+    );
+    expect(filtered.map((c) => c.playerId)).toEqual(["pitcher"]);
+  });
+
+  it("keeps everyone while room remains", () => {
+    const filtered = filterCandidatesWithRoom(
+      [candidate("hitter", 1, ["OF"]), candidate("pitcher", 50, ["SP"])],
+      [["C"], ["SP"]],
+      defaultRosterSlots,
+    );
+    expect(filtered).toHaveLength(2);
+  });
+
+  it("falls back to the full list when nothing fits, so the draft never stalls", () => {
+    const filtered = filterCandidatesWithRoom(
+      [candidate("hitter-a", 1, ["OF"]), candidate("hitter-b", 2, ["C"])],
+      hitterFullRoster,
+      defaultRosterSlots,
+    );
+    expect(filtered).toHaveLength(2);
+  });
+
+  it("keeps auto-drafts from overfilling the bench across a full draft", () => {
+    // A pool that starts hitter-heavy: without the room filter the bot hoards
+    // hitters and ends with more than batter slots + bench can hold.
+    const pool: DraftCandidate[] = [];
+    const hitterPositions: RosterSlot[][] = [["C"], ["1B"], ["2B"], ["3B"], ["SS"], ["OF"]];
+
+    for (let i = 1; i <= 40; i++) {
+      pool.push(candidate(`h${i}`, i, hitterPositions[i % hitterPositions.length]));
+    }
+    for (let i = 41; i <= 80; i++) {
+      pool.push(candidate(`p${i}`, i, i % 3 === 0 ? ["RP"] : ["SP"]));
+    }
+
+    const drafted: RosterSlot[][] = [];
+    const taken = new Set<string>();
+
+    for (let round = 1; round <= 23; round++) {
+      const available = pool.filter((c) => !taken.has(c.playerId));
+      const withRoom = filterCandidatesWithRoom(available, drafted, defaultRosterSlots);
+      const pick = selectAutoPick(withRoom, computeRosterNeeds(defaultRosterSlots, drafted));
+
+      expect(pick).not.toBeNull();
+      taken.add(pick!.playerId);
+      drafted.push(pick!.positions);
+    }
+
+    const pitchers = drafted.filter((positions) => positions.every((p) => ["SP", "RP", "P"].includes(p))).length;
+    // 8 pitcher slots (SP 2 + RP 2 + P 4) and 15 hitter seats: a legal 23-man
+    // roster needs at least 8 pitchers.
+    expect(pitchers).toBeGreaterThanOrEqual(8);
   });
 });
