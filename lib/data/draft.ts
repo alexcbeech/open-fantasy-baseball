@@ -96,13 +96,32 @@ function settingsWithDefaults(settings: LeagueSettings): LeagueSettings {
   };
 }
 
-function poolFilterSql(pool: PlayerPool, alias = "mt"): string {
+// Division pools filter on league + division. The values are fixed constants
+// (never user input), so interpolating them is injection-safe. Division names
+// differ by source — mlb-sync stores the full "National League Central" while
+// the seed stores the short "Central" — so match on the substring.
+const divisionPoolFilters: Partial<Record<PlayerPool, { league: string; division: string }>> = {
+  "al-east": { league: "American", division: "East" },
+  "al-central": { league: "American", division: "Central" },
+  "al-west": { league: "American", division: "West" },
+  "nl-east": { league: "National", division: "East" },
+  "nl-central": { league: "National", division: "Central" },
+  "nl-west": { league: "National", division: "West" },
+};
+
+export function poolFilterSql(pool: PlayerPool, alias = "mt"): string {
   if (pool === "al") {
     return `and ${alias}.league ilike 'American%'`;
   }
 
   if (pool === "nl") {
     return `and ${alias}.league ilike 'National%'`;
+  }
+
+  const division = divisionPoolFilters[pool];
+
+  if (division) {
+    return `and ${alias}.league ilike '${division.league}%' and ${alias}.division ilike '%${division.division}%'`;
   }
 
   return "";
