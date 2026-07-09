@@ -36,6 +36,8 @@ describe("startsToday", () => {
   it("counts hitters and relievers whenever their team plays today", () => {
     expect(startsToday(entry("BN", { id: "of", positions: ["OF"] }).player)).toBe(true);
     expect(startsToday(entry("BN", { id: "rp", positions: ["RP"] }).player)).toBe(true);
+    // Bat-only DH types carry the "UTIL" position and are everyday hitters.
+    expect(startsToday(entry("BN", { id: "dh", positions: ["UTIL"] }).player)).toBe(true);
   });
 
   it("requires SP-only pitchers to be the probable starter", () => {
@@ -113,6 +115,17 @@ describe("planActiveLineup", () => {
     const next = planActiveLineup(lineup, new Set());
     expect(next.hurt).toBe("IL");
     expect(next.kid).toBe("NA");
+    expect(next.of).toBe("OF");
+  });
+
+  it("seats a bat-only DH in the UTIL slot", () => {
+    const lineup = [
+      entry("BN", { id: "dh", positions: ["UTIL"], projectedStats: proj(400) }),
+      entry("BN", { id: "of", positions: ["OF"], projectedStats: proj(100) }),
+    ];
+
+    const next = planActiveLineup(lineup, new Set());
+    expect(next.dh).toBe("UTIL");
     expect(next.of).toBe("OF");
   });
 
