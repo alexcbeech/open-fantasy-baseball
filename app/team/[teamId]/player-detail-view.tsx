@@ -358,8 +358,10 @@ function presentCategories(rows: Array<Record<string, number | string>>) {
 type GameLogColumn = { label: string; render: (stats: Record<string, number | string>) => string };
 
 // Month/day only -- the game log spans the current season, so the year is noise.
+// Rendered in UTC: the value is a calendar date serialized at UTC midnight, so
+// local-time formatting would show the previous day for viewers west of UTC.
 function formatGameLogDate(value: string): string {
-  return new Date(value).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+  return new Date(value).toLocaleDateString("en-US", { month: "numeric", day: "numeric", timeZone: "UTC" });
 }
 
 // Convert baseball innings-pitched notation (6.1 = 6 1/3, 6.2 = 6 2/3) to
