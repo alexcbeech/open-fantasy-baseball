@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
 import { findLineupLockIssues, isPlayerGameLocked, isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
+import { planActiveLineup } from "@/lib/fantasy/start-active-players";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
@@ -246,6 +247,21 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
     setFillingSlot(null);
   }
 
+  /**
+   * One-tap optimal lineup: seat players with a game today (probable starters
+   * for SP slots) by projected points then ADP, bench the rest. Locked and
+   * IL/NA players stay put; the result goes through the same validate/commit
+   * path as a manual move.
+   */
+  function startActivePlayers() {
+    const next = planActiveLineup(currentLineup, lockedPlayerIds);
+    const changed = currentLineup.some((entry) => next[entry.player.id] !== entry.slot);
+
+    if (changed) {
+      commitSlots(next);
+    }
+  }
+
   function startMove(entry: LineupPlayer) {
     if (isEntryLocked(entry)) {
       setError(`${entry.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`);
@@ -257,7 +273,12 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
   return (
     <>
       <section className="panel" aria-labelledby="lineup-heading">
-        <h2 id="lineup-heading">Lineup</h2>
+        <div className="lineup-header">
+          <h2 id="lineup-heading">Lineup</h2>
+          <button className="start-active-button" type="button" onClick={startActivePlayers}>
+            Start Active Players
+          </button>
+        </div>
         {error ? (
           <div className="status-banner bad" role="alert">
             {error}

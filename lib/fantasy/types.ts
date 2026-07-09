@@ -112,6 +112,14 @@ export type Player = {
   todaysGameStart?: string | null;
   /** Percent of leagues where the player is rostered; null when unknown. */
   rosteredPercent?: number | null;
+  /**
+   * True when the player is a probable starting pitcher in today's MLB game;
+   * null/undefined when unknown or their team doesn't play today. Hitters
+   * don't get a confirmed-starter signal, so this only ever flags pitchers.
+   */
+  probableStarterToday?: boolean | null;
+  /** Average draft position (lower = drafted earlier); null when unknown. */
+  adp?: number | null;
 };
 
 export type PlayerNewsItem = {

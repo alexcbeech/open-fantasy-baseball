@@ -30,7 +30,9 @@ export type DbPlayerRow = {
   home_away?: "home" | "away" | null;
   opponent?: string | null;
   todays_game_start?: Date | string | null;
+  todays_probable_starter?: boolean | null;
   rostered_percent?: string | number | null;
+  adp?: string | number | null;
 };
 
 export type DbLineupRow = DbPlayerRow & {
@@ -94,7 +96,9 @@ export function mapPlayer(row: DbPlayerRow): Player {
     seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points)) : null,
     nextGame,
     todaysGameStart: row.todays_game_start ? new Date(row.todays_game_start).toISOString() : null,
+    probableStarterToday: row.todays_probable_starter ?? null,
     rosteredPercent: row.rostered_percent != null ? Math.round(Number(row.rostered_percent)) : null,
+    adp: row.adp != null ? Number(row.adp) : null,
   };
 }
 
