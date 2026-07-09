@@ -13,7 +13,7 @@ export const createLeagueInputSchema = z
     tradeReview: z.enum([tradeReviewModes[0], tradeReviewModes[1], tradeReviewModes[2]]),
     tradeReviewDays: z.coerce.number().int().min(0).max(7),
     lineupLockMode: z.enum([lineupLockModes[0], lineupLockModes[1], lineupLockModes[2]]),
-    draftType: z.enum([draftTypes[0], draftTypes[1], draftTypes[2]]),
+    draftType: z.enum([draftTypes[0], draftTypes[1]]),
     playerPool: z.enum(playerPools as [PlayerPoolValue, ...PlayerPoolValue[]]).default(defaultLeagueSettings.playerPool),
     draftPickSeconds: z.coerce.number().int().min(15).max(300).default(defaultLeagueSettings.draftPickSeconds),
     benchSlots: z.coerce.number().int().min(0).max(10).default(defaultRosterSlots.BN),

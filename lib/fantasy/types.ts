@@ -6,7 +6,7 @@ export type TradeReviewMode = "commissioner" | "league-vote" | "none";
 
 export type LineupLockMode = "daily" | "weekly" | "first-game";
 
-export type DraftType = "snake" | "auction" | "offline";
+export type DraftType = "snake" | "offline";
 
 export type PlayerPool =
   | "all"

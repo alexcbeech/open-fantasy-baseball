@@ -2,8 +2,8 @@ import type { DraftType, RosterSlot } from "@/lib/fantasy/types";
 
 /**
  * Maps a 1-based overall pick number to a 0-based index into the round-1
- * draft order. Pluggable so auction/linear formats can slot in later without
- * touching the advancement or persistence layers.
+ * draft order. Pluggable so other formats can slot in later without touching
+ * the advancement or persistence layers.
  */
 export interface OrderStrategy {
   teamIndexForPick(overallPick: number, teamCount: number): number;
@@ -18,7 +18,7 @@ export const snakeOrderStrategy: OrderStrategy = {
   },
 };
 
-/** Same order every round; used by offline drafts and a base for auction. */
+/** Same order every round; used by offline drafts. */
 export const linearOrderStrategy: OrderStrategy = {
   teamIndexForPick(overallPick, teamCount) {
     return (overallPick - 1) % teamCount;

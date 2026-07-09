@@ -34,7 +34,7 @@ const allScoringTypes: LeagueScoringType[] = ["h2h-categories", "h2h-points", "r
 export const waiverModes: WaiverMode[] = ["rolling", "faab"];
 export const tradeReviewModes: TradeReviewMode[] = ["league-vote", "commissioner", "none"];
 export const lineupLockModes: LineupLockMode[] = ["daily", "weekly", "first-game"];
-export const draftTypes: DraftType[] = ["snake", "auction", "offline"];
+export const draftTypes: DraftType[] = ["snake", "offline"];
 export const playerPools: PlayerPool[] = [
   "all",
   "al",
