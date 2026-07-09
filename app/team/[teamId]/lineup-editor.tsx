@@ -20,8 +20,8 @@ type LineupEditorProps = {
 
 type LiveEntry = { state: string | null; points: number; stats?: Record<string, number | string> };
 
-type SlotRow = { key: string; slot: RosterSlot; entry: LineupPlayer | null };
-type LineupGroup = { label: string; rows: SlotRow[] };
+export type SlotRow = { key: string; slot: RosterSlot; entry: LineupPlayer | null };
+export type LineupGroup = { label: string; rows: SlotRow[] };
 
 const batterSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "UTIL"];
 const pitcherSlots: RosterSlot[] = ["SP", "RP", "P"];
@@ -30,9 +30,10 @@ const pitcherSlots: RosterSlot[] = ["SP", "RP", "P"];
  * Turn the flat lineup into a slot-oriented view: every starting slot is shown
  * (filled or empty) so a vacated position reads as an open slot, while reserve
  * sections only list the players actually parked there. Starters are split into
- * Batters and Pitchers, Yahoo-style.
+ * Batters and Pitchers, Yahoo-style. Shared with the read-only team lineup
+ * sheet on the League tab.
  */
-function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlot, number>): LineupGroup[] {
+export function buildLineupGroups(lineup: LineupPlayer[], rosterSlots: Record<RosterSlot, number>): LineupGroup[] {
   const occupantsBySlot = new Map<RosterSlot, LineupPlayer[]>();
   for (const entry of lineup) {
     occupantsBySlot.set(entry.slot, [...(occupantsBySlot.get(entry.slot) ?? []), entry]);
