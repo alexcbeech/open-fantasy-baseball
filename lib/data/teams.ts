@@ -24,10 +24,13 @@ const lineupRowsSql = `
             next_game.home_away,
             next_game.opponent,
             todays_game.first_pitch as todays_game_start,
+            todays_game.probable_starter as todays_probable_starter,
+            adp.adp,
             0 as matchup_total
           from lineup_entry le
           join player p on p.id = le.player_id
           left join mlb_team mt on mt.id = p.current_mlb_team_id
+          left join player_adp adp on adp.player_id = p.id
           left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
           left join lateral (
             select stats from player_stat_line psl where psl.player_id = p.id and split = 'season' order by stat_date desc limit 1
@@ -51,7 +54,10 @@ const lineupRowsSql = `
           left join lateral (
             -- First pitch of the player's MLB game today (baseball's "today" is
             -- the ET official date). Once this passes, the lineup slot locks.
-            select min(g.game_date) as first_pitch
+            -- probable_starter flags pitchers listed as today's probable starter.
+            select
+              min(g.game_date) as first_pitch,
+              bool_or(g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id) as probable_starter
             from mlb_game g
             where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
               and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
@@ -60,7 +66,8 @@ const lineupRowsSql = `
           where le.team_id = $1
             and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
-            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch
+            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch,
+            todays_game.probable_starter, adp.adp
           order by le.lineup_date desc, le.id
 `;
 
