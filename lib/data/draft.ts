@@ -11,6 +11,7 @@ import {
   type DraftState,
   type DraftStatus,
   type DraftTeam,
+  type QueuedPlayer,
 } from "@/lib/draft/types";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import type { DraftType, LeagueSettings, PlayerPool, RosterSlot } from "@/lib/fantasy/types";
@@ -69,6 +70,7 @@ type OrderedTeamRow = {
   position: number;
   name: string;
   is_bot: boolean;
+  auto_pick: boolean;
   manager_user_id: string;
   manager_name: string;
   manager_email: string;
@@ -143,7 +145,7 @@ async function getLeague(client: PoolClient, leagueId: string): Promise<LeagueRo
 
 async function getOrderedTeams(client: PoolClient, draftId: string): Promise<OrderedTeamRow[]> {
   const result = await client.query<OrderedTeamRow>(
-    `select o.team_id, o.position, t.name, t.is_bot, t.manager_user_id, u.display_name as manager_name, u.email as manager_email
+    `select o.team_id, o.position, o.auto_pick, t.name, t.is_bot, t.manager_user_id, u.display_name as manager_name, u.email as manager_email
      from draft_order o
      join fantasy_team t on t.id = o.team_id
      join app_user u on u.id = t.manager_user_id
@@ -153,6 +155,60 @@ async function getOrderedTeams(client: PoolClient, draftId: string): Promise<Ord
   );
 
   return result.rows;
+}
+
+/** The non-bot team the viewer manages in this draft, if any. */
+function viewerTeam(context: DraftContext, viewerUserId: string): OrderedTeamRow | null {
+  return context.teams.find((team) => !team.is_bot && team.manager_user_id === viewerUserId) ?? null;
+}
+
+/**
+ * The team's draft queue in priority order, excluding players already drafted
+ * (a safety net; picks also delete queue rows). Used to render the viewer's
+ * queue and drive auto-pick.
+ */
+async function getQueueForTeam(client: PoolClient, draftId: string, teamId: string): Promise<QueuedPlayer[]> {
+  const result = await client.query<{ player_id: string; player_name: string; positions: RosterSlot[] | null }>(
+    `select dq.player_id, p.full_name as player_name, dq.priority,
+       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+     from draft_queue dq
+     join player p on p.id = dq.player_id
+     left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
+     where dq.draft_id = $1 and dq.team_id = $2
+       and dq.player_id not in (select player_id from draft_pick where draft_id = $1)
+     group by dq.player_id, p.full_name, dq.priority
+     order by dq.priority`,
+    [draftId, teamId],
+  );
+
+  return result.rows.map((row) => ({
+    playerId: row.player_id,
+    playerName: row.player_name,
+    positions: row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]),
+  }));
+}
+
+/**
+ * The first still-draftable player in a team's queue: undrafted, not in the
+ * minors, and inside the league's player pool. Returns null when the queue has
+ * no usable player, so auto-pick falls back to best-available.
+ */
+async function firstAvailableQueuedPlayer(client: PoolClient, context: DraftContext, teamId: string): Promise<string | null> {
+  const result = await client.query<{ player_id: string }>(
+    `select dq.player_id
+     from draft_queue dq
+     join player p on p.id = dq.player_id
+     left join mlb_team mt on mt.id = p.current_mlb_team_id
+     where dq.draft_id = $1 and dq.team_id = $2
+       and p.status <> 'minors'
+       and dq.player_id not in (select player_id from draft_pick where draft_id = $1)
+       ${poolFilterSql(context.league.settings.playerPool)}
+     order by dq.priority
+     limit 1`,
+    [context.draft.id, teamId],
+  );
+
+  return result.rows[0]?.player_id ?? null;
 }
 
 /**
@@ -272,21 +328,32 @@ async function makePickInternal(
      values ($1, $2, 'add', 'processed', $3)`,
     [context.league.id, teamId, JSON.stringify({ playerId, draftPick: overallPick, madeBy })],
   );
+  // A drafted player is off the board, so drop them from every team's queue.
+  await client.query(`delete from draft_queue where draft_id = $1 and player_id = $2`, [context.draft.id, playerId]);
 }
 
-/** Auto/bot pick for one expired turn: best available with positional need. */
+/**
+ * Auto/bot pick for one turn: the team's top still-available queued player if
+ * it has one, otherwise best-available weighted by positional need.
+ */
 async function autoPickForTurn(client: PoolClient, context: DraftContext, overallPick: number): Promise<void> {
   const team = teamForPick(context, overallPick);
-  const candidates = await listAutoPickCandidates(client, context);
-  const drafted = await draftedPositionsForTeam(client, context.draft.id, team.team_id);
-  const needs = computeRosterNeeds(context.league.settings.rosterSlots, drafted);
-  const pick = selectAutoPick(candidates, needs);
+  let playerId = await firstAvailableQueuedPlayer(client, context, team.team_id);
 
-  if (!pick) {
-    throw new DraftError("No draftable players remain in the pool.", 409);
+  if (!playerId) {
+    const candidates = await listAutoPickCandidates(client, context);
+    const drafted = await draftedPositionsForTeam(client, context.draft.id, team.team_id);
+    const needs = computeRosterNeeds(context.league.settings.rosterSlots, drafted);
+    const pick = selectAutoPick(candidates, needs);
+
+    if (!pick) {
+      throw new DraftError("No draftable players remain in the pool.", 409);
+    }
+
+    playerId = pick.playerId;
   }
 
-  await makePickInternal(client, context, overallPick, team.team_id, pick.playerId, team.is_bot ? "bot" : "auto");
+  await makePickInternal(client, context, overallPick, team.team_id, playerId, team.is_bot ? "bot" : "auto");
 }
 
 /**
@@ -321,32 +388,68 @@ async function advanceExpiredTurns(
     MAX_ADVANCE_PER_CALL,
   );
 
-  if (!expiry.expiredPicks.length) {
+  const totalPicks = draft.rounds * teams.length;
+  let picksMade = 0;
+
+  // Phase 1: turns whose clock has expired (existing behavior).
+  for (const overallPick of expiry.expiredPicks) {
+    await autoPickForTurn(client, context, overallPick);
+    picksMade += 1;
+  }
+
+  if (expiry.expiredPicks.length) {
+    if (expiry.complete) {
+      await completeDraft(client, context);
+      draft.status = "complete";
+      draft.current_pick_deadline = null;
+      draft.current_overall_pick = expiry.expiredPicks[expiry.expiredPicks.length - 1];
+    } else {
+      draft.current_overall_pick = expiry.expiredPicks[expiry.expiredPicks.length - 1] + 1;
+      draft.current_pick_deadline = expiry.nextDeadline;
+    }
+  }
+
+  // Phase 2: teams that opted into auto-draft pick immediately, regardless of
+  // their clock, so an absent/auto manager doesn't stall the room. Bounded by
+  // the same per-call budget as phase 1.
+  while (draft.status === "in_progress" && picksMade < MAX_ADVANCE_PER_CALL) {
+    const cursor = draft.current_overall_pick;
+
+    if (cursor > totalPicks || !teamForPick(context, cursor).auto_pick) {
+      break;
+    }
+
+    await autoPickForTurn(client, context, cursor);
+    picksMade += 1;
+
+    if (cursor >= totalPicks) {
+      await completeDraft(client, context);
+      draft.status = "complete";
+      draft.current_pick_deadline = null;
+      draft.current_overall_pick = cursor;
+      break;
+    }
+
+    const nextPick = cursor + 1;
+    draft.current_overall_pick = nextPick;
+    draft.current_pick_deadline = deadlineForTurn(now, teamForPick(context, nextPick).is_bot, draft.pick_seconds, draft.bot_pick_seconds);
+  }
+
+  if (picksMade === 0) {
     return;
   }
 
-  for (const overallPick of expiry.expiredPicks) {
-    await autoPickForTurn(client, context, overallPick);
-  }
-
-  const nextPick = expiry.expiredPicks[expiry.expiredPicks.length - 1] + 1;
-
-  if (expiry.complete) {
-    await completeDraft(client, context);
-    draft.status = "complete";
-    draft.current_pick_deadline = null;
-    draft.current_overall_pick = nextPick - 1;
+  if (draft.status === "complete") {
+    // completeDraft already persisted the draft row.
     return;
   }
 
   await client.query(
     `update draft set current_overall_pick = $2, current_pick_deadline = $3, updated_at = now() where id = $1`,
-    [draft.id, nextPick, expiry.nextDeadline],
+    [draft.id, draft.current_overall_pick, draft.current_pick_deadline],
   );
-  draft.current_overall_pick = nextPick;
-  draft.current_pick_deadline = expiry.nextDeadline;
 
-  queueOnClockNotification(context, nextPick, notifications);
+  queueOnClockNotification(context, draft.current_overall_pick, notifications);
 }
 
 function queueOnClockNotification(context: DraftContext, overallPick: number, notifications: PendingNotification[]) {
@@ -442,6 +545,7 @@ function buildDraftState(
   picks: DraftPickRecord[],
   viewer: { userId: string; isCommissioner: boolean },
   now: Date,
+  viewerQueue: QueuedPlayer[] = [],
 ): DraftState {
   const { draft, league, teams } = context;
   const totalPickCount = draft.rounds * teams.length;
@@ -475,6 +579,9 @@ function buildDraftState(
     serverNow: now.toISOString(),
     myTeamId: myTeam?.team_id ?? null,
     viewerIsCommissioner: viewer.isCommissioner,
+    myQueue: viewerQueue,
+    myAutoPick: myTeam?.auto_pick ?? false,
+    autoPickTeamIds: teams.filter((team) => team.auto_pick || team.is_bot).map((team) => team.team_id),
   };
 }
 
@@ -535,10 +642,12 @@ export async function getDraftState(leagueId: string, viewerUserId: string): Pro
         await advanceExpiredTurns(client, context, new Date(), notifications);
         const picks = await listPicks(client, context.draft.id);
         const commissioner = await isCommissioner(client, leagueId, viewerUserId);
+        const myTeam = viewerTeam(context, viewerUserId);
+        const viewerQueue = myTeam ? await getQueueForTeam(client, context.draft.id, myTeam.team_id) : [];
         await client.query("commit");
         flushNotifications(notifications);
 
-        return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date());
+        return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date(), viewerQueue);
       } catch (error) {
         await client.query("rollback").catch(() => undefined);
         throw error;
@@ -625,17 +734,145 @@ export async function makePick(leagueId: string, playerId: string, viewerUserId:
       queueOnClockNotification(context, nextPick, notifications);
     }
 
+    // If the manager(s) now on the clock are auto-drafting, take their picks
+    // too so the room keeps moving.
+    if (context.draft.status === "in_progress") {
+      await advanceExpiredTurns(client, context, new Date(), notifications);
+    }
+
     const picks = await listPicks(client, context.draft.id);
+    const myTeam = viewerTeam(context, viewerUserId);
+    const viewerQueue = myTeam ? await getQueueForTeam(client, context.draft.id, myTeam.team_id) : [];
     await client.query("commit");
     flushNotifications(notifications);
 
-    return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date());
+    return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date(), viewerQueue);
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Shared lock+transaction wrapper for draft mutations that return the viewer's
+ * fresh DraftState (queue add/remove, auto-draft toggle). Mirrors makePick's
+ * transaction handling.
+ */
+async function withDraftMutation(
+  leagueId: string,
+  viewerUserId: string,
+  mutate: (
+    client: PoolClient,
+    context: DraftContext,
+    team: OrderedTeamRow,
+    notifications: PendingNotification[],
+  ) => Promise<void>,
+): Promise<DraftState> {
+  requireDatabase();
+  const client = await getPool().connect();
+  const notifications: PendingNotification[] = [];
+
+  try {
+    await client.query("begin");
+    const context = await lockDraftContext(client, leagueId);
+
+    if (!context) {
+      throw new DraftError("Draft has not been set up.", 404);
+    }
+
+    const team = viewerTeam(context, viewerUserId);
+
+    if (!team) {
+      throw new DraftError("You don't have a team in this draft.", 403);
+    }
+
+    await mutate(client, context, team, notifications);
+
+    const picks = await listPicks(client, context.draft.id);
+    const commissioner = await isCommissioner(client, leagueId, viewerUserId);
+    const queue = await getQueueForTeam(client, context.draft.id, team.team_id);
+    await client.query("commit");
+    flushNotifications(notifications);
+
+    return buildDraftState(context, picks, { userId: viewerUserId, isCommissioner: commissioner }, new Date(), queue);
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/** Add a player to the viewer's team's draft queue (idempotent, appends last). */
+export async function enqueueDraftPlayer(leagueId: string, playerId: string, viewerUserId: string): Promise<DraftState> {
+  return withDraftMutation(leagueId, viewerUserId, async (client, context, team) => {
+    if (context.draft.status === "complete") {
+      throw new DraftError("The draft is over.", 409);
+    }
+
+    const eligible = await client.query(
+      `select 1
+       from player p
+       left join mlb_team mt on mt.id = p.current_mlb_team_id
+       where p.id = $1 ${poolFilterSql(context.league.settings.playerPool)}
+       limit 1`,
+      [playerId],
+    );
+
+    if (!eligible.rows.length) {
+      throw new DraftError("That player is not in this league's player pool.", 422);
+    }
+
+    const drafted = await client.query(`select 1 from draft_pick where draft_id = $1 and player_id = $2 limit 1`, [
+      context.draft.id,
+      playerId,
+    ]);
+
+    if (drafted.rows.length) {
+      throw new DraftError("That player has already been drafted.", 409);
+    }
+
+    await client.query(
+      `insert into draft_queue (draft_id, team_id, player_id, priority)
+       values ($1, $2, $3, coalesce((select max(priority) from draft_queue where draft_id = $1 and team_id = $2), 0) + 1)
+       on conflict (draft_id, team_id, player_id) do nothing`,
+      [context.draft.id, team.team_id, playerId],
+    );
+  });
+}
+
+/** Remove a player from the viewer's team's draft queue. */
+export async function dequeueDraftPlayer(leagueId: string, playerId: string, viewerUserId: string): Promise<DraftState> {
+  return withDraftMutation(leagueId, viewerUserId, async (client, context, team) => {
+    await client.query(`delete from draft_queue where draft_id = $1 and team_id = $2 and player_id = $3`, [
+      context.draft.id,
+      team.team_id,
+      playerId,
+    ]);
+  });
+}
+
+/**
+ * Turn auto-draft on or off for the viewer's team. Enabling it takes the pick
+ * immediately if it's already the team's turn (and keeps taking auto teams'
+ * turns), so an "exit draft" flip doesn't wait for the clock.
+ */
+export async function setAutoPick(leagueId: string, enabled: boolean, viewerUserId: string): Promise<DraftState> {
+  return withDraftMutation(leagueId, viewerUserId, async (client, context, team, notifications) => {
+    await client.query(`update draft_order set auto_pick = $3 where draft_id = $1 and team_id = $2`, [
+      context.draft.id,
+      team.team_id,
+      enabled,
+    ]);
+    // Reflect the flag in the in-memory context so advanceExpiredTurns sees it.
+    team.auto_pick = enabled;
+
+    if (enabled && context.draft.status === "in_progress") {
+      await advanceExpiredTurns(client, context, new Date(), notifications);
+    }
+  });
 }
 
 export type SetupDraftInput = {

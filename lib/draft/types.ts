@@ -22,6 +22,12 @@ export type DraftPickRecord = {
   madeBy: "human" | "auto" | "bot";
 };
 
+export type QueuedPlayer = {
+  playerId: string;
+  playerName: string;
+  positions: RosterSlot[];
+};
+
 export type DraftState = {
   draftId: string;
   leagueId: string;
@@ -43,6 +49,12 @@ export type DraftState = {
   /** The viewer's team in this draft, if any. */
   myTeamId: string | null;
   viewerIsCommissioner: boolean;
+  /** The viewer's team's draft queue, in priority order. */
+  myQueue: QueuedPlayer[];
+  /** Whether the viewer's team has auto-draft enabled. */
+  myAutoPick: boolean;
+  /** Team ids currently auto-drafting (opted in or bots), for board hints. */
+  autoPickTeamIds: string[];
 };
 
 export type DraftPlayer = Player & {

@@ -12,12 +12,15 @@ type PickSheetProps = {
   canPick: boolean;
   disabledReason: string | null;
   busy: boolean;
+  /** Queue controls are shown only when the viewer has a team; null hides them. */
+  isQueued: boolean | null;
   onConfirm: () => void;
+  onToggleQueue: () => void;
   onClose: () => void;
 };
 
-/** Bottom-sheet pick confirmation: player summary, key stats, draft button. */
-export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, onConfirm, onClose }: PickSheetProps) {
+/** Bottom-sheet pick confirmation: player summary, key stats, draft + queue. */
+export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, isQueued, onConfirm, onToggleQueue, onClose }: PickSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,6 +89,11 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, on
         <button className="primary-button" type="button" disabled={!canPick || busy} onClick={onConfirm}>
           {busy ? "Drafting..." : pickLabel ? `Draft with pick ${pickLabel}` : "Draft"}
         </button>
+        {isQueued !== null ? (
+          <button className="secondary-button" type="button" onClick={onToggleQueue}>
+            {isQueued ? "Remove from queue" : "Add to queue"}
+          </button>
+        ) : null}
         {!canPick && disabledReason ? <p className="player-meta pick-sheet-reason">{disabledReason}</p> : null}
       </div>
     </div>
