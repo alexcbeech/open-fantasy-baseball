@@ -258,7 +258,10 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           [playerId],
         ),
         query<PlayerGameLogRow>(
-          `select id, game_pk, stat_date, stats
+          // stat_date is a calendar date; cast to text so node-pg doesn't turn
+          // it into a Date at server-local midnight, which shifts a day when
+          // serialized across timezones.
+          `select id, game_pk, stat_date::text as stat_date, stats
            from player_stat_line
            where player_id = $1 and split = 'game'
            order by stat_date desc
