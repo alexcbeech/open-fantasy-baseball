@@ -11,7 +11,7 @@ vi.mock("@/lib/db/client", () => ({
   getPool: () => ({ connect: async () => currentClient }),
 }));
 
-import { getDefaultScheduleWindow, syncMlbTeamsAndRosters } from "./mlb-sync";
+import { getDefaultScheduleWindow, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
 
 describe("MLB sync", () => {
   it("uses a schedule window from yesterday through the next week", () => {
@@ -19,6 +19,58 @@ describe("MLB sync", () => {
       startDate: "2026-07-01",
       endDate: "2026-07-09",
     });
+  });
+});
+
+// The schedule feed includes All-Star and exhibition games whose pseudo-teams
+// (e.g. AL/NL All-Stars, ids 159/160) aren't in mlb_team; writing those games
+// or their probable pitchers violates the team foreign keys.
+describe("syncMlbSchedule game-type filtering", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("skips non-regular/postseason games and their probable pitchers", async () => {
+    const schedulePayload = {
+      dates: [
+        {
+          games: [
+            {
+              gamePk: 1,
+              gameType: "A",
+              gameDate: "2026-07-14T23:00:00Z",
+              teams: {
+                away: { team: { id: 159 }, probablePitcher: { id: 900001, fullName: "AL Starter" } },
+                home: { team: { id: 160 }, probablePitcher: { id: 900002, fullName: "NL Starter" } },
+              },
+            },
+            {
+              gamePk: 2,
+              gameType: "R",
+              gameDate: "2026-07-15T23:00:00Z",
+              teams: {
+                away: { team: { id: 121 } },
+                home: { team: { id: 143 } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
+    );
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [{ id: "player-1" }] }));
+
+    const rowsSeen = await syncMlbSchedule({ query });
+
+    expect(rowsSeen).toBe(2);
+    const gameInserts = query.mock.calls.filter(([sql]) => sql.includes("insert into mlb_game"));
+    expect(gameInserts).toHaveLength(1);
+    expect(gameInserts[0][1]?.[0]).toBe(2);
+    // No player upsert for the All-Star probable pitchers either.
+    expect(query.mock.calls.some(([sql]) => sql.includes("insert into player"))).toBe(false);
   });
 });
 
