@@ -523,13 +523,21 @@ function DraftBoard({ draft }: { draft: DraftState }) {
                   const pick = picksByOverall.get(overall);
                   const isCurrent = draft.onClock?.overallPick === overall;
 
+                  // The position class sets --pos on the whole cell, tinting
+                  // its background and left accent (see globals.css).
+                  const cellClass = [
+                    "draft-cell",
+                    isCurrent ? "current" : "",
+                    pick ? positionGroupClass(pick.positions[0]) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
                   return (
-                    <td key={team.teamId} className={isCurrent ? "draft-cell current" : "draft-cell"}>
+                    <td key={team.teamId} className={cellClass}>
                       {pick ? (
                         <span className="draft-cell-pick">
-                          <span className={`draft-cell-pos ${positionGroupClass(pick.positions[0])}`}>
-                            {pick.positions[0]}
-                          </span>
+                          <span className="draft-cell-pos">{pick.positions[0]}</span>
                           <span className="draft-cell-name">{shortName(pick.playerName)}</span>
                         </span>
                       ) : isCurrent ? (

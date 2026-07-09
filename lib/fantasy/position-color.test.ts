@@ -8,11 +8,11 @@ describe("positionGroup", () => {
     expect(positionGroup("P")).toBe("pitcher");
   });
 
-  it("maps infield and outfield families", () => {
-    expect(positionGroup("1B")).toBe("corner-infield");
-    expect(positionGroup("3B")).toBe("corner-infield");
-    expect(positionGroup("2B")).toBe("middle-infield");
-    expect(positionGroup("SS")).toBe("middle-infield");
+  it("gives each infield spot its own family, plus outfield and catcher", () => {
+    expect(positionGroup("1B")).toBe("first-base");
+    expect(positionGroup("2B")).toBe("second-base");
+    expect(positionGroup("3B")).toBe("third-base");
+    expect(positionGroup("SS")).toBe("shortstop");
     expect(positionGroup("OF")).toBe("outfield");
     expect(positionGroup("C")).toBe("catcher");
   });
