@@ -8,7 +8,16 @@ export type LineupLockMode = "daily" | "weekly" | "first-game";
 
 export type DraftType = "snake" | "auction" | "offline";
 
-export type PlayerPool = "all" | "al" | "nl";
+export type PlayerPool =
+  | "all"
+  | "al"
+  | "nl"
+  | "al-east"
+  | "al-central"
+  | "al-west"
+  | "nl-east"
+  | "nl-central"
+  | "nl-west";
 
 export type StatCategory =
   | "R"

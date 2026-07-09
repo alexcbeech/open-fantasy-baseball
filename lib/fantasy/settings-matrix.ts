@@ -35,7 +35,17 @@ export const waiverModes: WaiverMode[] = ["rolling", "faab"];
 export const tradeReviewModes: TradeReviewMode[] = ["league-vote", "commissioner", "none"];
 export const lineupLockModes: LineupLockMode[] = ["daily", "weekly", "first-game"];
 export const draftTypes: DraftType[] = ["snake", "auction", "offline"];
-export const playerPools: PlayerPool[] = ["all", "al", "nl"];
+export const playerPools: PlayerPool[] = [
+  "all",
+  "al",
+  "nl",
+  "al-east",
+  "al-central",
+  "al-west",
+  "nl-east",
+  "nl-central",
+  "nl-west",
+];
 export const draftPickSecondsOptions = [30, 60, 90, 120] as const;
 export const scoringPeriods = ["daily", "weekly"] as const;
 

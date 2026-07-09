@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LeagueCreateForm } from "./league-create-form";
 import { defaultCreateLeagueInput } from "@/lib/fantasy/league-create";
-import { defaultHitterCategories, defaultPitcherCategories, defaultRosterSlots } from "@/lib/fantasy/defaults";
+import { defaultHitterCategories, defaultPitcherCategories } from "@/lib/fantasy/defaults";
 
 export default function NewLeaguePage() {
   return (
@@ -22,7 +22,8 @@ export default function NewLeaguePage() {
           <LeagueCreateForm defaults={defaultCreateLeagueInput} />
 
           <aside className="panel">
-            <h2>Default Setup</h2>
+            <h2>Scoring Categories</h2>
+            <p className="subtle">Roster slots, player pool, and playoff teams are set in the form. Categories use the OFB defaults.</p>
             <div className="setting-list">
               <div className="setting-row">
                 <span>Hitting</span>
@@ -31,18 +32,6 @@ export default function NewLeaguePage() {
               <div className="setting-row">
                 <span>Pitching</span>
                 <strong>{defaultPitcherCategories.join(", ")}</strong>
-              </div>
-              <div className="setting-row">
-                <span>IL</span>
-                <strong>{defaultRosterSlots.IL}</strong>
-              </div>
-              <div className="setting-row">
-                <span>Bench</span>
-                <strong>{defaultRosterSlots.BN}</strong>
-              </div>
-              <div className="setting-row">
-                <span>Playoffs</span>
-                <strong>6 teams</strong>
               </div>
             </div>
           </aside>

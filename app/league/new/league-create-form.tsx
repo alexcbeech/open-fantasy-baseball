@@ -35,6 +35,12 @@ const playerPoolLabels: Record<string, string> = {
   all: "All MLB",
   al: "AL Only",
   nl: "NL Only",
+  "al-east": "AL East Only",
+  "al-central": "AL Central Only",
+  "al-west": "AL West Only",
+  "nl-east": "NL East Only",
+  "nl-central": "NL Central Only",
+  "nl-west": "NL West Only",
 };
 
 type LeagueCreateFormProps = {
@@ -73,6 +79,9 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
       draftType: formData.get("draftType"),
       playerPool: formData.get("playerPool"),
       draftPickSeconds: formData.get("draftPickSeconds"),
+      benchSlots: formData.get("benchSlots"),
+      ilSlots: formData.get("ilSlots"),
+      playoffTeamCount: formData.get("playoffTeamCount"),
       allowNA: formData.has("allowNA"),
       allowILPlus: formData.has("allowILPlus"),
     };
@@ -226,6 +235,22 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
           </select>
         </label>
       </div>
+
+      <div className="field-grid">
+        <label className="field">
+          <span>Bench Slots</span>
+          <input name="benchSlots" inputMode="numeric" defaultValue={defaults.benchSlots} />
+        </label>
+        <label className="field">
+          <span>IL Slots</span>
+          <input name="ilSlots" inputMode="numeric" defaultValue={defaults.ilSlots} />
+        </label>
+      </div>
+
+      <label className="field">
+        <span>Playoff Teams</span>
+        <input name="playoffTeamCount" inputMode="numeric" defaultValue={defaults.playoffTeamCount} />
+      </label>
 
       <label className="check-row">
         <input name="allowNA" type="checkbox" defaultChecked={defaults.allowNA} />
