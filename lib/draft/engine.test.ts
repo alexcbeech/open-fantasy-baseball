@@ -41,7 +41,6 @@ describe("orderStrategyFor", () => {
   it("uses snake for snake drafts and linear otherwise", () => {
     expect(orderStrategyFor("snake")).toBe(snakeOrderStrategy);
     expect(orderStrategyFor("offline")).toBe(linearOrderStrategy);
-    expect(orderStrategyFor("auction")).toBe(linearOrderStrategy);
   });
 });
 

@@ -27,7 +27,6 @@ const lineupLockLabels: Record<string, string> = {
 
 const draftTypeLabels: Record<string, string> = {
   snake: "Snake",
-  auction: "Auction",
   offline: "Offline",
 };
 
