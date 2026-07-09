@@ -211,12 +211,19 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
     };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
-    await client.query(
-      `update ingestion_run
-       set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2
-       where id = $3`,
-      [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
-    );
+    // Record the failure so it shows as a failed run in the admin panel rather
+    // than leaving the data silently stale. The 'started' row was inserted
+    // before `begin`, so it survived the rollback and this update commits in
+    // autocommit. Swallow a secondary failure here (e.g. a dead connection) so
+    // the original error is what propagates and fails the sync.
+    await client
+      .query(
+        `update ingestion_run
+         set status = 'failed', finished_at = now(), rows_seen = $1, error_message = $2
+         where id = $3`,
+        [rowsSeen, error instanceof Error ? error.message : String(error), ingestionRunId],
+      )
+      .catch(() => undefined);
     throw error;
   } finally {
     client.release();
