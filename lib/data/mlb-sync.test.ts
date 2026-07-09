@@ -61,16 +61,63 @@ describe("syncMlbSchedule game-type filtering", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
-    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [{ id: "player-1" }] }));
+    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] as unknown[] }));
 
     const rowsSeen = await syncMlbSchedule({ query });
 
     expect(rowsSeen).toBe(2);
     const gameInserts = query.mock.calls.filter(([sql]) => sql.includes("insert into mlb_game"));
     expect(gameInserts).toHaveLength(1);
-    expect(gameInserts[0][1]?.[0]).toBe(2);
+    // The batched insert's first parameter is the game_pk array.
+    expect(gameInserts[0][1]?.[0]).toEqual([2]);
     // No player upsert for the All-Star probable pitchers either.
     expect(query.mock.calls.some(([sql]) => sql.includes("insert into player"))).toBe(false);
+  });
+
+  it("batches probable pitcher upserts and maps their ids into game rows", async () => {
+    const schedulePayload = {
+      dates: [
+        {
+          games: [
+            {
+              gamePk: 7,
+              gameType: "R",
+              gameDate: "2026-07-10T23:00:00Z",
+              teams: {
+                away: { team: { id: 121 }, probablePitcher: { id: 800001, fullName: "Away Ace" } },
+                home: { team: { id: 143 }, probablePitcher: { id: 800002, fullName: "Home Ace" } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
+    );
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("insert into player")) {
+        return {
+          rows: [
+            { id: "uuid-away", mlb_player_id: 800001 },
+            { id: "uuid-home", mlb_player_id: 800002 },
+          ],
+        };
+      }
+      return { rows: [] as unknown[] };
+    });
+
+    await syncMlbSchedule({ query });
+
+    const pitcherUpserts = query.mock.calls.filter(([sql]) => sql.includes("insert into player"));
+    expect(pitcherUpserts).toHaveLength(1);
+    expect(pitcherUpserts[0][1]?.[0]).toEqual([800001, 800002]);
+
+    const gameInsert = query.mock.calls.find(([sql]) => sql.includes("insert into mlb_game"));
+    // Columns 9 and 10 of the batched insert are the home/away pitcher uuids.
+    expect(gameInsert?.[1]?.[8]).toEqual(["uuid-home"]);
+    expect(gameInsert?.[1]?.[9]).toEqual(["uuid-away"]);
   });
 });
 
