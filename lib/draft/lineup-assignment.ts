@@ -14,43 +14,95 @@ export type LineupAssignment = {
 
 const dedicatedSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];
 const flexSlots: RosterSlot[] = ["UTIL", "P"];
+// Per-player try order: dedicated first so flex stays open, bench last.
+const assignableSlots: RosterSlot[] = [...dedicatedSlots, ...flexSlots, "BN"];
+
+type SeatablePlayer = { positions: readonly RosterSlot[]; status: AssignablePlayer["status"] };
 
 /**
- * Greedy initial-lineup assignment for a freshly drafted roster: fill
- * dedicated starting slots first, then flex (UTIL/P), overflow to bench.
- * Scarce-position players are placed before flexible ones so a C/1B player
- * doesn't burn the only C slot a pure catcher needed.
+ * Seat players into slots (dedicated → flex → bench) using augmenting-path
+ * matching: when a player's slots are all taken, an existing occupant is
+ * relocated if any rearrangement allows it. Seats the maximum possible number
+ * of players; the returned map omits players no arrangement can seat.
  */
-export function planInitialLineup(players: AssignablePlayer[], slotCounts: Record<RosterSlot, number>): LineupAssignment[] {
-  const remaining: Record<RosterSlot, number> = { ...slotCounts };
-  const assignments: LineupAssignment[] = [];
+function seatPlayers(players: SeatablePlayer[], slotCounts: Record<RosterSlot, number>): Map<number, RosterSlot> {
+  const capacity = new Map<RosterSlot, number>(assignableSlots.map((slot) => [slot, slotCounts[slot] ?? 0]));
+  const occupants = new Map<RosterSlot, number[]>(assignableSlots.map((slot) => [slot, []]));
+  const seatBySlot = new Map<number, RosterSlot>();
 
-  // Fewest eligible dedicated slots first = most constrained first.
-  const ordered = [...players].sort(
-    (a, b) => countEligibleDedicated(a, slotCounts) - countEligibleDedicated(b, slotCounts),
-  );
+  const seat = (index: number, slot: RosterSlot) => {
+    occupants.get(slot)?.push(index);
+    seatBySlot.set(index, slot);
+  };
 
-  for (const player of ordered) {
-    const slotOrder = [...dedicatedSlots, ...flexSlots, "BN" as RosterSlot];
-    const slot = slotOrder.find(
-      (candidate) => (remaining[candidate] ?? 0) > 0 && isSlotEligibleForPlayer(player, candidate),
+  const tryPlace = (index: number, visited: Set<RosterSlot>): boolean => {
+    const player = players[index];
+    const slots = assignableSlots.filter(
+      (slot) => !visited.has(slot) && (capacity.get(slot) ?? 0) > 0 && isSlotEligibleForPlayer(player, slot),
     );
 
-    // BN is universal, so this only falls through when the bench itself is
-    // full — possible if rounds exceed countable slots; park on BN anyway
-    // and let the manager resolve via the lineup editor's validation.
-    const resolved = slot ?? "BN";
-
-    if (remaining[resolved] !== undefined) {
-      remaining[resolved] -= 1;
+    for (const slot of slots) {
+      if ((occupants.get(slot)?.length ?? 0) < (capacity.get(slot) ?? 0)) {
+        seat(index, slot);
+        return true;
+      }
     }
 
-    assignments.push({ playerId: player.playerId, slot: resolved });
+    for (const slot of slots) {
+      visited.add(slot);
+      const seated = occupants.get(slot) ?? [];
+
+      for (let position = 0; position < seated.length; position += 1) {
+        const [displaced] = seated.splice(position, 1);
+
+        if (tryPlace(displaced, visited)) {
+          seat(index, slot);
+          return true;
+        }
+
+        seated.splice(position, 0, displaced);
+      }
+    }
+
+    return false;
+  };
+
+  // Fewest eligible dedicated slots first = most constrained first, so slot
+  // preference (not just seat count) favors scarce-position players.
+  const order = players
+    .map((_, index) => index)
+    .sort((a, b) => countEligibleDedicated(players[a], slotCounts) - countEligibleDedicated(players[b], slotCounts));
+
+  for (const index of order) {
+    tryPlace(index, new Set());
   }
 
-  return assignments;
+  return seatBySlot;
 }
 
-function countEligibleDedicated(player: AssignablePlayer, slotCounts: Record<RosterSlot, number>): number {
+/**
+ * Initial-lineup assignment for a freshly drafted roster: fill dedicated
+ * starting slots first, then flex (UTIL/P), overflow to bench. Uses matching,
+ * so a player is only left without a seat when no rearrangement could fit
+ * them — such players are parked on BN anyway (overfilling it) and left for
+ * the manager to resolve via the lineup editor's validation.
+ */
+export function planInitialLineup(players: AssignablePlayer[], slotCounts: Record<RosterSlot, number>): LineupAssignment[] {
+  const seats = seatPlayers(players, slotCounts);
+  return players.map((player, index) => ({ playerId: player.playerId, slot: seats.get(index) ?? "BN" }));
+}
+
+/**
+ * Whether every one of these position-sets can occupy some slot (dedicated,
+ * flex, or bench) at once. The draft uses this to refuse picks that could
+ * never fit the roster — the failure mode being a bench overfilled at draft
+ * completion, which then blocks every lineup save for the team.
+ */
+export function rosterFits(positionSets: RosterSlot[][], slotCounts: Record<RosterSlot, number>): boolean {
+  const players = positionSets.map((positions) => ({ positions, status: "active" as const }));
+  return seatPlayers(players, slotCounts).size === players.length;
+}
+
+function countEligibleDedicated(player: SeatablePlayer, slotCounts: Record<RosterSlot, number>): number {
   return dedicatedSlots.filter((slot) => (slotCounts[slot] ?? 0) > 0 && isSlotEligibleForPlayer(player, slot)).length;
 }
