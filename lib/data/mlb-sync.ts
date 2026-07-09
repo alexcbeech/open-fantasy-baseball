@@ -97,6 +97,13 @@ function normalizePosition(position?: string) {
     return "OF";
   }
 
+  // Designated hitters and two-way players are real draftable bats with no
+  // fielding position; "UTIL" eligibility lets them fill the UTIL slot
+  // (two-way players also earn SP/RP from the pitching-stats sync).
+  if (["DH", "TWP"].includes(position)) {
+    return "UTIL";
+  }
+
   return undefined;
 }
 

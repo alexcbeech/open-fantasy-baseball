@@ -57,6 +57,20 @@ describe("isSlotEligibleForPlayer", () => {
     expect(isSlotEligibleForPlayer(pitcher, "UTIL")).toBe(false);
   });
 
+  it("lets a bat-only (UTIL-position) player fill the UTIL slot and nothing else", () => {
+    // DH types (and players the eligibility sync has no fielding position
+    // for) carry only the "UTIL" position — they must still be startable.
+    const designatedHitter = { positions: ["UTIL"] as const, status: "active" as const };
+
+    expect(isSlotEligibleForPlayer(designatedHitter, "UTIL")).toBe(true);
+    expect(isSlotEligibleForPlayer(designatedHitter, "BN")).toBe(true);
+
+    expect(isSlotEligibleForPlayer(designatedHitter, "C")).toBe(false);
+    expect(isSlotEligibleForPlayer(designatedHitter, "1B")).toBe(false);
+    expect(isSlotEligibleForPlayer(designatedHitter, "OF")).toBe(false);
+    expect(isSlotEligibleForPlayer(designatedHitter, "P")).toBe(false);
+  });
+
   it("honors multi-position eligibility", () => {
     const middleInfielder = { positions: ["SS", "3B"] as const, status: "active" as const };
 

@@ -35,7 +35,10 @@ export function isSlotEligibleForPlayer(player: SlotEligibilityPlayer, slot: Ros
   }
 
   if (slot === "UTIL") {
-    return player.positions.some((position) => ["C", "1B", "2B", "3B", "SS", "OF"].includes(position));
+    // "UTIL" as a *position* marks bat-only players (DH types and players the
+    // eligibility sync has no fielding position for) — the UTIL slot is
+    // exactly where they belong.
+    return player.positions.some((position) => ["C", "1B", "2B", "3B", "SS", "OF", "UTIL"].includes(position));
   }
 
   if (slot === "P") {

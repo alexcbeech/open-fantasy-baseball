@@ -27,7 +27,10 @@ export function startsToday(player: Player): boolean {
     return false;
   }
 
-  const everydayEligible = player.positions.some((position) => batterPositions.includes(position) || position === "RP" || position === "P");
+  // "UTIL" as a position = a bat-only (DH-type) player: an everyday hitter.
+  const everydayEligible = player.positions.some(
+    (position) => batterPositions.includes(position) || position === "UTIL" || position === "RP" || position === "P",
+  );
   return everydayEligible || player.probableStarterToday === true;
 }
 
