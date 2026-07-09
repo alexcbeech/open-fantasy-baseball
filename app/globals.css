@@ -2231,6 +2231,10 @@ p.player-meta,
   width: 20px;
 }
 
+.commissioner-actions {
+  margin-bottom: 14px;
+}
+
 .status-banner {
   border-radius: 8px;
   font-size: 13px;

@@ -65,6 +65,31 @@ export async function getTeamAccess(teamId: string, identity: ApiIdentity): Prom
   return row.is_member ? "member" : "none";
 }
 
+/** Whether the identity is the league's commissioner (or a co-commissioner). */
+export async function isLeagueCommissioner(leagueId: string, identity: ApiIdentity): Promise<boolean> {
+  if (!isDatabaseConfigured() || !isUuid(leagueId)) {
+    return false;
+  }
+
+  const result = await query<{ is_commissioner: boolean }>(
+    `select
+       exists (
+         select 1 from app_user cu
+         where cu.id = l.commissioner_user_id and (cu.id::text = $2 or cu.email = $3)
+       ) or exists (
+         select 1 from league_member lm
+         join app_user lu on lu.id = lm.user_id
+         where lm.league_id = l.id and lm.role in ('commissioner', 'co_commissioner')
+           and (lu.id::text = $2 or lu.email = $3)
+       ) as is_commissioner
+     from league l
+     where l.id = $1`,
+    [leagueId, identity.userId, identity.email],
+  );
+
+  return Boolean(result.rows[0]?.is_commissioner);
+}
+
 export async function getLeagueAccess(leagueId: string, identity: ApiIdentity): Promise<"member" | "none" | "not-found"> {
   if (!isUuid(leagueId)) {
     return "not-found";

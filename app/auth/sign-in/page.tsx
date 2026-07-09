@@ -6,11 +6,20 @@ import { SignInForm } from "./sign-in-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function SignInPage() {
+type SignInPageProps = {
+  searchParams: Promise<{
+    next?: string;
+  }>;
+};
+
+export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const { next: rawNext } = await searchParams;
+  // Only league-invite landings may override the destination (no open redirect).
+  const next = rawNext?.startsWith("/join/") ? rawNext : undefined;
   const [currentUser, setup] = await Promise.all([getCurrentOfbUser(), Promise.resolve(getAuthSetupStatus())]);
 
   if (currentUser && isNeonAuthConfigured()) {
-    redirect("/");
+    redirect(next ?? "/");
   }
 
   return (
@@ -30,7 +39,11 @@ export default async function SignInPage() {
         <div className="panel auth-page-panel">
           <h1>Sign in</h1>
           <p className="subtle">Use your Neon Auth account to manage teams, preferences, and owner API tokens.</p>
-          {isNeonAuthConfigured() ? <SignInForm signupsEnabled={areSignupsEnabled()} /> : <AuthSetupNotice setup={setup} />}
+          {isNeonAuthConfigured() ? (
+            <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
+          ) : (
+            <AuthSetupNotice setup={setup} />
+          )}
         </div>
       </section>
     </main>

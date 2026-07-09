@@ -5,8 +5,9 @@ import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
-import { getTeamAccess } from "@/lib/auth/team-access";
+import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
+import { LeagueInviteButton } from "./league-invite-button";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
@@ -61,6 +62,8 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   const watchItems = selectedTab === "Team" ? await getPlayerWatchForTeam(teamId) : [];
   const matchupDetails = selectedTab === "Matchup" ? await getMatchupDetailsForTeam(teamId) : null;
   const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;
+  const viewerIsCommissioner =
+    selectedTab === "League" && team && currentUser ? await isLeagueCommissioner(team.leagueId, currentUser) : false;
 
   if (!team) {
     notFound();
@@ -121,7 +124,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           matchupDetails ? <MatchupTab matchup={matchupDetails} teamId={team.id} /> : <MatchupEmptyState teamName={team.teamName} />
         ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
-        {selectedTab === "League" && leagueOverview ? <LeagueTab overview={leagueOverview} /> : null}
+        {selectedTab === "League" && leagueOverview ? (
+          <LeagueTab overview={leagueOverview} canInvite={viewerIsCommissioner} />
+        ) : null}
       </section>
     </main>
   );
@@ -158,7 +163,7 @@ function PlayersTab({ teamId, players }: { teamId: string; players: Player[] }) 
   return <PlayersBrowser teamId={teamId} players={players} />;
 }
 
-function LeagueTab({ overview }: { overview: LeagueOverview }) {
+function LeagueTab({ overview, canInvite }: { overview: LeagueOverview; canInvite: boolean }) {
   return (
     <div className="content-grid">
       <section className="panel" aria-labelledby="standings-heading">
@@ -190,6 +195,11 @@ function LeagueTab({ overview }: { overview: LeagueOverview }) {
 
       <aside className="panel" aria-labelledby="settings-heading">
         <h3 id="settings-heading">Commissioner</h3>
+        {canInvite ? (
+          <div className="commissioner-actions">
+            <LeagueInviteButton leagueId={overview.leagueId} />
+          </div>
+        ) : null}
         <div className="setting-list">
           <div className="setting-row">
             <span>Teams</span>
