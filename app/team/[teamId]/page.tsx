@@ -8,6 +8,7 @@ import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
+import { LeagueStandings } from "./league-standings";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
@@ -168,29 +169,7 @@ function LeagueTab({ overview, canInvite }: { overview: LeagueOverview; canInvit
     <div className="content-grid">
       <section className="panel" aria-labelledby="standings-heading">
         <h2 id="standings-heading">Standings</h2>
-        <table className="standings-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Team</th>
-              <th>Record</th>
-              <th>Pts</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overview.standings.map((row) => (
-              <tr key={row.teamId}>
-                <td>{row.rank}</td>
-                <td>
-                  <span className="player-name">{row.teamName}</span>
-                  <span className="player-meta">{row.managerName}</span>
-                </td>
-                <td>{row.record}</td>
-                <td>{row.points}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <LeagueStandings standings={overview.standings} />
       </section>
 
       <aside className="panel" aria-labelledby="settings-heading">

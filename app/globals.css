@@ -2423,6 +2423,24 @@ p.player-meta,
   text-transform: uppercase;
 }
 
+/* Team cell as a tap target: opens that team's current lineup. */
+.standings-team-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+@media (hover: hover) {
+  .standings-team-button:hover .player-name {
+    text-decoration: underline;
+  }
+}
+
 .api-docs-hero {
   display: grid;
   gap: 10px;
