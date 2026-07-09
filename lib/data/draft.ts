@@ -577,13 +577,17 @@ export async function makePick(leagueId: string, playerId: string, viewerUserId:
 
     const onClock = teamForPick(context, context.draft.current_overall_pick);
     const commissioner = await isCommissioner(client, leagueId, viewerUserId);
+    const isMyTurn = onClock.manager_user_id === viewerUserId;
 
-    if (!commissioner && onClock.manager_user_id !== viewerUserId) {
-      throw new DraftError("It is not your turn to pick.", 403);
-    }
-
-    if (onClock.is_bot && !commissioner) {
-      throw new DraftError("A bot is on the clock.", 403);
+    // A pick may only be made for the team on the clock, and only by that
+    // team's manager. The commissioner may act for a bot on the clock, but not
+    // for another manager's live turn — a stalled human turn is resolved by
+    // advanceExpiredTurns (auto-pick) above, not by a commissioner override.
+    if (!isMyTurn && !(commissioner && onClock.is_bot)) {
+      throw new DraftError(
+        onClock.is_bot ? "A bot is on the clock." : "It is not your turn to pick.",
+        403,
+      );
     }
 
     const eligible = await client.query(

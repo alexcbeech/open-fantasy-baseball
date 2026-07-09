@@ -9,6 +9,7 @@ import type { DraftPlayer, DraftState } from "@/lib/draft/types";
 import type { DraftLobby } from "@/lib/data/draft";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { rowPoints } from "@/lib/fantasy/player-view";
+import { positionGroupClass, positionGroupLegend } from "@/lib/fantasy/position-color";
 import type { RosterSlot } from "@/lib/fantasy/types";
 import { PickSheet } from "./pick-sheet";
 import { SetupPanel } from "./setup-panel";
@@ -16,7 +17,13 @@ import { SetupPanel } from "./setup-panel";
 const POLL_MS = 3000;
 const positionFilters: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];
 const roomTabs = ["Players", "Board", "My Team"] as const;
+const sortOptions = [
+  { key: "adp", label: "ADP" },
+  { key: "proj", label: "Proj Pts" },
+  { key: "season", label: "Season Pts" },
+] as const;
 
+type SortKey = (typeof sortOptions)[number]["key"];
 type RoomTab = (typeof roomTabs)[number];
 
 type DraftRoomProps = {
@@ -35,6 +42,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
   const [tab, setTab] = useState<RoomTab>("Players");
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<RosterSlot | "ALL">("ALL");
+  const [sortKey, setSortKey] = useState<SortKey>("adp");
   const [sheetPlayerId, setSheetPlayerId] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,13 +158,25 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
 
   const filteredPlayers = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return players.filter((player) => {
+    const matched = players.filter((player) => {
       if (position !== "ALL" && !player.positions.includes(position)) {
         return false;
       }
       return normalized ? player.name.toLowerCase().includes(normalized) : true;
     });
-  }, [players, query, position]);
+
+    // ADP keeps the server's rank order (best-available first); the points
+    // sorts rank highest-first with unknowns last.
+    if (sortKey === "adp") {
+      return matched;
+    }
+
+    return [...matched].sort((left, right) => {
+      const leftPts = sortKey === "proj" ? rowPoints(left).projPts : rowPoints(left).seasonPts;
+      const rightPts = sortKey === "proj" ? rowPoints(right).projPts : rowPoints(right).seasonPts;
+      return rightPts - leftPts || left.name.localeCompare(right.name);
+    });
+  }, [players, query, position, sortKey]);
 
   async function confirmPick(playerId: string) {
     setBusy(true);
@@ -248,6 +268,11 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
 
   const onClockTeam = draft.onClock ? teamsById.get(draft.onClock.teamId) : null;
   const sheetPlayer = sheetPlayerId ? (players.find((player) => player.id === sheetPlayerId) ?? null) : null;
+  // Mirrors the server rule in makePick: you may pick on your own turn, and the
+  // commissioner may pick only for a bot on the clock — never another manager's
+  // live turn.
+  const canPickNow =
+    (isMyTurn || (draft.viewerIsCommissioner && Boolean(onClockTeam?.isBot))) && draft.status === "in_progress";
   const clockClass =
     remainingSeconds !== null && remainingSeconds <= 10 ? "draft-clock-time urgent" : "draft-clock-time";
 
@@ -340,6 +365,30 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
             ))}
           </div>
 
+          <div className="draft-sort" role="group" aria-label="Sort players">
+            <span className="draft-sort-label">Sort</span>
+            {sortOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                className={sortKey === option.key ? "filter-chip active" : "filter-chip"}
+                aria-pressed={sortKey === option.key}
+                onClick={() => setSortKey(option.key)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="player-list-head" aria-hidden="true">
+            <span className="draft-adp-rank">#</span>
+            <span className="player-list-head-spacer" />
+            <span className="player-points">
+              <span className="points-live">SZN</span>
+              <span className="points-proj">PROJ</span>
+            </span>
+          </div>
+
           <div className="player-list" aria-live="polite">
             {filteredPlayers.length ? (
               filteredPlayers.map((player) => {
@@ -419,11 +468,11 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
         <PickSheet
           player={sheetPlayer}
           pickLabel={draft.onClock ? pickLabel(draft.onClock.round, draft.onClock.pickInRound) : null}
-          canPick={(isMyTurn || draft.viewerIsCommissioner) && draft.status === "in_progress"}
+          canPick={canPickNow}
           disabledReason={
             draft.status === "paused"
               ? "The draft is paused."
-              : isMyTurn || draft.viewerIsCommissioner
+              : canPickNow
                 ? null
                 : `${onClockTeam?.name ?? "Another team"} is on the clock.`
           }
@@ -443,6 +492,14 @@ function DraftBoard({ draft }: { draft: DraftState }) {
   return (
     <section className="panel" aria-labelledby="draft-board-heading">
       <h2 id="draft-board-heading">Draft Board</h2>
+      <div className="draft-board-legend" aria-label="Position color key">
+        {positionGroupLegend.map(({ group, label }) => (
+          <span className="draft-legend-item" key={group}>
+            <span className={`draft-legend-swatch pos-group-${group}`} aria-hidden="true" />
+            {label}
+          </span>
+        ))}
+      </div>
       <div className="draft-board-scroll">
         <table className="draft-board">
           <thead>
@@ -466,8 +523,18 @@ function DraftBoard({ draft }: { draft: DraftState }) {
                   const pick = picksByOverall.get(overall);
                   const isCurrent = draft.onClock?.overallPick === overall;
 
+                  // The position class sets --pos on the whole cell, tinting
+                  // its background and left accent (see globals.css).
+                  const cellClass = [
+                    "draft-cell",
+                    isCurrent ? "current" : "",
+                    pick ? positionGroupClass(pick.positions[0]) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
                   return (
-                    <td key={team.teamId} className={isCurrent ? "draft-cell current" : "draft-cell"}>
+                    <td key={team.teamId} className={cellClass}>
                       {pick ? (
                         <span className="draft-cell-pick">
                           <span className="draft-cell-pos">{pick.positions[0]}</span>
