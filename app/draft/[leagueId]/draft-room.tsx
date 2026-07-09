@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
@@ -37,6 +38,7 @@ function pickLabel(round: number, pickInRound: number) {
 }
 
 export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProps) {
+  const router = useRouter();
   const [draft, setDraft] = useState<DraftState | null>(initialDraft);
   const [players, setPlayers] = useState<DraftPlayer[]>(initialPlayers);
   const [tab, setTab] = useState<RoomTab>("Players");
@@ -143,6 +145,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
   }, [draft?.deadline, draft?.status, nowTick]);
 
   const teamsById = useMemo(() => new Map((draft?.teams ?? []).map((team) => [team.teamId, team])), [draft?.teams]);
+  const queuedIds = useMemo(() => new Set((draft?.myQueue ?? []).map((entry) => entry.playerId)), [draft?.myQueue]);
   const myPicks = useMemo(
     () => (draft?.myTeamId ? draft.picks.filter((pick) => pick.teamId === draft.myTeamId) : []),
     [draft?.picks, draft?.myTeamId],
@@ -233,6 +236,64 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
     }
   }
 
+  // Add/remove a player from the viewer's queue; the server returns fresh state.
+  async function changeQueue(playerId: string, queued: boolean) {
+    setBanner(null);
+
+    try {
+      const response = await fetch(`/api/v1/leagues/${lobby.leagueId}/draft/queue`, {
+        method: queued ? "DELETE" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerId }),
+      });
+      const result = (await response.json()) as { error?: string; draft?: DraftState };
+
+      if (!response.ok || !result.draft) {
+        setBanner(result.error ?? "Could not update your queue.");
+        return;
+      }
+
+      applyDraft(result.draft);
+    } catch {
+      setBanner("Could not update your queue.");
+    }
+  }
+
+  async function setAutoDraft(enabled: boolean) {
+    setBusy(true);
+    setBanner(null);
+
+    try {
+      const response = await fetch(`/api/v1/leagues/${lobby.leagueId}/draft/auto-pick`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const result = (await response.json()) as { error?: string; draft?: DraftState };
+
+      if (!response.ok || !result.draft) {
+        setBanner(result.error ?? "Could not update auto-draft.");
+        return false;
+      }
+
+      applyDraft(result.draft);
+      return true;
+    } catch {
+      setBanner("Could not update auto-draft.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Exit the draft: turn auto-draft on so the viewer's remaining turns fill
+  // themselves (from the queue, else best-available), then leave the room.
+  async function exitDraft() {
+    if (await setAutoDraft(true)) {
+      router.push("/");
+    }
+  }
+
   // Setup phase: commissioner configures; everyone else waits.
   if (!draft || draft.status === "setup") {
     if (lobby.viewerIsCommissioner) {
@@ -301,6 +362,35 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
           ) : null}
         </div>
       </div>
+
+      {draft.myTeamId ? (
+        <div className="draft-controls">
+          <button
+            className={draft.myAutoPick ? "draft-auto-toggle on" : "draft-auto-toggle"}
+            type="button"
+            disabled={busy}
+            aria-pressed={draft.myAutoPick}
+            onClick={() => setAutoDraft(!draft.myAutoPick)}
+          >
+            Auto-draft: {draft.myAutoPick ? "On" : "Off"}
+          </button>
+          {!draft.myAutoPick ? (
+            <button className="draft-exit-button" type="button" disabled={busy} onClick={exitDraft}>
+              Exit draft
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {draft.myAutoPick ? (
+        <div className="draft-auto-warning" role="alert">
+          <strong>Auto-draft is on.</strong> Your picks are being made automatically from your queue, then best available.
+          Turn it off to draft manually again.
+          <button className="draft-auto-off" type="button" disabled={busy} onClick={() => setAutoDraft(false)}>
+            Turn off auto-draft
+          </button>
+        </div>
+      ) : null}
 
       {banner ? <div className="status-banner bad">{banner}</div> : null}
 
@@ -394,28 +484,42 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
               filteredPlayers.map((player) => {
                 const { seasonPts, projPts } = rowPoints(player);
 
+                const queued = queuedIds.has(player.id);
+
                 return (
-                  <button
-                    className="row players-row"
-                    type="button"
-                    key={player.id}
-                    onClick={() => setSheetPlayerId(player.id)}
-                    aria-label={`Draft ${player.name}`}
-                  >
-                    <span className="draft-adp-rank">{player.adpRank ?? "—"}</span>
-                    <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
-                    <span className="player-main">
-                      <span className="player-name">{player.name}</span>
-                      <span className="player-meta">
-                        {player.mlbTeam} &ndash; {player.positions.join(", ")}
-                        {player.adp !== null ? ` · ADP ${player.adp.toFixed(1)}` : ""}
+                  <div className="row players-row" key={player.id}>
+                    <button
+                      className="players-row-main"
+                      type="button"
+                      onClick={() => setSheetPlayerId(player.id)}
+                      aria-label={`View ${player.name}`}
+                    >
+                      <span className="draft-adp-rank">{player.adpRank ?? "—"}</span>
+                      <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
+                      <span className="player-main">
+                        <span className="player-name">{player.name}</span>
+                        <span className="player-meta">
+                          {player.mlbTeam} &ndash; {player.positions.join(", ")}
+                          {player.adp !== null ? ` · ADP ${player.adp.toFixed(1)}` : ""}
+                        </span>
                       </span>
-                    </span>
-                    <span className="player-points" aria-hidden="true">
-                      <span className="points-live">{seasonPts}</span>
-                      <span className="points-proj">{projPts}</span>
-                    </span>
-                  </button>
+                      <span className="player-points" aria-hidden="true">
+                        <span className="points-live">{seasonPts}</span>
+                        <span className="points-proj">{projPts}</span>
+                      </span>
+                    </button>
+                    {draft.myTeamId ? (
+                      <button
+                        className={queued ? "draft-queue-btn queued" : "draft-queue-btn"}
+                        type="button"
+                        aria-label={queued ? `Remove ${player.name} from queue` : `Add ${player.name} to queue`}
+                        aria-pressed={queued}
+                        onClick={() => changeQueue(player.id, queued)}
+                      >
+                        {queued ? "★" : "☆"}
+                      </button>
+                    ) : null}
+                  </div>
                 );
               })
             ) : (
@@ -457,6 +561,32 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
               ) : (
                 <div className="empty-state">You haven&apos;t drafted anyone yet.</div>
               )}
+
+              <h3 className="draft-queue-heading">My Queue</h3>
+              <p className="subtle">Auto-pick (on your clock or when auto-drafting) takes the top available queued player.</p>
+              {draft.myQueue.length ? (
+                <div className="player-list">
+                  {draft.myQueue.map((entry, index) => (
+                    <div className="row" key={entry.playerId}>
+                      <span className="draft-queue-rank">{index + 1}</span>
+                      <span className="player-main">
+                        <span className="player-name">{entry.playerName}</span>
+                        <span className="player-meta">{entry.positions.join(", ")}</span>
+                      </span>
+                      <button
+                        className="draft-queue-btn queued"
+                        type="button"
+                        aria-label={`Remove ${entry.playerName} from queue`}
+                        onClick={() => changeQueue(entry.playerId, true)}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">Your queue is empty. Star players on the Players tab to queue them.</div>
+              )}
             </>
           ) : (
             <div className="empty-state">You don&apos;t have a team in this draft.</div>
@@ -477,7 +607,9 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
                 : `${onClockTeam?.name ?? "Another team"} is on the clock.`
           }
           busy={busy}
+          isQueued={draft.myTeamId ? queuedIds.has(sheetPlayer.id) : null}
           onConfirm={() => confirmPick(sheetPlayer.id)}
+          onToggleQueue={() => changeQueue(sheetPlayer.id, queuedIds.has(sheetPlayer.id))}
           onClose={() => setSheetPlayerId(null)}
         />
       ) : null}

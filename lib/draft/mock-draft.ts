@@ -68,6 +68,9 @@ export function mockDraftState(now = new Date()): DraftState {
     serverNow: now.toISOString(),
     myTeamId: teams[MOCK_PICK_COUNT].teamId,
     viewerIsCommissioner: true,
+    myQueue: [],
+    myAutoPick: false,
+    autoPickTeamIds: teams.filter((team) => team.isBot).map((team) => team.teamId),
   };
 }
 

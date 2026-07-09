@@ -777,9 +777,101 @@ button.row {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+/* Available-player row: a tap area (opens the pick sheet) plus a queue star. */
 .players-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.players-row-main {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  flex: 1;
   gap: 10px;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.draft-queue-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 16px;
+  height: 34px;
+  line-height: 1;
+  width: 34px;
+}
+
+.draft-queue-btn.queued {
+  border-color: #eab308;
+  color: #eab308;
+}
+
+.draft-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.draft-auto-toggle,
+.draft-exit-button {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 8px 12px;
+}
+
+.draft-auto-toggle.on {
+  background: color-mix(in srgb, #f97316 20%, transparent);
+  border-color: #f97316;
+  color: #f97316;
+}
+
+.draft-auto-warning {
+  align-items: center;
+  background: color-mix(in srgb, #f97316 16%, transparent);
+  border: 1px solid #f97316;
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+}
+
+.draft-auto-off {
+  background: #f97316;
+  border: 0;
+  border-radius: 8px;
+  color: #1a1a1a;
+  cursor: pointer;
+  font-weight: 800;
+  margin-left: auto;
+  padding: 7px 12px;
+}
+
+.draft-queue-heading {
+  margin: 18px 0 2px;
+}
+
+.draft-queue-rank {
+  color: var(--muted);
+  font-weight: 900;
+  text-align: center;
 }
 
 .player-info-button {
