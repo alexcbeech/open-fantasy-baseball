@@ -34,9 +34,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Order matters: stats first (writes season / splits / game logs), then
-      # projections (derived from season + trailing splits) and matchups
-      # (recomputed from those fresh season stats). News is independent.
+      # Order matters. Teams/rosters/schedule first so today's games and any
+      # new players exist before stats attribute to them; then stats (season /
+      # splits / game logs), then projections (derived from season + trailing
+      # splits) and matchups (recomputed from those fresh season stats). News
+      # is independent.
+      #
+      # continue-on-error isolates a schedule-sync failure from the rest of the
+      # pipeline (stats/news don't depend on the schedule and should still run),
+      # while the ingestion_run it writes records the failure in the admin
+      # panel's Recent Runs and the guard step below still fails the workflow.
+      - name: Sync MLB teams, rosters, and schedule
+        id: sync_mlb
+        continue-on-error: true
+        run: npm run sync:mlb
+
       - name: Sync player stats (season, splits, game logs)
         run: npm run sync:stats
 
@@ -52,3 +64,12 @@ jobs:
       # (Matchup recompute lives here now, not a standalone sync:matchups step.)
       - name: Process due jobs
         run: npm run jobs:run
+
+      # Surface a schedule-sync failure loudly: the ingestion_run above is
+      # already marked 'failed' (visible in the admin panel), and this turns the
+      # workflow red so the stale schedule is noticed instead of passing silently.
+      - name: Fail if the MLB sync step failed
+        if: steps.sync_mlb.outcome == 'failure'
+        run: |
+          echo "::error::MLB teams/rosters/schedule sync failed — the schedule is stale. See the admin panel's Recent Runs for the error."
+          exit 1
