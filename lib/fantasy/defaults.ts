@@ -44,26 +44,16 @@ export const defaultLeagueSettings: LeagueSettings = {
   waiverProcessingDays: [0, 1, 2, 3, 4, 5, 6],
 };
 
+// Settings the commissioner may change after creation. Structural settings
+// (scoring type, team count, roster slots, categories, draft shape) are fixed
+// once the league exists — they define the draft and the season schedule.
 export const commissionerEditableSettings = [
-  "scoringType",
-  "teamCount",
-  "hitterCategories",
-  "pitcherCategories",
-  "rosterSlots",
-  "inningsMinimumPerMatchup",
   "waiverMode",
   "faabBudget",
   "tradeReview",
   "tradeReviewDays",
-  "playoffTeamCount",
+  "lineupLockMode",
   "waiverProcessingDays",
-  "lineupLockTime",
-  "tradeDeadline",
-  "playoffWeeks",
-  "draftType",
-  "playerPool",
-  "draftPickSeconds",
-  "keeperRules",
   "allowILPlus",
-  "addDropDeadlineDays",
+  "allowNA",
 ] as const;

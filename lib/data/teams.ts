@@ -207,8 +207,15 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
     // or rollback. hashtext maps the team id to the int the lock function takes.
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [teamId]);
 
-    const teamResult = await client.query<{ league_id: string }>("select league_id from fantasy_team where id = $1", [teamId]);
+    const teamResult = await client.query<{ league_id: string; lineup_lock_mode: string | null }>(
+      `select ft.league_id, l.settings->>'lineupLockMode' as lineup_lock_mode
+       from fantasy_team ft
+       join league l on l.id = ft.league_id
+       where ft.id = $1`,
+      [teamId],
+    );
     const leagueId = teamResult.rows[0]?.league_id;
+    const lockMode = teamResult.rows[0]?.lineup_lock_mode === "first-game" ? "first-game" : "daily";
 
     if (!leagueId) {
       throw new LineupSaveError("Team not found.", 404);
@@ -233,7 +240,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       matchupTotal: entry.matchupTotal,
     }));
     const validation = validateLineup(proposedLineup);
-    const lockIssues = findLineupLockIssues(currentLineup, proposedLineup);
+    const lockIssues = findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
     if (lockIssues.length) {
       throw new LineupSaveError(lockIssues[0].message, 409);

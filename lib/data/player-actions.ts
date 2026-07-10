@@ -64,6 +64,11 @@ export async function applyPlayerManagementAction(
         if (player.status !== "injured" && player.status !== "day-to-day") {
           throw new PlayerActionError("Only injured or day-to-day players can be moved to IL.", 422);
         }
+        // IL+ leagues accept day-to-day players; strict IL requires a real
+        // injury designation.
+        if (player.status === "day-to-day" && !team.settings.allowILPlus) {
+          throw new PlayerActionError("Day-to-day players need IL+ slots, which this league has disabled.", 422);
+        }
         await movePlayerToSlot(client, team, teamId, playerId, "IL");
         break;
       case "move-to-na":
