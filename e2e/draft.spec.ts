@@ -41,14 +41,17 @@ test.describe("draft room (mock draft)", () => {
   test("blocks drafting in demo mode with a clear error", async ({ page }) => {
     await page.goto("/draft/league-1");
 
-    // Open the pick sheet from the first available player row.
-    await page.locator("button.players-row").first().click();
+    // Open the pick sheet from the first available player row. The row is a
+    // div wrapper; its clickable body is button.players-row-main.
+    await page.locator("button.players-row-main").first().click();
     const sheet = page.getByRole("dialog", { name: "Draft Player" });
     await expect(sheet).toBeVisible();
 
     // The mock viewer is commissioner, so the button is enabled; the mutating
-    // route then rejects because no database is configured.
+    // route then rejects because no database is configured. This is the first
+    // hit to the draft-pick API route, which Next compiles on demand under the
+    // dev server, so allow extra time for the rejection banner to appear.
     await sheet.getByRole("button", { name: /Draft with pick/ }).click();
-    await expect(page.getByText(/requires a configured database/i)).toBeVisible();
+    await expect(page.getByText(/requires a configured database/i)).toBeVisible({ timeout: 15_000 });
   });
 });
