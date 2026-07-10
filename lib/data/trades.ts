@@ -5,6 +5,7 @@ import { enqueueNotificationForTeam } from "@/lib/data/notifications";
 import { planInitialLineup, type AssignablePlayer } from "@/lib/draft/lineup-assignment";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
+import { nextWaiverProcessingTime } from "@/lib/fantasy/waivers";
 import { tradeIssues, votesNeededToReject, type TradeRosterPlayer } from "@/lib/fantasy/trade-evaluation";
 import type { TradePlayerSummary, TradeStatus, TradeSummary } from "@/lib/fantasy/trade-types";
 import type { LeagueSettings, RosterSlot } from "@/lib/fantasy/types";
@@ -164,11 +165,13 @@ async function executeTrade(client: PoolClient, context: LeagueContext, trade: T
     ...trade.to_drop_player_ids.map((playerId) => ({ playerId, teamId: trade.to_team_id })),
   ];
 
+  const dropClearsAt = nextWaiverProcessingTime(context.settings.waiverProcessingDays ?? [], new Date());
+
   for (const drop of drops) {
-    await client.query(`update roster_entry set dropped_at = now() where team_id = $1 and player_id = $2 and dropped_at is null`, [
-      drop.teamId,
-      drop.playerId,
-    ]);
+    await client.query(
+      `update roster_entry set dropped_at = now(), waiver_until = $3 where team_id = $1 and player_id = $2 and dropped_at is null`,
+      [drop.teamId, drop.playerId, dropClearsAt],
+    );
     await removeLineupEntry(client, drop.teamId, drop.playerId);
   }
 

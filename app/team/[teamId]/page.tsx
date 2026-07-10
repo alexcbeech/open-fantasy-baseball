@@ -64,7 +64,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   const team = await getTeamSummary(teamId);
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const teamLineup = await getLineupForTeam(teamId);
-  const playerPool = selectedTab === "Players" ? await listPlayers() : [];
+  const playerPool = selectedTab === "Players" && team ? await listPlayers({ leagueId: team.leagueId }) : [];
   const watchItems = selectedTab === "Team" ? await getPlayerWatchForTeam(teamId) : [];
   const matchupDetails = selectedTab === "Matchup" ? await getMatchupDetailsForTeam(teamId) : null;
   const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;

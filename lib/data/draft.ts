@@ -511,6 +511,16 @@ async function completeDraft(client: PoolClient, context: DraftContext): Promise
   ]);
   await client.query(`update league set status = 'active', updated_at = now() where id = $1`, [context.league.id]);
 
+  // Initialize the waiver economy: reverse draft order sets waiver priority
+  // (last pick claims first) and every team starts with the league's FAAB
+  // budget. Without this, drafted leagues had null priorities and $0 budgets.
+  for (const [index, team] of [...context.teams].reverse().entries()) {
+    await client.query(
+      `update fantasy_team set waiver_priority = $2, faab_remaining = coalesce(faab_remaining, $3) where id = $1`,
+      [team.team_id, index + 1, context.league.settings.faabBudget ?? 0],
+    );
+  }
+
   // A completed draft starts the season: weekly scoring periods and
   // round-robin matchups through season end, with the current week active.
   await ensureSeasonSchedule(client, context.league.id);

@@ -1,10 +1,19 @@
 import { getPool, isUniqueViolation } from "@/lib/db/client";
 import { getPlayerDetail } from "@/lib/data/players";
+import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
-import type { PlayerDetail, RosterSlot } from "@/lib/fantasy/types";
+import { nextWaiverProcessingTime } from "@/lib/fantasy/waivers";
+import type { LeagueSettings, PlayerDetail, RosterSlot } from "@/lib/fantasy/types";
 import type { PoolClient } from "pg";
 
-export type PlayerManagementAction = "add" | "drop" | "move-to-il" | "move-to-na";
+export type PlayerManagementAction = "add" | "drop" | "move-to-il" | "move-to-na" | "claim" | "cancel-claim";
+
+export type PlayerActionOptions = {
+  /** FAAB bid for a waiver claim; ignored in rolling-priority leagues. */
+  bid?: number;
+  /** Roster-room drop executed if the waiver claim wins. */
+  dropPlayerId?: string;
+};
 
 export class PlayerActionError extends Error {
   constructor(
@@ -17,13 +26,19 @@ export class PlayerActionError extends Error {
 
 type TeamContext = {
   leagueId: string;
+  settings: LeagueSettings;
 };
 
 type PlayerContext = {
   status: PlayerDetail["status"];
 };
 
-export async function applyPlayerManagementAction(teamId: string, playerId: string, action: PlayerManagementAction) {
+export async function applyPlayerManagementAction(
+  teamId: string,
+  playerId: string,
+  action: PlayerManagementAction,
+  options: PlayerActionOptions = {},
+) {
   const client = await getPool().connect();
 
   try {
@@ -38,6 +53,12 @@ export async function applyPlayerManagementAction(teamId: string, playerId: stri
         break;
       case "drop":
         await dropPlayer(client, team, teamId, playerId);
+        break;
+      case "claim":
+        await claimPlayer(client, team, teamId, playerId, options);
+        break;
+      case "cancel-claim":
+        await cancelClaim(client, teamId, playerId);
         break;
       case "move-to-il":
         if (player.status !== "injured" && player.status !== "day-to-day") {
@@ -73,14 +94,31 @@ export async function applyPlayerManagementAction(teamId: string, playerId: stri
 }
 
 async function getTeamContext(client: PoolClient, teamId: string): Promise<TeamContext> {
-  const result = await client.query<{ league_id: string }>("select league_id from fantasy_team where id = $1", [teamId]);
+  const result = await client.query<{ league_id: string; settings: LeagueSettings }>(
+    `select ft.league_id, l.settings
+     from fantasy_team ft
+     join league l on l.id = ft.league_id
+     where ft.id = $1`,
+    [teamId],
+  );
   const team = result.rows[0];
 
   if (!team) {
     throw new PlayerActionError("Team not found.", 404);
   }
 
-  return { leagueId: team.league_id };
+  return { leagueId: team.league_id, settings: team.settings };
+}
+
+/** When the player's current waiver window in this league ends, if any. */
+async function waiverUntil(client: PoolClient, leagueId: string, playerId: string): Promise<Date | null> {
+  const result = await client.query<{ waiver_until: Date | null }>(
+    `select max(waiver_until) as waiver_until
+     from roster_entry
+     where league_id = $1 and player_id = $2 and dropped_at is not null and waiver_until > now()`,
+    [leagueId, playerId],
+  );
+  return result.rows[0]?.waiver_until ?? null;
 }
 
 async function getPlayerContext(client: PoolClient, playerId: string): Promise<PlayerContext> {
@@ -106,6 +144,14 @@ async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, 
 
   if (activeRoster.rows.length) {
     throw new PlayerActionError("Player is already rostered.", 409);
+  }
+
+  // A recently dropped player clears waivers first; adds must go through a
+  // claim so every team gets a shot at them.
+  const onWaiversUntil = await waiverUntil(client, team.leagueId, playerId);
+
+  if (onWaiversUntil) {
+    throw new PlayerActionError("Player is on waivers. Place a waiver claim instead.", 409);
   }
 
   try {
@@ -137,9 +183,9 @@ const addSlotOrder: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP
  * active slot with spare capacity, else BN. Skipped (roster-only add) when the
  * league has no scoring period to attach a lineup row to.
  */
-async function assignLineupSlotForAdd(
+export async function assignLineupSlotForAdd(
   client: PoolClient,
-  team: TeamContext,
+  team: Pick<TeamContext, "leagueId">,
   teamId: string,
   playerId: string,
   player: PlayerContext,
@@ -158,20 +204,20 @@ async function assignLineupSlotForAdd(
     return null;
   }
 
-  const [positionsResult, limitsResult, lineupDateResult] = await Promise.all([
-    client.query<{ position: RosterSlot }>(
-      "select position from player_position_eligibility where player_id = $1 and valid_to is null",
-      [playerId],
-    ),
-    client.query<{ slot: RosterSlot; count: number | string }>(
-      "select slot, count from league_roster_slot where league_id = $1",
-      [team.leagueId],
-    ),
-    client.query<{ lineup_date: Date | string }>(
-      "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
-      [teamId],
-    ),
-  ]);
+  // Sequential on the caller's client: pg serializes per-connection queries
+  // and warns on overlapping query() calls inside a transaction.
+  const positionsResult = await client.query<{ position: RosterSlot }>(
+    "select position from player_position_eligibility where player_id = $1 and valid_to is null",
+    [playerId],
+  );
+  const limitsResult = await client.query<{ slot: RosterSlot; count: number | string }>(
+    "select slot, count from league_roster_slot where league_id = $1",
+    [team.leagueId],
+  );
+  const lineupDateResult = await client.query<{ lineup_date: Date | string }>(
+    "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
+    [teamId],
+  );
   const lineupDate = lineupDateResult.rows[0].lineup_date;
   const usageResult = await client.query<{ slot: RosterSlot; used: number | string }>(
     "select slot, count(*) as used from lineup_entry where team_id = $1 and lineup_date = $2 group by slot",
@@ -203,11 +249,14 @@ async function assignLineupSlotForAdd(
 }
 
 async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string) {
+  // Dropped players sit on waivers until the league's next processing time,
+  // so a hot drop can't be instantly re-added by whoever refreshes first.
+  const clearsAt = nextWaiverProcessingTime(team.settings.waiverProcessingDays ?? [], new Date());
   const result = await client.query(
     `update roster_entry
-     set dropped_at = now()
+     set dropped_at = now(), waiver_until = $3
      where team_id = $1 and player_id = $2 and dropped_at is null`,
-    [teamId, playerId],
+    [teamId, playerId, clearsAt],
   );
 
   if (!result.rowCount) {
@@ -222,6 +271,91 @@ async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string,
     [teamId, playerId],
   );
   await insertTransaction(client, team, teamId, "drop", { playerId });
+}
+
+/**
+ * Place a waiver claim on a player currently clearing waivers. FAAB leagues
+ * bid from their remaining budget; rolling leagues use waiver priority. The
+ * claim must fit the roster — a full roster requires naming a drop — and it
+ * processes at the player's waiver-clear time.
+ */
+async function claimPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string, options: PlayerActionOptions) {
+  const onWaiversUntil = await waiverUntil(client, team.leagueId, playerId);
+
+  if (!onWaiversUntil) {
+    throw new PlayerActionError("Player is not on waivers. Add them directly instead.", 409);
+  }
+
+  const teamRow = await client.query<{ waiver_priority: number | null; faab_remaining: string | number | null }>(
+    `select waiver_priority, faab_remaining from fantasy_team where id = $1`,
+    [teamId],
+  );
+  const faabMode = team.settings.waiverMode === "faab";
+  const bid = faabMode ? Math.max(0, Math.floor(options.bid ?? 0)) : null;
+
+  if (faabMode) {
+    const remaining = Number(teamRow.rows[0]?.faab_remaining ?? 0);
+
+    if ((bid ?? 0) > remaining) {
+      throw new PlayerActionError(`Bid exceeds your remaining FAAB budget ($${remaining}).`, 422);
+    }
+  }
+
+  // The winning claim must produce a legal roster: adding without room
+  // requires a drop named up front.
+  const roster = await client.query<{ player_id: string; positions: RosterSlot[] | null }>(
+    `select re.player_id,
+       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+     from roster_entry re
+     left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+     where re.team_id = $1 and re.dropped_at is null
+     group by re.player_id`,
+    [teamId],
+  );
+
+  if (options.dropPlayerId && !roster.rows.some((row) => row.player_id === options.dropPlayerId)) {
+    throw new PlayerActionError("The player to drop is not on your roster.", 409);
+  }
+
+  const claimPositions = await client.query<{ position: RosterSlot }>(
+    `select position from player_position_eligibility where player_id = $1 and valid_to is null`,
+    [playerId],
+  );
+  const postClaim = [
+    ...roster.rows
+      .filter((row) => row.player_id !== options.dropPlayerId)
+      .map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
+    claimPositions.rows.length ? claimPositions.rows.map((row) => row.position) : (["UTIL"] as RosterSlot[]),
+  ];
+
+  if (!rosterFits(postClaim, team.settings.rosterSlots)) {
+    throw new PlayerActionError("Your roster has no room for this claim. Choose a player to drop with it.", 409);
+  }
+
+  try {
+    await client.query(
+      `insert into waiver_claim (league_id, team_id, add_player_id, drop_player_id, bid_amount, priority_at_claim, process_after)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [team.leagueId, teamId, playerId, options.dropPlayerId ?? null, bid, teamRow.rows[0]?.waiver_priority ?? null, onWaiversUntil],
+    );
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new PlayerActionError("You already have a pending claim for this player.", 409);
+    }
+
+    throw error;
+  }
+}
+
+async function cancelClaim(client: PoolClient, teamId: string, playerId: string) {
+  const result = await client.query(
+    `update waiver_claim set status = 'canceled' where team_id = $1 and add_player_id = $2 and status = 'pending'`,
+    [teamId, playerId],
+  );
+
+  if (!result.rowCount) {
+    throw new PlayerActionError("No pending claim to cancel.", 409);
+  }
 }
 
 async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: string, playerId: string, slot: "IL" | "NA") {

@@ -187,8 +187,18 @@ export type PlayerDetail = Player & {
   news: PlayerNewsItem[];
   statWindows: PlayerStatWindow[];
   gameLog: PlayerGameLog[];
+  /** Waiver context for the viewing team's league; null off waivers. */
+  waiver?: {
+    /** When the player clears waivers (ISO); null once only a claim remains. */
+    until: string | null;
+    myClaimPending: boolean;
+    mode: "faab" | "rolling";
+    faabRemaining: number | null;
+  } | null;
   management: {
     canAdd: boolean;
+    canClaim?: boolean;
+    canCancelClaim?: boolean;
     canDrop: boolean;
     canMoveToIL: boolean;
     canMoveToNA: boolean;

@@ -2423,6 +2423,30 @@ p.player-meta,
   text-transform: uppercase;
 }
 
+/* Waiver context in the player detail sheet. */
+.waiver-note {
+  color: var(--muted);
+  font-weight: 700;
+  margin: 0;
+}
+
+.claim-bid-field {
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.claim-bid-field input {
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 8px 10px;
+  width: 120px;
+}
+
 /* Trade builder: compact selectable player rows in the proposal sheet. */
 .trade-section-heading {
   color: var(--muted);

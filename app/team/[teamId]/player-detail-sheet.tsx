@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LivePlayerStatus, PlayerDetail } from "@/lib/fantasy/types";
-import { PlayerDetailView, type PlayerAction, type PlayerDetailStatusBanner } from "./player-detail-view";
+import { PlayerDetailView, type PlayerAction, type PlayerActionOptions, type PlayerDetailStatusBanner } from "./player-detail-view";
 
 type SheetState =
   | { kind: "loading"; player: PlayerDetail | null; message: string }
@@ -19,6 +19,10 @@ function actionSuccessMessage(action: PlayerAction, player: PlayerDetail): strin
       return `${player.name} was moved to an IL slot.`;
     case "move-to-na":
       return `${player.name} was moved to an NA slot.`;
+    case "claim":
+      return `Waiver claim placed for ${player.name}.`;
+    case "cancel-claim":
+      return `Your waiver claim for ${player.name} was canceled.`;
   }
 }
 
@@ -107,7 +111,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  async function applyAction(action: PlayerAction) {
+  async function applyAction(action: PlayerAction, options?: PlayerActionOptions) {
     const current = state.player;
     if (!current) {
       return;
@@ -119,7 +123,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
       const response = await fetch(`/api/v1/teams/${teamId}/players/${current.id}/actions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...options }),
       });
       const result = (await response.json()) as { player?: PlayerDetail; error?: string };
 
