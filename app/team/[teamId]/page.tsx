@@ -9,6 +9,7 @@ import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
 import { LeagueStandings } from "./league-standings";
+import { TradesPanel } from "./trades-panel";
 import { getLeagueOverview } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
@@ -48,12 +49,16 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   // Team pages are league-private: only members of the team's league (or its
   // commissioner) may view them. The API routes enforce the same rule.
+  let viewerManagesTeam = !isDatabaseConfigured();
+
   if (isDatabaseConfigured() && currentUser) {
     const access = await getTeamAccess(teamId, currentUser);
 
     if (access === "not-found" || access === "none") {
       notFound();
     }
+
+    viewerManagesTeam = access === "manager";
   }
 
   const team = await getTeamSummary(teamId);
@@ -126,7 +131,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
         {selectedTab === "League" && leagueOverview ? (
-          <LeagueTab overview={leagueOverview} canInvite={viewerIsCommissioner} />
+          <LeagueTab overview={leagueOverview} canInvite={viewerIsCommissioner} viewerTeamId={team.id} canTrade={viewerManagesTeam} />
         ) : null}
       </section>
     </main>
@@ -164,13 +169,30 @@ function PlayersTab({ teamId, players }: { teamId: string; players: Player[] }) 
   return <PlayersBrowser teamId={teamId} players={players} />;
 }
 
-function LeagueTab({ overview, canInvite }: { overview: LeagueOverview; canInvite: boolean }) {
+function LeagueTab({
+  overview,
+  canInvite,
+  viewerTeamId,
+  canTrade,
+}: {
+  overview: LeagueOverview;
+  canInvite: boolean;
+  viewerTeamId: string;
+  canTrade: boolean;
+}) {
   return (
     <div className="content-grid">
       <section className="panel" aria-labelledby="standings-heading">
         <h2 id="standings-heading">Standings</h2>
-        <LeagueStandings standings={overview.standings} />
+        <LeagueStandings
+          standings={overview.standings}
+          leagueId={overview.leagueId}
+          viewerTeamId={viewerTeamId}
+          canTrade={canTrade}
+        />
       </section>
+
+      <TradesPanel leagueId={overview.leagueId} viewerTeamId={viewerTeamId} />
 
       <aside className="panel" aria-labelledby="settings-heading">
         <h3 id="settings-heading">Commissioner</h3>

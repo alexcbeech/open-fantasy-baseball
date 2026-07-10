@@ -12,6 +12,8 @@ type TeamLineupSheetProps = {
   teamId: string;
   teamName: string;
   onClose: () => void;
+  /** When set, shows a Propose Trade button that hands off to the trade sheet. */
+  onProposeTrade?: () => void;
 };
 
 /**
@@ -19,7 +21,7 @@ type TeamLineupSheetProps = {
  * tab's standings. Reuses the lineup editor's slot grouping and row layout,
  * minus every editing affordance; the lineup GET is league-member gated.
  */
-export function TeamLineupSheet({ teamId, teamName, onClose }: TeamLineupSheetProps) {
+export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: TeamLineupSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [lineup, setLineup] = useState<LineupPlayer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +88,12 @@ export function TeamLineupSheet({ teamId, teamName, onClose }: TeamLineupSheetPr
           </button>
         </div>
         <p className="move-sheet-subtitle">Current lineup</p>
+
+        {onProposeTrade ? (
+          <button className="secondary-button" type="button" onClick={onProposeTrade}>
+            Propose Trade
+          </button>
+        ) : null}
 
         {error ? <div className="empty-state">{error}</div> : null}
         {!error && !lineup ? <div className="empty-state">Loading lineup&hellip;</div> : null}
