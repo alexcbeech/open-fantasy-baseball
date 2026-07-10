@@ -1,5 +1,6 @@
 import { getPool } from "../db/client";
 import { inningsFromIpNotation } from "@/lib/fantasy/scoring";
+import { ensureSeasonSchedule } from "./season";
 
 type StatMap = Record<string, number | string>;
 
@@ -184,6 +185,10 @@ export async function finalizeEndedMatchups(now = new Date()): Promise<FinalizeM
       matchupsFinalized += locked.rowCount ?? 0;
 
       await client.query(`update scoring_period set status = 'final' where id = $1`, [period.id]);
+
+      // A closed week opens the next one: activate the period covering now
+      // (and extend the schedule if the season ran out of generated weeks).
+      await ensureSeasonSchedule(client, period.league_id, now);
     }
 
     return { periodsFinalized: periods.rows.length, matchupsFinalized };

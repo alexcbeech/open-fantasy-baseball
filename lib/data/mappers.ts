@@ -7,11 +7,17 @@ export type DbTeamSummaryRow = {
   team_name: string;
   manager_name: string;
   scoring_type: TeamSummary["scoringType"];
-  rank: number | null;
   matchup_label: string | null;
+  period_starts: Date | string | null;
+  period_ends: Date | string | null;
   opponent_name: string | null;
   user_score: string | number | null;
   opponent_score: string | number | null;
+};
+
+export type TeamStandingsContext = {
+  record: string;
+  rank: number;
 };
 
 export type DbPlayerRow = {
@@ -49,7 +55,7 @@ function toNumber(value: string | number | null | undefined, fallback = 0) {
   return Number.isNaN(numeric) ? fallback : numeric;
 }
 
-export function mapTeamSummary(row: DbTeamSummaryRow): TeamSummary {
+export function mapTeamSummary(row: DbTeamSummaryRow, standings?: TeamStandingsContext): TeamSummary {
   const userScore = toNumber(row.user_score);
   const opponentScore = toNumber(row.opponent_score);
 
@@ -60,16 +66,33 @@ export function mapTeamSummary(row: DbTeamSummaryRow): TeamSummary {
     teamName: row.team_name,
     managerName: row.manager_name,
     scoringType: row.scoring_type,
-    record: row.scoring_type === "roto" ? "0 pts" : "0-0",
-    rank: row.rank ?? 1,
+    record: standings?.record ?? "0-0",
+    rank: standings?.rank ?? 1,
     matchup: {
       opponentName: row.opponent_name ?? "Season Standings",
       userScore,
       opponentScore,
       periodLabel: row.matchup_label ?? "Season",
-      progressPercent: 50,
+      progressPercent: periodProgressPercent(row.period_starts, row.period_ends),
     },
   };
+}
+
+/** How far through the current scoring period we are, clamped to 0-100. */
+function periodProgressPercent(starts: Date | string | null, ends: Date | string | null, now = new Date()): number {
+  if (!starts || !ends) {
+    return 0;
+  }
+
+  const startMs = new Date(starts).getTime();
+  const endMs = new Date(ends).getTime();
+
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return 0;
+  }
+
+  const ratio = (now.getTime() - startMs) / (endMs - startMs);
+  return Math.round(Math.min(Math.max(ratio, 0), 1) * 100);
 }
 
 export function mapPlayer(row: DbPlayerRow): Player {
