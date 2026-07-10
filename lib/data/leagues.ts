@@ -4,6 +4,7 @@ import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
+import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
 
 type LeagueSettingsRow = {
@@ -84,34 +85,53 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
       );
 
       const teamStats = teamsResult.rows.map(mapLeagueTeamStats);
+      const scoringType = league.scoring_type ?? league.settings.scoringType;
+      const managerByTeam = new Map(teamsResult.rows.map((row) => [row.team_id, row.manager_name]));
 
-      // Standings: W-L-T from finalized matchups, plus accumulated points
-      // (finalized totals + the live score of the current matchup).
-      const records = await teamRecordsForLeague(leagueId);
-      const ranked = rankStandings(
-        teamsResult.rows.map((row) => {
-          const record = records.get(row.team_id);
-          return {
-            teamId: row.team_id,
-            teamName: row.team_name,
-            managerName: row.manager_name,
-            wins: record?.wins ?? 0,
-            losses: record?.losses ?? 0,
-            ties: record?.ties ?? 0,
-            points: (record?.points ?? 0) + toNumber(row.matchup_score),
-          };
-        }),
-      );
-      const standings = ranked.map(
-        (row, index): LeagueStanding => ({
-          teamId: row.teamId,
-          teamName: row.teamName,
-          managerName: row.managerName,
-          rank: index + 1,
-          record: formatRecord(row),
-          points: Math.round(row.points * 10) / 10,
-        }),
-      );
+      let standings: LeagueStanding[];
+
+      if (scoringType === "roto") {
+        // Rotisserie: a season-long table of per-category ranks, no records.
+        const roto = await rotoStandingsForLeague(leagueId);
+        standings = roto.map(
+          (row): LeagueStanding => ({
+            teamId: row.teamId,
+            teamName: row.teamName,
+            managerName: managerByTeam.get(row.teamId) ?? "",
+            rank: row.rank,
+            record: `${row.points} pts`,
+            points: row.points,
+          }),
+        );
+      } else {
+        // Head-to-head: W-L-T from finalized matchups, plus accumulated points
+        // (finalized totals + the live score of the current matchup).
+        const records = await teamRecordsForLeague(leagueId);
+        const ranked = rankStandings(
+          teamsResult.rows.map((row) => {
+            const record = records.get(row.team_id);
+            return {
+              teamId: row.team_id,
+              teamName: row.team_name,
+              managerName: row.manager_name,
+              wins: record?.wins ?? 0,
+              losses: record?.losses ?? 0,
+              ties: record?.ties ?? 0,
+              points: (record?.points ?? 0) + toNumber(row.matchup_score),
+            };
+          }),
+        );
+        standings = ranked.map(
+          (row, index): LeagueStanding => ({
+            teamId: row.teamId,
+            teamName: row.teamName,
+            managerName: row.managerName,
+            rank: index + 1,
+            record: formatRecord(row),
+            points: Math.round(row.points * 10) / 10,
+          }),
+        );
+      }
 
       return {
         leagueId: league.id,
@@ -126,6 +146,67 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
     },
     () => mockLeagueOverview(leagueId),
   );
+}
+
+export type UpdatableLeagueSettings = Partial<
+  Pick<
+    LeagueSettings,
+    | "waiverMode"
+    | "faabBudget"
+    | "tradeReview"
+    | "tradeReviewDays"
+    | "lineupLockMode"
+    | "waiverProcessingDays"
+    | "allowILPlus"
+    | "allowNA"
+  >
+>;
+
+/**
+ * Apply commissioner edits to the post-creation-editable settings. Toggling
+ * NA slots also resizes the league's NA roster slots (0 or 2) so the setting
+ * actually shapes rosters; existing NA occupants keep their slot until moved.
+ */
+export async function updateLeagueSettings(leagueId: string, changes: UpdatableLeagueSettings): Promise<LeagueSettings> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+
+    const current = await client.query<{ settings: LeagueSettings; name: string }>(
+      `select settings, name from league where id = $1 for update`,
+      [leagueId],
+    );
+
+    if (!current.rows[0]) {
+      throw new Error("League not found.");
+    }
+
+    const merged: LeagueSettings = { ...current.rows[0].settings, ...changes };
+
+    if (changes.allowNA !== undefined) {
+      merged.rosterSlots = { ...merged.rosterSlots, NA: changes.allowNA ? 2 : 0 };
+      await client.query(
+        `insert into league_roster_slot (league_id, slot, count)
+         values ($1, 'NA', $2)
+         on conflict (league_id, slot) do update set count = excluded.count`,
+        [leagueId, changes.allowNA ? 2 : 0],
+      );
+    }
+
+    await client.query(`update league set settings = $2::jsonb, updated_at = now() where id = $1`, [
+      leagueId,
+      JSON.stringify(merged),
+    ]);
+    await client.query("commit");
+
+    return { ...merged, id: leagueId, name: current.rows[0].name };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export type LeagueCommissioner = {

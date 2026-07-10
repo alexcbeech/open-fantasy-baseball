@@ -12,7 +12,7 @@ export const createLeagueInputSchema = z
     faabBudget: z.coerce.number().int().min(0).max(1000),
     tradeReview: z.enum([tradeReviewModes[0], tradeReviewModes[1], tradeReviewModes[2]]),
     tradeReviewDays: z.coerce.number().int().min(0).max(7),
-    lineupLockMode: z.enum([lineupLockModes[0], lineupLockModes[1], lineupLockModes[2]]),
+    lineupLockMode: z.enum([lineupLockModes[0], lineupLockModes[1]]),
     draftType: z.enum([draftTypes[0], draftTypes[1]]),
     playerPool: z.enum(playerPools as [PlayerPoolValue, ...PlayerPoolValue[]]).default(defaultLeagueSettings.playerPool),
     draftPickSeconds: z.coerce.number().int().min(15).max(300).default(defaultLeagueSettings.draftPickSeconds),
@@ -50,6 +50,9 @@ export function buildLeagueSettingsFromInput(input: CreateLeagueInput) {
       ...defaultLeagueSettings.rosterSlots,
       BN: input.benchSlots,
       IL: input.ilSlots,
+      // NA slots only exist when the league enables them (previously the
+      // toggle was stored but never shaped the roster).
+      NA: input.allowNA ? 2 : 0,
     },
     allowNA: input.allowNA,
     allowILPlus: input.allowILPlus,

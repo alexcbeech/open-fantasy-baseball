@@ -1,5 +1,5 @@
 import { defaultRosterSlots } from "./defaults";
-import type { LineupPlayer, RosterSlot } from "./types";
+import type { LineupLockMode, LineupPlayer, RosterSlot } from "./types";
 
 export type LineupValidationIssue = {
   code: "duplicate-player" | "slot-overfilled" | "position-ineligible" | "player-status-ineligible" | "player-locked";
@@ -63,25 +63,43 @@ export function isPlayerGameLocked(player: Pick<LineupPlayer["player"], "todaysG
 }
 
 /**
- * Slot changes that would move a game-locked player. Shared by the lineup
- * editor (to reject a locked move with an inline notice) and the lineup API
- * (so the lock is enforced server-side, not just in the UI).
+ * In first-game lock mode the whole lineup locks together when the earliest
+ * game of the day begins; returns that cutoff's passage.
+ */
+export function isLineupFirstGameLocked(lineup: Array<Pick<LineupPlayer, "player">>, now = new Date()): boolean {
+  const starts = lineup
+    .map((entry) => (entry.player.todaysGameStart ? new Date(entry.player.todaysGameStart).getTime() : null))
+    .filter((value): value is number => value !== null);
+
+  return starts.length > 0 && Math.min(...starts) <= now.getTime();
+}
+
+/**
+ * Slot changes that would move a locked player. Daily mode locks each player
+ * at their own game's first pitch; first-game mode locks the whole lineup at
+ * the day's earliest first pitch. Shared by the lineup editor (inline notice)
+ * and the lineup API (so the lock is enforced server-side, not just in UI).
  */
 export function findLineupLockIssues(
   currentLineup: LineupPlayer[],
   proposedLineup: LineupPlayer[],
   now = new Date(),
+  lockMode: LineupLockMode = "daily",
 ): LineupValidationIssue[] {
   const currentSlotByPlayer = new Map(currentLineup.map((entry) => [entry.player.id, entry.slot]));
   const issues: LineupValidationIssue[] = [];
+  const lineupLocked = lockMode === "first-game" && isLineupFirstGameLocked(currentLineup, now);
 
   for (const entry of proposedLineup) {
     const currentSlot = currentSlotByPlayer.get(entry.player.id);
+    const moved = currentSlot !== undefined && currentSlot !== entry.slot;
 
-    if (currentSlot !== undefined && currentSlot !== entry.slot && isPlayerGameLocked(entry.player, now)) {
+    if (moved && (lineupLocked || isPlayerGameLocked(entry.player, now))) {
       issues.push({
         code: "player-locked",
-        message: `${entry.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`,
+        message: lineupLocked
+          ? `${entry.player.name} is locked: the day's first game has started. Lineup changes reopen at the next daily rollover.`
+          : `${entry.player.name} is locked: their game has started. Lineup changes reopen at the next daily rollover.`,
         playerId: entry.player.id,
         slot: entry.slot,
       });

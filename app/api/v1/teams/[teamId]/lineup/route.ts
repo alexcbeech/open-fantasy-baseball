@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamManager, requireTeamViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
+import { getLeagueSettings } from "@/lib/data/leagues";
 import { getLineupForTeam, getTeamSummary, LineupSaveError, saveLineupSlots } from "@/lib/data/teams";
 import { isDatabaseConfigured } from "@/lib/db/client";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
@@ -60,9 +61,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return accessDenied;
   }
 
-  if (!(await findTeam(teamId))) {
+  const team = await findTeam(teamId);
+
+  if (!team) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
+
+  const lockMode = (await getLeagueSettings(team.leagueId)).lineupLockMode ?? "daily";
 
   let body: {
     entries?: Array<{
@@ -106,8 +111,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   const validation = validateLineup(proposedLineup);
   // A player whose MLB game has started is locked in place until the next
-  // daily rollover; the API enforces this so it can't be bypassed client-side.
-  const lockIssues = findLineupLockIssues(currentLineup, proposedLineup);
+  // daily rollover (first-game mode locks the whole lineup at the day's first
+  // pitch); the API enforces this so it can't be bypassed client-side.
+  const lockIssues = findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
   if (!validation.valid || lockIssues.length) {
     return NextResponse.json(

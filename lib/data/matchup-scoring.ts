@@ -1,5 +1,5 @@
 import { getPool } from "../db/client";
-import { inningsFromIpNotation } from "@/lib/fantasy/scoring";
+import { calculateFantasyPoints, inningsFromIpNotation } from "@/lib/fantasy/scoring";
 import { ensureSeasonSchedule } from "./season";
 
 type StatMap = Record<string, number | string>;
@@ -59,7 +59,7 @@ export function compareCategory(
   return homeBetter ? "win" : "loss";
 }
 
-async function activeLineupStats(client: { query: <T>(sql: string, values: unknown[]) => Promise<{ rows: T[] }> }, teamId: string) {
+export async function activeLineupStats(client: { query: <T>(sql: string, values: unknown[]) => Promise<{ rows: T[] }> }, teamId: string) {
   const result = await client.query<{ stats: StatMap }>(
     `select season_stats.stats
      from lineup_entry le
@@ -81,6 +81,12 @@ export type RecomputeMatchupsResult = {
   categoriesWritten: number;
 };
 
+/** Team fantasy-point total across its active lineup, to one decimal. */
+function totalFantasyPoints(statLines: StatMap[]): number {
+  const total = statLines.reduce((sum, line) => sum + calculateFantasyPoints(line), 0);
+  return Math.round(total * 10) / 10;
+}
+
 /**
  * Recompute each active matchup's category battle from the current active
  * lineups' real season stats, updating matchup_category_score and the
@@ -91,10 +97,17 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
   const client = await pool.connect();
 
   try {
-    const matchups = await client.query<{ id: string; league_id: string; home_team_id: string; away_team_id: string }>(
-      `select id, league_id, home_team_id, away_team_id
-       from matchup
-       where status = 'active' ${leagueId ? "and league_id = $1" : ""}`,
+    const matchups = await client.query<{
+      id: string;
+      league_id: string;
+      home_team_id: string;
+      away_team_id: string;
+      scoring_type: string | null;
+    }>(
+      `select m.id, m.league_id, m.home_team_id, m.away_team_id, l.scoring_type
+       from matchup m
+       join league l on l.id = m.league_id
+       where m.status = 'active' ${leagueId ? "and m.league_id = $1" : ""}`,
       leagueId ? [leagueId] : [],
     );
 
@@ -141,7 +154,15 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
         categoriesWritten += 1;
       }
 
-      await client.query(`update matchup set home_score = $1, away_score = $2 where id = $3`, [homeWins, awayWins, matchup.id]);
+      // Category battles still get written for every league (they're shown in
+      // the matchup detail), but the matchup SCORE depends on the league type:
+      // h2h-points compares total fantasy points; categories compares wins.
+      const [homeScore, awayScore] =
+        matchup.scoring_type === "h2h-points"
+          ? [totalFantasyPoints(homeStats), totalFantasyPoints(awayStats)]
+          : [homeWins, awayWins];
+
+      await client.query(`update matchup set home_score = $1, away_score = $2 where id = $3`, [homeScore, awayScore, matchup.id]);
     }
 
     return { matchups: matchups.rows.length, categoriesWritten };

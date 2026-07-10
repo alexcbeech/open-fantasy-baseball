@@ -5,7 +5,12 @@ import { liveLineSummary } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
-export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na";
+export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na" | "claim" | "cancel-claim";
+
+export type PlayerActionOptions = {
+  /** FAAB bid attached to a waiver claim. */
+  bid?: number;
+};
 
 export type PlayerDetailStatusBanner = { kind: "good" | "bad"; message: string };
 
@@ -82,15 +87,16 @@ export function PlayerDetailView({
   player: PlayerDetail;
   actionInFlight: boolean;
   statusBanner?: PlayerDetailStatusBanner | null;
-  onAction: (action: PlayerAction) => void;
+  onAction: (action: PlayerAction, options?: PlayerActionOptions) => void;
   liveStatus?: LivePlayerStatus | null;
   variant?: "panel" | "card";
   /** When provided, a close control is pinned in the sticky header (card variant). */
   onClose?: () => void;
 }) {
   const [tab, setTab] = useState<DetailTab>("overview");
-  // Add/drop are real roster transactions, so they confirm before executing.
-  const [confirmingAction, setConfirmingAction] = useState<"add" | "drop" | null>(null);
+  // Add/drop/claim are real roster transactions; they confirm before executing.
+  const [confirmingAction, setConfirmingAction] = useState<"add" | "drop" | "claim" | null>(null);
+  const [claimBid, setClaimBid] = useState("0");
   const tabbed = variant === "card";
   const health = healthBadges[player.status];
   const summary = seasonSummary(player);
@@ -100,9 +106,11 @@ export function PlayerDetailView({
     if (!confirmingAction) {
       return;
     }
-    onAction(confirmingAction);
+    onAction(confirmingAction, confirmingAction === "claim" ? { bid: Number.parseInt(claimBid, 10) || 0 } : undefined);
     setConfirmingAction(null);
   }
+
+  const confirmTitles = { add: "Add Player", drop: "Drop Player", claim: "Place Waiver Claim" } as const;
 
   return (
     <>
@@ -131,25 +139,52 @@ export function PlayerDetailView({
 
       {statusBanner ? <div className={`status-banner ${statusBanner.kind}`}>{statusBanner.message}</div> : null}
 
+      {player.waiver?.until ? (
+        <p className="player-meta waiver-note">
+          On waivers until {new Date(player.waiver.until).toLocaleString()}
+          {player.waiver.mode === "faab" && player.waiver.faabRemaining !== null
+            ? ` · FAAB remaining: $${player.waiver.faabRemaining}`
+            : ""}
+        </p>
+      ) : null}
+      {player.waiver?.myClaimPending ? <p className="player-meta waiver-note">You have a pending claim for this player.</p> : null}
+
       {confirmingAction ? (
         <div className="confirm-panel" role="alertdialog" aria-labelledby="confirm-action-heading" aria-describedby="confirm-action-detail">
-          <h4 id="confirm-action-heading">{confirmingAction === "add" ? "Add Player" : "Drop Player"}</h4>
+          <h4 id="confirm-action-heading">{confirmTitles[confirmingAction]}</h4>
           <p id="confirm-action-detail">
             {confirmingAction === "add" ? (
               <>
                 Add <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) to your team?
                 They&apos;ll fill an open eligible lineup slot, or your bench if every slot is taken.
               </>
-            ) : (
+            ) : confirmingAction === "drop" ? (
               <>
                 Drop <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) from your team?
-                They&apos;ll leave your lineup immediately and become a free agent anyone can add.
+                They&apos;ll leave your lineup immediately and go on waivers before clearing to free agency.
+              </>
+            ) : (
+              <>
+                Claim <strong>{player.name}</strong> off waivers? The claim processes when they clear
+                {player.waiver?.until ? ` (${new Date(player.waiver.until).toLocaleString()})` : ""}; the best claim wins.
               </>
             )}
           </p>
+          {confirmingAction === "claim" && player.waiver?.mode === "faab" ? (
+            <label className="claim-bid-field">
+              FAAB bid (${player.waiver.faabRemaining ?? 0} available)
+              <input
+                type="number"
+                min={0}
+                max={player.waiver.faabRemaining ?? 0}
+                value={claimBid}
+                onChange={(event) => setClaimBid(event.target.value)}
+              />
+            </label>
+          ) : null}
           <div className="confirm-panel-actions">
             <button className="primary-button" type="button" disabled={actionInFlight} onClick={confirmAction}>
-              {confirmingAction === "add" ? "Confirm Add" : "Confirm Drop"}
+              {confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
             </button>
             <button className="secondary-button" type="button" onClick={() => setConfirmingAction(null)}>
               Cancel
@@ -159,6 +194,21 @@ export function PlayerDetailView({
       ) : null}
 
       <div className="player-actions" aria-label="Player management actions">
+        {player.management.canClaim ? (
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={actionInFlight}
+            onClick={() => setConfirmingAction("claim")}
+          >
+            Claim
+          </button>
+        ) : null}
+        {player.management.canCancelClaim ? (
+          <button className="secondary-button" type="button" disabled={actionInFlight} onClick={() => onAction("cancel-claim")}>
+            Cancel Claim
+          </button>
+        ) : null}
         <button
           className="secondary-button"
           type="button"

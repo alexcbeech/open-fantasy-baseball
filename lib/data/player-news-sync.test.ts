@@ -19,11 +19,13 @@ describe("deriveNewsDrafts", () => {
     expect(deriveNewsDrafts(context(), now)).toEqual([]);
   });
 
-  it("creates an injury item for an injured player stamped at the sync time", () => {
+  it("creates an injury item stamped at the start of the sync day", () => {
     const [item] = deriveNewsDrafts(context({ status: "injured" }), now);
 
     expect(item.headline).toBe("Julio Rodriguez placed on the injured list");
-    expect(item.publishedAt).toBe(now.toISOString());
+    // Day-stable so re-syncs dedupe (and managers get at most one push a day).
+    expect(item.publishedAt).toBe("2026-07-02T00:00:00.000Z");
+    expect(item.injuryStatus).toBe("injured");
   });
 
   it("creates a day-to-day item", () => {

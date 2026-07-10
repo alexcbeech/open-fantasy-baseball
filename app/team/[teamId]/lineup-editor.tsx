@@ -4,9 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
-import { findLineupLockIssues, isPlayerGameLocked, isSlotEligibleForPlayer, validateLineup } from "@/lib/fantasy/roster-validation";
+import {
+  findLineupLockIssues,
+  isLineupFirstGameLocked,
+  isPlayerGameLocked,
+  isSlotEligibleForPlayer,
+  validateLineup,
+} from "@/lib/fantasy/roster-validation";
 import { planActiveLineup } from "@/lib/fantasy/start-active-players";
-import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
+import type { LineupLockMode, LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
 import { PlayerAvatar } from "./player-avatar";
@@ -16,6 +22,8 @@ import { PositionBadge } from "./position-badge";
 type LineupEditorProps = {
   teamId: string;
   initialLineup: LineupPlayer[];
+  /** League lock mode: daily per-player locks or whole-lineup first-game. */
+  lockMode?: LineupLockMode;
 };
 
 type LiveEntry = { state: string | null; points: number; stats?: Record<string, number | string> };
@@ -78,7 +86,7 @@ function slotsFromLineup(lineup: LineupPlayer[]): Record<string, RosterSlot> {
   return Object.fromEntries(lineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>;
 }
 
-export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
+export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: LineupEditorProps) {
   const router = useRouter();
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
@@ -133,11 +141,16 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
 
   const groups = useMemo(() => buildLineupGroups(currentLineup, defaultRosterSlots), [currentLineup]);
 
-  // A player is locked once their MLB game today has started: the scheduled
-  // first pitch has passed, or the live overlay already sees them in a game.
+  // In first-game mode the whole lineup locks at the day's earliest first
+  // pitch; otherwise a player locks when their own game starts. The live
+  // overlay is a backstop either way.
+  const wholeLineupLocked = useMemo(
+    () => lockMode === "first-game" && isLineupFirstGameLocked(currentLineup),
+    [lockMode, currentLineup],
+  );
   const isEntryLocked = useCallback(
-    (entry: LineupPlayer) => isPlayerGameLocked(entry.player) || Boolean(live[entry.player.id]),
-    [live],
+    (entry: LineupPlayer) => wholeLineupLocked || isPlayerGameLocked(entry.player) || Boolean(live[entry.player.id]),
+    [live, wholeLineupLocked],
   );
   const lockedPlayerIds = useMemo(
     () => new Set(currentLineup.filter(isEntryLocked).map((entry) => entry.player.id)),
@@ -197,7 +210,7 @@ export function LineupEditor({ teamId, initialLineup }: LineupEditorProps) {
       return false;
     }
 
-    const lockIssues = findLineupLockIssues(currentLineup, nextLineup);
+    const lockIssues = findLineupLockIssues(currentLineup, nextLineup, new Date(), lockMode);
     // The scheduled-start check misses games the schedule sync hasn't seen;
     // the live overlay is the backstop for anyone already playing.
     const liveLockedMove = nextLineup.find(

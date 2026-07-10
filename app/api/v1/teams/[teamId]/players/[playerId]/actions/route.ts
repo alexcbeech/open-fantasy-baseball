@@ -15,17 +15,17 @@ type RouteContext = {
   }>;
 };
 
-const actions: PlayerManagementAction[] = ["add", "drop", "move-to-il", "move-to-na"];
+const actions: PlayerManagementAction[] = ["add", "drop", "move-to-il", "move-to-na", "claim", "cancel-claim"];
 
 export async function POST(request: Request, { params }: RouteContext) {
-  const body = (await request.json()) as { action?: string };
+  const body = (await request.json()) as { action?: string; bid?: number; dropPlayerId?: string };
 
   if (!body.action || !actions.includes(body.action as PlayerManagementAction)) {
     return NextResponse.json({ error: "A valid player action is required." }, { status: 400 });
   }
 
   const action = body.action as PlayerManagementAction;
-  const requiredScope = action === "add" || action === "drop" ? "write:transactions" : "write:lineup";
+  const requiredScope = action === "move-to-il" || action === "move-to-na" ? "write:lineup" : "write:transactions";
   const auth = await resolveApiIdentity(request, requiredScope);
 
   if (auth.response) {
@@ -44,7 +44,10 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   try {
-    const player = await applyPlayerManagementAction(teamId, playerId, action);
+    const player = await applyPlayerManagementAction(teamId, playerId, action, {
+      bid: typeof body.bid === "number" ? body.bid : undefined,
+      dropPlayerId: typeof body.dropPlayerId === "string" ? body.dropPlayerId : undefined,
+    });
     return NextResponse.json({
       accepted: true,
       action,

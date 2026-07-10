@@ -8,15 +8,17 @@ import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
+import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
-import { getLeagueOverview } from "@/lib/data/leagues";
+import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { LiveMatchup } from "./live-matchup";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
+import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { formatScoringType } from "@/lib/fantasy/scoring";
-import type { LeagueOverview, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
+import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
 
 type TeamPageProps = {
   params: Promise<{
@@ -62,9 +64,10 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   }
 
   const team = await getTeamSummary(teamId);
+  const leagueSettings = team ? await getLeagueSettings(team.leagueId) : defaultLeagueSettings;
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const teamLineup = await getLineupForTeam(teamId);
-  const playerPool = selectedTab === "Players" ? await listPlayers() : [];
+  const playerPool = selectedTab === "Players" && team ? await listPlayers({ leagueId: team.leagueId }) : [];
   const watchItems = selectedTab === "Team" ? await getPlayerWatchForTeam(teamId) : [];
   const matchupDetails = selectedTab === "Matchup" ? await getMatchupDetailsForTeam(teamId) : null;
   const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;
@@ -125,7 +128,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           })}
         </nav>
 
-        {selectedTab === "Team" ? <TeamTab teamId={team.id} lineup={teamLineup} watchItems={watchItems} /> : null}
+        {selectedTab === "Team" ? (
+          <TeamTab teamId={team.id} lineup={teamLineup} watchItems={watchItems} lockMode={leagueSettings.lineupLockMode} />
+        ) : null}
         {selectedTab === "Matchup" ? (
           matchupDetails ? <MatchupTab matchup={matchupDetails} teamId={team.id} /> : <MatchupEmptyState teamName={team.teamName} />
         ) : null}
@@ -138,13 +143,23 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   );
 }
 
-function TeamTab({ teamId, lineup, watchItems }: { teamId: string; lineup: LineupPlayer[]; watchItems: PlayerWatchItem[] }) {
+function TeamTab({
+  teamId,
+  lineup,
+  watchItems,
+  lockMode,
+}: {
+  teamId: string;
+  lineup: LineupPlayer[];
+  watchItems: PlayerWatchItem[];
+  lockMode: LineupLockMode;
+}) {
   return (
     <div className="team-tab">
       <div className="team-toolbar">
         <PlayerWatchButton items={watchItems} />
       </div>
-      <LineupEditor teamId={teamId} initialLineup={lineup} />
+      <LineupEditor teamId={teamId} initialLineup={lineup} lockMode={lockMode} />
     </div>
   );
 }
@@ -199,6 +214,7 @@ function LeagueTab({
         {canInvite ? (
           <div className="commissioner-actions">
             <LeagueInviteButton leagueId={overview.leagueId} />
+            <LeagueSettingsEditor leagueId={overview.leagueId} settings={overview.settings} />
           </div>
         ) : null}
         <div className="setting-list">

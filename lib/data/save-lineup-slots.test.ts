@@ -46,8 +46,8 @@ function makeClient(lineupRows: LineupRow[]): FakeClient {
     if (sql.includes("player_position_eligibility")) {
       return { rows: lineupRows };
     }
-    if (sql.includes("select league_id from fantasy_team")) {
-      return { rows: [{ league_id: "league-1" }] };
+    if (sql.includes("select ft.league_id")) {
+      return { rows: [{ league_id: "league-1", lineup_lock_mode: "daily" }] };
     }
     if (sql.includes("from scoring_period")) {
       return { rows: [{ id: "scoring-period-1" }] };

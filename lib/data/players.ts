@@ -45,7 +45,9 @@ export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatch
   );
 }
 
-export async function listPlayers(options: { query?: string; availability?: Player["availability"] } = {}): Promise<Player[]> {
+export async function listPlayers(
+  options: { query?: string; availability?: Player["availability"]; leagueId?: string } = {},
+): Promise<Player[]> {
   return withDemoFallback(
     async () => {
       const values: unknown[] = [];
@@ -54,6 +56,15 @@ export async function listPlayers(options: { query?: string; availability?: Play
       if (options.query) {
         values.push(`%${options.query}%`);
         filters.push(`p.full_name ilike $${values.length}`);
+      }
+
+      // Rosters are per-league: scope "rostered" to the viewer's league when
+      // known, so a player owned in another league still reads free-agent here.
+      let rosterScope = "";
+
+      if (options.leagueId && isUuid(options.leagueId)) {
+        values.push(options.leagueId);
+        rosterScope = `and league_id = $${values.length}`;
       }
 
       const result = await query<DbPlayerRow>(
@@ -89,7 +100,7 @@ export async function listPlayers(options: { query?: string; availability?: Play
           left join (
             select distinct player_id
             from roster_entry
-            where dropped_at is null
+            where dropped_at is null ${rosterScope}
           ) active_roster on active_roster.player_id = p.id
           left join lateral (
             select headline from player_news pn where pn.player_id = p.id order by published_at desc limit 1
@@ -305,6 +316,61 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
 
       const onCurrentTeam = rosterMembershipResult.rows[0]?.on_team ?? false;
       const player = mapPlayer(playerRow);
+      let availability = player.availability;
+
+      // Rosters are per-league: when viewing from a team, "rostered" must mean
+      // rostered in THAT league, not anywhere in the app.
+      if (teamId && isUuid(teamId)) {
+        const scoped = await query<{ rostered: boolean }>(
+          `select exists (
+             select 1 from roster_entry re
+             where re.player_id = $2 and re.dropped_at is null
+               and re.league_id = (select league_id from fantasy_team where id = $1)
+           ) as rostered`,
+          [teamId, playerId],
+        );
+        availability = scoped.rows[0]?.rostered ? "rostered" : "free-agent";
+      }
+
+      // Waiver context for the current team's league: whether the player is
+      // clearing waivers, this team's pending claim, and the league's waiver
+      // economy (mode + remaining FAAB) for the claim UI.
+      let waiver: PlayerDetail["waiver"] = null;
+
+      if (teamId && isUuid(teamId) && availability !== "rostered") {
+        const waiverRow = await query<{
+          waiver_until: Date | null;
+          has_claim: boolean;
+          waiver_mode: string | null;
+          faab_remaining: string | number | null;
+        }>(
+          `select
+             (select max(re.waiver_until)
+              from roster_entry re
+              where re.league_id = ft.league_id and re.player_id = $2
+                and re.dropped_at is not null and re.waiver_until > now()) as waiver_until,
+             exists (
+               select 1 from waiver_claim wc
+               where wc.team_id = ft.id and wc.add_player_id = $2 and wc.status = 'pending'
+             ) as has_claim,
+             l.settings->>'waiverMode' as waiver_mode,
+             ft.faab_remaining
+           from fantasy_team ft
+           join league l on l.id = ft.league_id
+           where ft.id = $1`,
+          [teamId, playerId],
+        );
+        const row = waiverRow.rows[0];
+
+        if (row && (row.waiver_until || row.has_claim)) {
+          waiver = {
+            until: row.waiver_until ? new Date(row.waiver_until).toISOString() : null,
+            myClaimPending: row.has_claim,
+            mode: row.waiver_mode === "faab" ? "faab" : "rolling",
+            faabRemaining: row.faab_remaining != null ? Number(row.faab_remaining) : null,
+          };
+        }
+      }
       const nextGameRow = nextGameResult.rows[0];
       const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
       const valueRow = valueResult.rows[0];
@@ -338,11 +404,15 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         news: newsResult.rows.map(mapNewsItem),
         statWindows: statsResult.rows.map(mapStatWindow),
         gameLog: gameLogResult.rows.map(mapGameLog),
+        availability: waiver?.until ? "waivers" : availability,
+        waiver,
         management: {
-          // Add a player only if they are unrostered (a free agent / on waivers).
-          // Drop, IL, and NA act on the current team's roster, so they require
-          // the player to actually be on it.
-          canAdd: player.availability !== "rostered",
+          // Unrostered players are added directly unless they're clearing
+          // waivers, in which case the path is a claim. Drop, IL, and NA act
+          // on the current team's roster, so they require membership.
+          canAdd: availability !== "rostered" && !waiver?.until,
+          canClaim: Boolean(waiver?.until) && !waiver?.myClaimPending,
+          canCancelClaim: Boolean(waiver?.myClaimPending),
           canDrop: onCurrentTeam,
           canMoveToIL: onCurrentTeam && (player.status === "injured" || player.status === "day-to-day"),
           canMoveToNA: onCurrentTeam && player.status === "minors",

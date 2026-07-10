@@ -21,13 +21,13 @@ const tradeReviewLabels: Record<string, string> = {
 
 const lineupLockLabels: Record<string, string> = {
   daily: "Daily",
-  weekly: "Weekly",
   "first-game": "Lock At First Game",
 };
 
 const draftTypeLabels: Record<string, string> = {
   snake: "Snake",
-  offline: "Offline",
+  // "offline" runs a live draft with the same order every round (no snake).
+  offline: "Linear (same order each round)",
 };
 
 const playerPoolLabels: Record<string, string> = {

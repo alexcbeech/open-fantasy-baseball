@@ -1,16 +1,15 @@
 import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
+import { assignLineupSlotForAdd } from "@/lib/data/player-actions";
 
+// What this job actually does — surfaced verbatim in the admin panel, so it
+// must not promise work that other jobs (or nothing) performs.
 export const nightlyProcessingTasks = [
-  "Lock previous scoring period and finalize matchup snapshots.",
-  "Resolve waiver claims by league waiver mode, priority, and FAAB bids.",
-  "Apply successful adds, drops, and roster moves with audit records.",
-  "Advance waiver priorities when rolling waivers are enabled.",
-  "Refresh player availability, IL eligibility, and NA eligibility.",
-  "Apply scheduled commissioner setting changes.",
-  "Queue notifications for waiver results, trade reviews, injuries, and matchup finals.",
-  "Recompute standings, playoff seeds, and roto point totals.",
+  "Resolve due waiver claims by FAAB bid, waiver priority, and claim time.",
+  "Apply winning claims: roster add/drop, lineup slot, and audit records.",
+  "Debit FAAB budgets and advance rolling waiver priorities after each win.",
+  "Queue notifications for waiver results.",
 ] as const;
 
 export type NightlyProcessingSummary = {
@@ -179,7 +178,10 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
 
     for (const group of claimGroups) {
       const playerAvailable = await isPlayerAvailable(client, group[0].leagueId, group[0].addPlayerId);
-      const decisions = decideWaiverClaimsForPlayer(group, playerAvailable);
+      // A FAAB bid a team can no longer afford (budget spent since placing the
+      // claim) competes as a zero bid rather than jumping the queue.
+      const affordable = await capUnaffordableBids(client, group);
+      const decisions = decideWaiverClaimsForPlayer(affordable, playerAvailable);
       const playerName = await getPlayerName(client, group[0].addPlayerId);
 
       for (const decision of decisions) {
@@ -262,12 +264,45 @@ async function isPlayerAvailable(client: PoolClient, leagueId: string, playerId:
   return !result.rows[0].exists;
 }
 
+/** Clamp each claim's bid to what the team can still afford right now. */
+async function capUnaffordableBids(client: PoolClient, group: WaiverClaimCandidate[]): Promise<WaiverClaimCandidate[]> {
+  const withBids = group.filter((claim) => (claim.bidAmount ?? 0) > 0);
+
+  if (!withBids.length) {
+    return group;
+  }
+
+  const budgets = await client.query<{ id: string; faab_remaining: string | number | null }>(
+    `select id, faab_remaining from fantasy_team where id = any($1::uuid[])`,
+    [[...new Set(withBids.map((claim) => claim.teamId))]],
+  );
+  const budgetByTeam = new Map(budgets.rows.map((row) => [row.id, Number(row.faab_remaining ?? 0)]));
+
+  return group.map((claim) => {
+    const bid = claim.bidAmount ?? 0;
+    const budget = budgetByTeam.get(claim.teamId);
+    return budget !== undefined && bid > budget ? { ...claim, bidAmount: Math.max(0, budget) } : claim;
+  });
+}
+
 async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCandidate, jobRunId: string) {
+  const settings = await client.query<{ waiver_mode: string | null }>(
+    `select settings->>'waiverMode' as waiver_mode from league where id = $1`,
+    [claim.leagueId],
+  );
+  const waiverMode = settings.rows[0]?.waiver_mode ?? "rolling";
+
   if (claim.dropPlayerId) {
     await client.query(
       `update roster_entry
        set dropped_at = now()
        where team_id = $1 and player_id = $2 and dropped_at is null`,
+      [claim.teamId, claim.dropPlayerId],
+    );
+    await client.query(
+      `delete from lineup_entry
+       where team_id = $1 and player_id = $2
+         and lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)`,
       [claim.teamId, claim.dropPlayerId],
     );
   }
@@ -277,6 +312,45 @@ async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCan
      values ($1, $2, 'waiver')`,
     [claim.teamId, claim.addPlayerId],
   );
+
+  // The added player joins today's lineup like a direct add would.
+  const playerStatus = await client.query<{ status: "active" | "day-to-day" | "injured" | "minors" }>(
+    `select status from player where id = $1`,
+    [claim.addPlayerId],
+  );
+  await assignLineupSlotForAdd(
+    client,
+    { leagueId: claim.leagueId },
+    claim.teamId,
+    claim.addPlayerId,
+    { status: playerStatus.rows[0]?.status ?? "active" },
+  );
+
+  if (waiverMode === "faab" && (claim.bidAmount ?? 0) > 0) {
+    // Winning FAAB bids spend real budget.
+    await client.query(
+      `update fantasy_team set faab_remaining = greatest(coalesce(faab_remaining, 0) - $2, 0) where id = $1`,
+      [claim.teamId, claim.bidAmount],
+    );
+  } else if (waiverMode === "rolling") {
+    // Rolling waivers: the winner drops to the back of the priority line and
+    // everyone behind them moves up one.
+    await client.query(
+      `update fantasy_team ft
+       set waiver_priority = ranked.new_priority
+       from (
+         select id,
+           row_number() over (
+             order by case when id = $2 then 1 else 0 end,
+               waiver_priority nulls last, created_at
+           ) as new_priority
+         from fantasy_team
+         where league_id = $1
+       ) ranked
+       where ft.id = ranked.id`,
+      [claim.leagueId, claim.teamId],
+    );
+  }
 
   await client.query(
     `insert into fantasy_transaction (league_id, team_id, type, status, payload, processed_at)
