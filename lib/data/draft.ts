@@ -18,6 +18,7 @@ import type { DraftType, LeagueSettings, PlayerPool, RosterSlot } from "@/lib/fa
 import { getPool, isDatabaseConfigured, tryDatabase, withDemoFallback } from "@/lib/db/client";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 import { sendPushToUser } from "./push-subscriptions";
+import { ensureSeasonSchedule } from "./season";
 
 export { DraftError };
 
@@ -510,21 +511,18 @@ async function completeDraft(client: PoolClient, context: DraftContext): Promise
   ]);
   await client.query(`update league set status = 'active', updated_at = now() where id = $1`, [context.league.id]);
 
+  // A completed draft starts the season: weekly scoring periods and
+  // round-robin matchups through season end, with the current week active.
+  await ensureSeasonSchedule(client, context.league.id);
+
   const period = await client.query<{ id: string }>(
     `select id from scoring_period where league_id = $1 and status = 'active' order by starts_at desc limit 1`,
     [context.league.id],
   );
-  let scoringPeriodId = period.rows[0]?.id;
+  const scoringPeriodId = period.rows[0]?.id;
 
   if (!scoringPeriodId) {
-    const created = await client.query<{ id: string }>(
-      `insert into scoring_period (league_id, label, starts_at, ends_at, status)
-       values ($1, 'Draft Week', now(), now() + interval '7 days', 'active')
-       on conflict (league_id, label) do update set status = 'active'
-       returning id`,
-      [context.league.id],
-    );
-    scoringPeriodId = created.rows[0].id;
+    throw new DraftError("No scoring period could be activated for the league.", 500);
   }
 
   for (const team of context.teams) {

@@ -2,8 +2,10 @@ import type { QueryResult, QueryResultRow } from "pg";
 import { getPool, query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
+import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
+import { teamRecordsForLeague } from "./season";
 
 type Executor = { query: <T extends QueryResultRow>(sql: string, values?: unknown[]) => Promise<QueryResult<T>> };
 
@@ -84,8 +86,9 @@ const teamSummarySql = `
     ft.name as team_name,
     u.display_name as manager_name,
     l.scoring_type,
-    ft.waiver_priority as rank,
     sp.label as matchup_label,
+    sp.starts_at as period_starts,
+    sp.ends_at as period_ends,
     opponent.name as opponent_name,
     case when m.home_team_id = ft.id then m.home_score else m.away_score end as user_score,
     case when m.home_team_id = ft.id then m.away_score else m.home_score end as opponent_score
@@ -96,6 +99,31 @@ const teamSummarySql = `
   left join scoring_period sp on sp.id = m.scoring_period_id
   left join fantasy_team opponent on opponent.id = case when m.home_team_id = ft.id then m.away_team_id else m.home_team_id end
 `;
+
+/**
+ * Standings context for a team: its W-L-T record string and rank within the
+ * league, computed from finalized matchups (new leagues rank by name).
+ */
+async function standingsContext(leagueId: string, teamId: string): Promise<{ record: string; rank: number }> {
+  const [records, teams] = await Promise.all([
+    teamRecordsForLeague(leagueId),
+    query<{ id: string; name: string }>(`select id, name from fantasy_team where league_id = $1`, [leagueId]),
+  ]);
+  const ranked = rankStandings(
+    teams.rows.map((team) => ({
+      teamId: team.id,
+      teamName: team.name,
+      ...(records.get(team.id) ?? { wins: 0, losses: 0, ties: 0, points: 0 }),
+    })),
+  );
+  const index = ranked.findIndex((entry) => entry.teamId === teamId);
+  const mine = ranked[index];
+
+  return {
+    record: mine ? formatRecord(mine) : "0-0",
+    rank: index >= 0 ? index + 1 : 1,
+  };
+}
 
 export async function listTeamsForCurrentUser(user?: { userId: string; email: string } | null): Promise<TeamSummary[]> {
   return withDemoFallback(
@@ -114,7 +142,9 @@ export async function listTeamsForCurrentUser(user?: { userId: string; email: st
       );
       // Empty is a valid result (a real user with no teams); the demo fallback
       // below serves mock data only when no database is configured.
-      return result.rows.map(mapTeamSummary);
+      return Promise.all(
+        result.rows.map(async (row) => mapTeamSummary(row, await standingsContext(row.league_id, row.id))),
+      );
     },
     () => mockTeams,
   );
@@ -125,7 +155,8 @@ export async function getTeamSummary(teamId: string): Promise<TeamSummary | unde
     async () => {
       const result = await query<DbTeamSummaryRow>(`${teamSummarySql} where ft.id = $1`, [teamId]);
       // A missing team is undefined (callers 404), not a mock team.
-      return result.rows[0] ? mapTeamSummary(result.rows[0]) : undefined;
+      const row = result.rows[0];
+      return row ? mapTeamSummary(row, await standingsContext(row.league_id, row.id)) : undefined;
     },
     () => mockTeams.find((team) => team.id === teamId),
   );
