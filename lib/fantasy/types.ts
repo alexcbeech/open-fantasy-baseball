@@ -4,7 +4,7 @@ export type WaiverMode = "rolling" | "faab";
 
 export type TradeReviewMode = "commissioner" | "league-vote" | "none";
 
-export type LineupLockMode = "daily" | "weekly" | "first-game";
+export type LineupLockMode = "daily" | "first-game";
 
 export type DraftType = "snake" | "offline";
 

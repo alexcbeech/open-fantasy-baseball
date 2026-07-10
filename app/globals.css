@@ -2423,6 +2423,37 @@ p.player-meta,
   text-transform: uppercase;
 }
 
+/* Commissioner league-settings editor. */
+.settings-editor {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.settings-field {
+  display: grid;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 4px;
+}
+
+.settings-field input,
+.settings-field select {
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
+.settings-check {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+}
+
 /* Waiver context in the player detail sheet. */
 .waiver-note {
   color: var(--muted);

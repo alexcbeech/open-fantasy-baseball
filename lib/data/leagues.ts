@@ -148,6 +148,67 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
   );
 }
 
+export type UpdatableLeagueSettings = Partial<
+  Pick<
+    LeagueSettings,
+    | "waiverMode"
+    | "faabBudget"
+    | "tradeReview"
+    | "tradeReviewDays"
+    | "lineupLockMode"
+    | "waiverProcessingDays"
+    | "allowILPlus"
+    | "allowNA"
+  >
+>;
+
+/**
+ * Apply commissioner edits to the post-creation-editable settings. Toggling
+ * NA slots also resizes the league's NA roster slots (0 or 2) so the setting
+ * actually shapes rosters; existing NA occupants keep their slot until moved.
+ */
+export async function updateLeagueSettings(leagueId: string, changes: UpdatableLeagueSettings): Promise<LeagueSettings> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+
+    const current = await client.query<{ settings: LeagueSettings; name: string }>(
+      `select settings, name from league where id = $1 for update`,
+      [leagueId],
+    );
+
+    if (!current.rows[0]) {
+      throw new Error("League not found.");
+    }
+
+    const merged: LeagueSettings = { ...current.rows[0].settings, ...changes };
+
+    if (changes.allowNA !== undefined) {
+      merged.rosterSlots = { ...merged.rosterSlots, NA: changes.allowNA ? 2 : 0 };
+      await client.query(
+        `insert into league_roster_slot (league_id, slot, count)
+         values ($1, 'NA', $2)
+         on conflict (league_id, slot) do update set count = excluded.count`,
+        [leagueId, changes.allowNA ? 2 : 0],
+      );
+    }
+
+    await client.query(`update league set settings = $2::jsonb, updated_at = now() where id = $1`, [
+      leagueId,
+      JSON.stringify(merged),
+    ]);
+    await client.query("commit");
+
+    return { ...merged, id: leagueId, name: current.rows[0].name };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export type LeagueCommissioner = {
   email: string;
   displayName: string;

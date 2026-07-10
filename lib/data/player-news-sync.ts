@@ -17,6 +17,8 @@ export type PlayerNewsDraft = {
   playerId: string;
   headline: string;
   summary: string | null;
+  /** Set for injury-status news; drives manager push notifications. */
+  injuryStatus?: "injured" | "day-to-day";
   publishedAt: string;
 };
 
@@ -65,7 +67,9 @@ export function deriveNewsDrafts(context: PlayerNewsContext, now: Date): PlayerN
       playerId: context.playerId,
       headline: statusEntry.headline(context.fullName),
       summary: statusEntry.summary,
-      publishedAt: now.toISOString(),
+      // Day-stable timestamp so re-syncs dedupe instead of re-publishing.
+      publishedAt: startOfDayIso(now.toISOString()),
+      injuryStatus: context.status === "injured" || context.status === "day-to-day" ? context.status : undefined,
     });
   }
 
@@ -189,6 +193,20 @@ export async function syncPlayerNews(
           [draft.playerId, provider.source, draft.headline, draft.summary, draft.publishedAt],
         );
         rowsWritten += inserted.rowCount ?? 0;
+
+        // Fresh injury news pushes to every (human) manager rostering the
+        // player, in any league. Deduped by the news insert above, so a
+        // status generates at most one notification per day.
+        if ((inserted.rowCount ?? 0) > 0 && draft.injuryStatus) {
+          await client.query(
+            `insert into notification_outbox (user_id, type, title, body, url)
+             select distinct ft.manager_user_id, 'injury', $2, $3, '/team/' || ft.id
+             from roster_entry re
+             join fantasy_team ft on ft.id = re.team_id
+             where re.player_id = $1 and re.dropped_at is null and ft.is_bot = false`,
+            [draft.playerId, draft.headline, draft.summary ?? ""],
+          );
+        }
       }
 
       await client.query(
