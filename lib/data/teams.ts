@@ -5,6 +5,7 @@ import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-valid
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
+import { rotoStandingsForLeague } from "./roto";
 import { teamRecordsForLeague } from "./season";
 
 type Executor = { query: <T extends QueryResultRow>(sql: string, values?: unknown[]) => Promise<QueryResult<T>> };
@@ -101,10 +102,16 @@ const teamSummarySql = `
 `;
 
 /**
- * Standings context for a team: its W-L-T record string and rank within the
- * league, computed from finalized matchups (new leagues rank by name).
+ * Standings context for a team: its record string ("3-1", or roto points for
+ * rotisserie leagues) and rank within the league (new leagues rank by name).
  */
-async function standingsContext(leagueId: string, teamId: string): Promise<{ record: string; rank: number }> {
+async function standingsContext(leagueId: string, teamId: string, scoringType: string | null): Promise<{ record: string; rank: number }> {
+  if (scoringType === "roto") {
+    const roto = await rotoStandingsForLeague(leagueId);
+    const mine = roto.find((entry) => entry.teamId === teamId);
+    return { record: mine ? `${mine.points} pts` : "0 pts", rank: mine?.rank ?? 1 };
+  }
+
   const [records, teams] = await Promise.all([
     teamRecordsForLeague(leagueId),
     query<{ id: string; name: string }>(`select id, name from fantasy_team where league_id = $1`, [leagueId]),
@@ -143,7 +150,7 @@ export async function listTeamsForCurrentUser(user?: { userId: string; email: st
       // Empty is a valid result (a real user with no teams); the demo fallback
       // below serves mock data only when no database is configured.
       return Promise.all(
-        result.rows.map(async (row) => mapTeamSummary(row, await standingsContext(row.league_id, row.id))),
+        result.rows.map(async (row) => mapTeamSummary(row, await standingsContext(row.league_id, row.id, row.scoring_type))),
       );
     },
     () => mockTeams,
@@ -156,7 +163,7 @@ export async function getTeamSummary(teamId: string): Promise<TeamSummary | unde
       const result = await query<DbTeamSummaryRow>(`${teamSummarySql} where ft.id = $1`, [teamId]);
       // A missing team is undefined (callers 404), not a mock team.
       const row = result.rows[0];
-      return row ? mapTeamSummary(row, await standingsContext(row.league_id, row.id)) : undefined;
+      return row ? mapTeamSummary(row, await standingsContext(row.league_id, row.id, row.scoring_type)) : undefined;
     },
     () => mockTeams.find((team) => team.id === teamId),
   );

@@ -4,6 +4,7 @@ import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
+import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
 
 type LeagueSettingsRow = {
@@ -84,34 +85,53 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
       );
 
       const teamStats = teamsResult.rows.map(mapLeagueTeamStats);
+      const scoringType = league.scoring_type ?? league.settings.scoringType;
+      const managerByTeam = new Map(teamsResult.rows.map((row) => [row.team_id, row.manager_name]));
 
-      // Standings: W-L-T from finalized matchups, plus accumulated points
-      // (finalized totals + the live score of the current matchup).
-      const records = await teamRecordsForLeague(leagueId);
-      const ranked = rankStandings(
-        teamsResult.rows.map((row) => {
-          const record = records.get(row.team_id);
-          return {
-            teamId: row.team_id,
-            teamName: row.team_name,
-            managerName: row.manager_name,
-            wins: record?.wins ?? 0,
-            losses: record?.losses ?? 0,
-            ties: record?.ties ?? 0,
-            points: (record?.points ?? 0) + toNumber(row.matchup_score),
-          };
-        }),
-      );
-      const standings = ranked.map(
-        (row, index): LeagueStanding => ({
-          teamId: row.teamId,
-          teamName: row.teamName,
-          managerName: row.managerName,
-          rank: index + 1,
-          record: formatRecord(row),
-          points: Math.round(row.points * 10) / 10,
-        }),
-      );
+      let standings: LeagueStanding[];
+
+      if (scoringType === "roto") {
+        // Rotisserie: a season-long table of per-category ranks, no records.
+        const roto = await rotoStandingsForLeague(leagueId);
+        standings = roto.map(
+          (row): LeagueStanding => ({
+            teamId: row.teamId,
+            teamName: row.teamName,
+            managerName: managerByTeam.get(row.teamId) ?? "",
+            rank: row.rank,
+            record: `${row.points} pts`,
+            points: row.points,
+          }),
+        );
+      } else {
+        // Head-to-head: W-L-T from finalized matchups, plus accumulated points
+        // (finalized totals + the live score of the current matchup).
+        const records = await teamRecordsForLeague(leagueId);
+        const ranked = rankStandings(
+          teamsResult.rows.map((row) => {
+            const record = records.get(row.team_id);
+            return {
+              teamId: row.team_id,
+              teamName: row.team_name,
+              managerName: row.manager_name,
+              wins: record?.wins ?? 0,
+              losses: record?.losses ?? 0,
+              ties: record?.ties ?? 0,
+              points: (record?.points ?? 0) + toNumber(row.matchup_score),
+            };
+          }),
+        );
+        standings = ranked.map(
+          (row, index): LeagueStanding => ({
+            teamId: row.teamId,
+            teamName: row.teamName,
+            managerName: row.managerName,
+            rank: index + 1,
+            record: formatRecord(row),
+            points: Math.round(row.points * 10) / 10,
+          }),
+        );
+      }
 
       return {
         leagueId: league.id,

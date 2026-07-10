@@ -21,8 +21,13 @@ type PeriodRow = {
  * activates whichever period covers `now`. Safe to call lazily on reads.
  */
 export async function ensureSeasonSchedule(db: Queryable, leagueId: string, now = new Date()): Promise<void> {
-  const league = await db.query<{ status: string; season_year: number | null; playoff_team_count: number | null }>(
-    `select status, season_year, (settings->>'playoffTeamCount')::int as playoff_team_count
+  const league = await db.query<{
+    status: string;
+    season_year: number | null;
+    playoff_team_count: number | null;
+    scoring_type: string | null;
+  }>(
+    `select status, season_year, (settings->>'playoffTeamCount')::int as playoff_team_count, scoring_type
      from league where id = $1`,
     [leagueId],
   );
@@ -31,6 +36,10 @@ export async function ensureSeasonSchedule(db: Queryable, leagueId: string, now 
   if (!row || (row.status !== "active" && row.status !== "playoffs")) {
     return;
   }
+
+  // Rotisserie is a season-long table, not head-to-head: periods still exist
+  // (lineup dates hang off them) but no matchups are scheduled.
+  const headToHead = row.scoring_type !== "roto";
 
   const teams = await db.query<{ id: string }>(
     `select id from fantasy_team where league_id = $1 order by created_at, id`,
@@ -66,10 +75,13 @@ export async function ensureSeasonSchedule(db: Queryable, leagueId: string, now 
       startWeekNumber: periods.rows.length + 1,
       rotationOffset: periods.rows.length,
     });
-    await insertPeriods(db, leagueId, plan);
+    await insertPeriods(db, leagueId, headToHead ? plan : plan.map((period) => ({ ...period, matchups: [] })));
   }
 
-  await backfillMissingMatchups(db, leagueId, teamIds);
+  if (headToHead) {
+    await backfillMissingMatchups(db, leagueId, teamIds);
+  }
+
   await activateDuePeriods(db, leagueId, now);
 }
 
