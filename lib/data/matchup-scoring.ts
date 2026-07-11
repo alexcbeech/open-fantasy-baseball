@@ -76,6 +76,43 @@ export async function activeLineupStats(client: { query: <T>(sql: string, values
   return result.rows.map((row) => row.stats);
 }
 
+/**
+ * A team's per-game stat lines inside one scoring period — the lines H2H
+ * matchups aggregate, so a week's totals are the week's production rather
+ * than season-to-date numbers. Each game line counts only when the player
+ * sat in an active slot on the lineup in effect that day (the most recent
+ * lineup_date at or before the game date), so benched players don't score
+ * and mid-week pickups only count from when they started.
+ *
+ * Period bounds are Monday-04:00-UTC boundaries with an exclusive end;
+ * game-log stat_date is the ET official date, so bounds convert to ET days.
+ */
+export async function periodLineupStats(
+  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ stats: StatMap }> }> },
+  teamId: string,
+  periodStartsAt: Date | string,
+  periodEndsAt: Date | string,
+) {
+  const result = await client.query(
+    `select psl.stats
+     from player_stat_line psl
+     join lateral (
+       select le.slot
+       from lineup_entry le
+       where le.team_id = $1 and le.player_id = psl.player_id and le.lineup_date <= psl.stat_date
+       order by le.lineup_date desc
+       limit 1
+     ) lineup_on_date on true
+     where psl.split = 'game'
+       and psl.player_id in (select player_id from lineup_entry where team_id = $1)
+       and psl.stat_date >= ($2::timestamptz at time zone 'America/New_York')::date
+       and psl.stat_date < ($3::timestamptz at time zone 'America/New_York')::date
+       and lineup_on_date.slot not in ('BN', 'IL', 'NA')`,
+    [teamId, periodStartsAt, periodEndsAt],
+  );
+  return result.rows.map((row) => row.stats);
+}
+
 export type RecomputeMatchupsResult = {
   matchups: number;
   categoriesWritten: number;
@@ -88,9 +125,9 @@ function totalFantasyPoints(statLines: StatMap[]): number {
 }
 
 /**
- * Recompute each active matchup's category battle from the current active
- * lineups' real season stats, updating matchup_category_score and the
- * categories-won score on the matchup itself.
+ * Recompute each active matchup's category battle from the game-by-game
+ * stats its players produced inside the matchup's scoring period, updating
+ * matchup_category_score and the categories-won score on the matchup itself.
  */
 export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMatchupsResult> {
   const pool = getPool();
@@ -103,10 +140,13 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
       home_team_id: string;
       away_team_id: string;
       scoring_type: string | null;
+      starts_at: Date | string;
+      ends_at: Date | string;
     }>(
-      `select m.id, m.league_id, m.home_team_id, m.away_team_id, l.scoring_type
+      `select m.id, m.league_id, m.home_team_id, m.away_team_id, l.scoring_type, sp.starts_at, sp.ends_at
        from matchup m
        join league l on l.id = m.league_id
+       join scoring_period sp on sp.id = m.scoring_period_id
        where m.status = 'active' ${leagueId ? "and m.league_id = $1" : ""}`,
       leagueId ? [leagueId] : [],
     );
@@ -119,8 +159,8 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
         [matchup.league_id],
       );
       const categories = categoryRows.rows.map((row) => row.category);
-      const homeStats = await activeLineupStats(client, matchup.home_team_id);
-      const awayStats = await activeLineupStats(client, matchup.away_team_id);
+      const homeStats = await periodLineupStats(client, matchup.home_team_id, matchup.starts_at, matchup.ends_at);
+      const awayStats = await periodLineupStats(client, matchup.away_team_id, matchup.starts_at, matchup.ends_at);
 
       let homeWins = 0;
       let awayWins = 0;

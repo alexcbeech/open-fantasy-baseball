@@ -83,6 +83,33 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
           </div>
         </div>
 
+        {/* Yahoo-style category totals directly under the score: this week's
+            numbers hug the centered category column, and the leading side's
+            value reads green. The result is spelled out for screen readers. */}
+        <h3 id="category-heading">Category Breakdown</h3>
+        <div className="category-table" aria-labelledby="category-heading">
+          <div className="category-row category-head" aria-hidden="true">
+            <span>{matchup.userTeam.teamName}</span>
+            <span>Cat</span>
+            <span>{matchup.opponentTeam.teamName}</span>
+          </div>
+          {categoryScores.map((score) => (
+            <div className="category-row" key={score.category}>
+              <span className={score.result === "win" ? "category-value leading" : "category-value"}>{score.userValue}</span>
+              <span className="category-cat">{score.category}</span>
+              <span className={score.result === "loss" ? "category-value leading" : "category-value"}>
+                {score.opponentValue}
+              </span>
+              <span className="visually-hidden">
+                {score.result === "tie" ? "tied" : score.result === "win" ? "you lead" : "opponent leads"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="compare-heading">
+        <h3 id="compare-heading">Starters Head to Head</h3>
         <div className="matchup-compare" aria-label="Starters head to head">
           {Array.from({ length: rowCount }).map((_, index) => {
             const user = userStarters[index];
@@ -96,26 +123,6 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="panel" aria-labelledby="category-heading">
-        <h3 id="category-heading">Category Breakdown</h3>
-        <div className="category-table">
-          <div className="category-row category-head">
-            <span>{matchup.userTeam.teamName}</span>
-            <span>Cat</span>
-            <span>{matchup.opponentTeam.teamName}</span>
-            <span>Result</span>
-          </div>
-          {categoryScores.map((score) => (
-            <div className="category-row" key={score.category}>
-              <strong>{score.userValue}</strong>
-              <span className="slot">{score.category}</span>
-              <strong>{score.opponentValue}</strong>
-              <span className={`pill result-${score.result}`}>{score.result.toUpperCase()}</span>
-            </div>
-          ))}
         </div>
       </section>
     </div>

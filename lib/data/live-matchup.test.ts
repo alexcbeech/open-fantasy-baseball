@@ -2,13 +2,10 @@ import { describe, expect, it } from "vitest";
 import { buildLiveMatchupUpdate } from "./live-matchup";
 import type { LiveLineupEntry, LivePlayerRef } from "./mlb-live";
 
-type ActiveRow = LivePlayerRef & { stats: Record<string, number | string> };
-
-const row = (id: string, stats: Record<string, number | string>): ActiveRow => ({
+const ref = (id: string): LivePlayerRef => ({
   id,
   mlb_player_id: 1,
   current_mlb_team_id: 1,
-  stats,
 });
 
 const liveEntry = (points: number, stats: Record<string, number | string>): LiveLineupEntry => ({
@@ -21,9 +18,9 @@ const categories = ["HR", "AVG"];
 
 describe("buildLiveMatchupUpdate", () => {
   it("returns a not-live result when nothing is in progress", () => {
-    const home = [row("h1", { HR: 10, H: 40, AB: 100 })];
-    const away = [row("a1", { HR: 8, H: 30, AB: 100 })];
-    expect(buildLiveMatchupUpdate(true, categories, home, away, {})).toEqual({
+    const homeStats = [{ HR: 10, H: 40, AB: 100 }];
+    const awayStats = [{ HR: 8, H: 30, AB: 100 }];
+    expect(buildLiveMatchupUpdate(true, categories, homeStats, awayStats, [ref("h1")], [ref("a1")], {})).toEqual({
       live: false,
       userScore: 0,
       opponentScore: 0,
@@ -32,14 +29,14 @@ describe("buildLiveMatchupUpdate", () => {
     });
   });
 
-  it("adds live lines onto season totals and recomputes the category battle", () => {
-    // Season: home leads HR 10-8 and AVG .400-.300.
-    const home = [row("h1", { HR: 10, H: 40, AB: 100 })];
-    const away = [row("a1", { HR: 8, H: 30, AB: 100 })];
-    // Live: the away hitter homers twice and goes 3-3, flipping both categories.
+  it("adds live lines onto the period's totals and recomputes the category battle", () => {
+    // This week so far: home leads HR 10-8 and AVG .400-.300.
+    const homeStats = [{ HR: 10, H: 40, AB: 100 }];
+    const awayStats = [{ HR: 8, H: 30, AB: 100 }];
+    // Live: the away hitter homers twice and goes 3-3, flipping HR.
     const live = { a1: liveEntry(9, { HR: 3, H: 3, AB: 3 }) };
 
-    const update = buildLiveMatchupUpdate(true, categories, home, away, live);
+    const update = buildLiveMatchupUpdate(true, categories, homeStats, awayStats, [ref("h1")], [ref("a1")], live);
 
     expect(update.live).toBe(true);
     // HR: home 10 vs away 8+3=11 -> away (opponent) wins.
@@ -58,13 +55,29 @@ describe("buildLiveMatchupUpdate", () => {
     expect(update.livePoints).toEqual({ a1: 9 });
   });
 
+  it("ignores live lines for players no longer in the active lineup", () => {
+    // The live map can carry an entry for someone since benched; only current
+    // starters' live lines join the totals.
+    const update = buildLiveMatchupUpdate(
+      true,
+      ["HR"],
+      [{ HR: 10 }],
+      [{ HR: 8 }],
+      [ref("h1")],
+      [ref("a1")],
+      { benched: liveEntry(4, { HR: 5 }) },
+    );
+
+    const hr = update.categoryScores[0];
+    expect(hr.userValue).toBe(10);
+    expect(hr.opponentValue).toBe(8);
+  });
+
   it("flips results and scores to the viewer's perspective when they are away", () => {
-    const home = [row("h1", { HR: 10 })];
-    const away = [row("a1", { HR: 8 })];
     const live = { a1: liveEntry(4, { HR: 1 }) };
 
     // Viewer is the away team: home still wins HR 10-9, so the viewer loses it.
-    const update = buildLiveMatchupUpdate(false, ["HR"], home, away, live);
+    const update = buildLiveMatchupUpdate(false, ["HR"], [{ HR: 10 }], [{ HR: 8 }], [ref("h1")], [ref("a1")], live);
     const hr = update.categoryScores[0];
     expect(hr.userValue).toBe(9);
     expect(hr.opponentValue).toBe(10);
