@@ -19,6 +19,9 @@ async function main() {
   // scoring periods that have ended. Each is dedup-keyed per day.
   const recurring = [
     { jobType: "nightly_processing", priority: 0 },
+    // After waivers so bot lineups see the day's roster changes, before the
+    // matchup recompute so scores reflect the lineups bots just set.
+    { jobType: "set_bot_lineups", priority: 3 },
     { jobType: "recompute_matchups", priority: 5 },
     { jobType: "finalize_ended_matchups", priority: 10 },
     // Runs last so it delivers notifications the jobs above produced.
