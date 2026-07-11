@@ -2,29 +2,42 @@ import { describe, expect, it } from "vitest";
 import { buildLiveMatchupUpdate } from "./live-matchup";
 import type { LiveLineupEntry, LivePlayerRef } from "./mlb-live";
 
-type ActiveRow = LivePlayerRef & { stats: Record<string, number | string> };
-
-const row = (id: string, stats: Record<string, number | string>): ActiveRow => ({
+const ref = (id: string): LivePlayerRef => ({
   id,
   mlb_player_id: 1,
   current_mlb_team_id: 1,
-  stats,
 });
 
-const liveEntry = (points: number, stats: Record<string, number | string>): LiveLineupEntry => ({
-  state: "Top 5th",
+const liveEntry = (points: number, stats: Record<string, number | string>, state = "Top 5th"): LiveLineupEntry => ({
+  state,
   stats,
   points,
 });
 
 const categories = ["HR", "AVG"];
 
+type Input = Parameters<typeof buildLiveMatchupUpdate>[0];
+
+const baseInput = (overrides: Partial<Input>): Input => ({
+  isHome: true,
+  categories,
+  homePeriodStats: [],
+  awayPeriodStats: [],
+  homeActive: [ref("h1")],
+  awayActive: [ref("a1")],
+  todayLines: {},
+  liveGameInProgress: false,
+  ...overrides,
+});
+
 describe("buildLiveMatchupUpdate", () => {
-  it("returns a not-live result when nothing is in progress", () => {
-    const home = [row("h1", { HR: 10, H: 40, AB: 100 })];
-    const away = [row("a1", { HR: 8, H: 30, AB: 100 })];
-    expect(buildLiveMatchupUpdate(true, categories, home, away, {})).toEqual({
+  it("returns a no-data result when nobody has played today", () => {
+    const update = buildLiveMatchupUpdate(
+      baseInput({ homePeriodStats: [{ HR: 10, H: 40, AB: 100 }], awayPeriodStats: [{ HR: 8, H: 30, AB: 100 }] }),
+    );
+    expect(update).toEqual({
       live: false,
+      hasTodayStats: false,
       userScore: 0,
       opponentScore: 0,
       categoryScores: [],
@@ -32,16 +45,20 @@ describe("buildLiveMatchupUpdate", () => {
     });
   });
 
-  it("adds live lines onto season totals and recomputes the category battle", () => {
-    // Season: home leads HR 10-8 and AVG .400-.300.
-    const home = [row("h1", { HR: 10, H: 40, AB: 100 })];
-    const away = [row("a1", { HR: 8, H: 30, AB: 100 })];
-    // Live: the away hitter homers twice and goes 3-3, flipping both categories.
-    const live = { a1: liveEntry(9, { HR: 3, H: 3, AB: 3 }) };
-
-    const update = buildLiveMatchupUpdate(true, categories, home, away, live);
+  it("adds live lines onto the period's totals and recomputes the category battle", () => {
+    const update = buildLiveMatchupUpdate(
+      baseInput({
+        // This week so far: home leads HR 10-8 and AVG .400-.300.
+        homePeriodStats: [{ HR: 10, H: 40, AB: 100 }],
+        awayPeriodStats: [{ HR: 8, H: 30, AB: 100 }],
+        // Live: the away hitter homers twice and goes 3-3, flipping HR.
+        todayLines: { a1: liveEntry(9, { HR: 3, H: 3, AB: 3 }) },
+        liveGameInProgress: true,
+      }),
+    );
 
     expect(update.live).toBe(true);
+    expect(update.hasTodayStats).toBe(true);
     // HR: home 10 vs away 8+3=11 -> away (opponent) wins.
     const hr = update.categoryScores.find((score) => score.category === "HR")!;
     expect(hr.userValue).toBe(10);
@@ -58,13 +75,53 @@ describe("buildLiveMatchupUpdate", () => {
     expect(update.livePoints).toEqual({ a1: 9 });
   });
 
+  it("keeps counting finished games today without flagging the matchup live", () => {
+    const update = buildLiveMatchupUpdate(
+      baseInput({
+        homePeriodStats: [{ HR: 10 }],
+        awayPeriodStats: [{ HR: 8 }],
+        // Both games ended earlier today; the lines still count.
+        todayLines: { h1: liveEntry(4, { HR: 1 }, "Final"), a1: liveEntry(0, { HR: 0 }, "Final") },
+        liveGameInProgress: false,
+      }),
+    );
+
+    expect(update.live).toBe(false);
+    expect(update.hasTodayStats).toBe(true);
+    const hr = update.categoryScores[0];
+    expect(hr.userValue).toBe(11);
+    expect(hr.opponentValue).toBe(8);
+  });
+
+  it("ignores today's lines for players no longer in the active lineup", () => {
+    const update = buildLiveMatchupUpdate(
+      baseInput({
+        categories: ["HR"],
+        homePeriodStats: [{ HR: 10 }],
+        awayPeriodStats: [{ HR: 8 }],
+        todayLines: { benched: liveEntry(4, { HR: 5 }) },
+        liveGameInProgress: true,
+      }),
+    );
+
+    const hr = update.categoryScores[0];
+    expect(hr.userValue).toBe(10);
+    expect(hr.opponentValue).toBe(8);
+  });
+
   it("flips results and scores to the viewer's perspective when they are away", () => {
-    const home = [row("h1", { HR: 10 })];
-    const away = [row("a1", { HR: 8 })];
-    const live = { a1: liveEntry(4, { HR: 1 }) };
+    const update = buildLiveMatchupUpdate(
+      baseInput({
+        isHome: false,
+        categories: ["HR"],
+        homePeriodStats: [{ HR: 10 }],
+        awayPeriodStats: [{ HR: 8 }],
+        todayLines: { a1: liveEntry(4, { HR: 1 }) },
+        liveGameInProgress: true,
+      }),
+    );
 
     // Viewer is the away team: home still wins HR 10-9, so the viewer loses it.
-    const update = buildLiveMatchupUpdate(false, ["HR"], home, away, live);
     const hr = update.categoryScores[0];
     expect(hr.userValue).toBe(9);
     expect(hr.opponentValue).toBe(10);

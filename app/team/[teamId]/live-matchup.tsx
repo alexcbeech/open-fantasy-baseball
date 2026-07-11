@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLiveMatchup } from "@/app/use-live-matchup";
 import { rowPoints } from "@/lib/fantasy/player-view";
-import type { LineupPlayer, LiveMatchupUpdate, MatchupDetails, RosterSlot } from "@/lib/fantasy/types";
+import type { LineupPlayer, MatchupDetails, RosterSlot } from "@/lib/fantasy/types";
 
 // Order starters the way the lineup is displayed so the two rosters line up
 // position-by-position; reserves are excluded from the head-to-head compare.
@@ -16,42 +16,19 @@ function orderedStarters(lineup: LineupPlayer[]): LineupPlayer[] {
 
 /**
  * The Matchup tab. Server-rendered with the stored (nightly) category battle,
- * then polls for live in-game recalculation: while games are in progress the
- * category values, categories-won score, and each starter's points update from
- * live boxscore lines. When nothing is live it simply shows the stored values.
+ * then polls for the live recalculation: whenever today's games have produced
+ * stats (in progress or already final) the category values, categories-won
+ * score, and each starter's points reflect them, with a LIVE pill while any
+ * game is still going. When nobody has played today it shows stored values.
  */
 export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
-  const [update, setUpdate] = useState<LiveMatchupUpdate | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const response = await fetch(`/api/v1/teams/${teamId}/matchup/live`);
-        if (!response.ok) {
-          return;
-        }
-        const result = (await response.json()) as { update?: LiveMatchupUpdate | null };
-        if (active) {
-          setUpdate(result.update ?? null);
-        }
-      } catch {
-        // Keep the last known values on a transient failure.
-      }
-    };
-
-    load();
-    const timer = setInterval(load, 30000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [teamId]);
+  const update = useLiveMatchup(teamId);
 
   const isLive = Boolean(update?.live);
-  const userScore = isLive ? update!.userScore : matchup.userScore;
-  const opponentScore = isLive ? update!.opponentScore : matchup.opponentScore;
-  const categoryScores = isLive ? update!.categoryScores : matchup.categoryScores;
+  const hasToday = Boolean(update?.hasTodayStats);
+  const userScore = hasToday ? update!.userScore : matchup.userScore;
+  const opponentScore = hasToday ? update!.opponentScore : matchup.opponentScore;
+  const categoryScores = hasToday ? update!.categoryScores : matchup.categoryScores;
   const livePoints = update?.livePoints ?? {};
 
   const userStarters = orderedStarters(matchup.userLineup);
@@ -83,6 +60,33 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
           </div>
         </div>
 
+        {/* Yahoo-style category totals directly under the score: this week's
+            numbers hug the centered category column, and the leading side's
+            value reads green. The result is spelled out for screen readers. */}
+        <h3 id="category-heading">Category Breakdown</h3>
+        <div className="category-table" aria-labelledby="category-heading">
+          <div className="category-row category-head" aria-hidden="true">
+            <span>{matchup.userTeam.teamName}</span>
+            <span>Cat</span>
+            <span>{matchup.opponentTeam.teamName}</span>
+          </div>
+          {categoryScores.map((score) => (
+            <div className="category-row" key={score.category}>
+              <span className={score.result === "win" ? "category-value leading" : "category-value"}>{score.userValue}</span>
+              <span className="category-cat">{score.category}</span>
+              <span className={score.result === "loss" ? "category-value leading" : "category-value"}>
+                {score.opponentValue}
+              </span>
+              <span className="visually-hidden">
+                {score.result === "tie" ? "tied" : score.result === "win" ? "you lead" : "opponent leads"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="compare-heading">
+        <h3 id="compare-heading">Starters Head to Head</h3>
         <div className="matchup-compare" aria-label="Starters head to head">
           {Array.from({ length: rowCount }).map((_, index) => {
             const user = userStarters[index];
@@ -96,26 +100,6 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="panel" aria-labelledby="category-heading">
-        <h3 id="category-heading">Category Breakdown</h3>
-        <div className="category-table">
-          <div className="category-row category-head">
-            <span>{matchup.userTeam.teamName}</span>
-            <span>Cat</span>
-            <span>{matchup.opponentTeam.teamName}</span>
-            <span>Result</span>
-          </div>
-          {categoryScores.map((score) => (
-            <div className="category-row" key={score.category}>
-              <strong>{score.userValue}</strong>
-              <span className="slot">{score.category}</span>
-              <strong>{score.opponentValue}</strong>
-              <span className={`pill result-${score.result}`}>{score.result.toUpperCase()}</span>
-            </div>
-          ))}
         </div>
       </section>
     </div>

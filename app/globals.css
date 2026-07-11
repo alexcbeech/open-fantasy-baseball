@@ -1496,6 +1496,8 @@ button.row {
   color: var(--brand-strong);
 }
 
+/* Yahoo-style category totals: both values hug the centered category column
+   and the leading side reads green — no separate result column. */
 .category-table {
   display: grid;
 }
@@ -1504,10 +1506,10 @@ button.row {
   align-items: center;
   border-bottom: 1px solid var(--line);
   display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr) auto;
-  min-height: 44px;
-  padding: 8px 0;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
+  min-height: 40px;
+  padding: 6px 0;
 }
 
 .category-row:last-child {
@@ -1522,24 +1524,27 @@ button.row {
   text-transform: uppercase;
 }
 
-.category-row strong:nth-child(3),
-.category-head span:nth-child(3) {
+.category-row > :first-child {
   text-align: right;
 }
 
-.result-win {
-  background: var(--good-bg);
-  color: var(--win);
-}
-
-.result-loss {
-  background: var(--bad-bg);
-  color: var(--loss);
-}
-
-.result-tie {
-  background: var(--surface-strong);
+.category-cat,
+.category-head span:nth-child(2) {
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.category-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.category-value.leading {
+  color: var(--win);
+  font-weight: 900;
 }
 
 .searchbar {
