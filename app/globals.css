@@ -209,7 +209,10 @@ select {
 
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 /* Hover/focus tooltips for icon-only controls. The accessible name still
@@ -1278,6 +1281,20 @@ button.row {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Outbound stats link (Baseball Savant) under the player identity. */
+.player-external-link {
+  color: var(--brand);
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+  text-decoration: none;
+}
+
+.player-external-link:hover {
+  text-decoration: underline;
 }
 
 .player-meta {
@@ -2900,6 +2917,7 @@ button.row {
   .brand-lockup--clip .brand-mark {
     display: none;
   }
+
 }
 
 /* ---------------------------------------------------------------------------
@@ -3353,6 +3371,20 @@ button.row {
   right: 18px;
   width: min(340px, calc(100vw - 36px));
   z-index: 46;
+}
+
+/* On phones the soft keyboard covers the bottom of the viewport, so the
+   feedback panel anchors to the top instead of floating above the FAB. */
+@media (max-width: 760px) {
+  .feedback-panel {
+    bottom: auto;
+    left: 16px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    right: 16px;
+    top: max(16px, env(safe-area-inset-top));
+    width: auto;
+  }
 }
 
 .feedback-panel-header {

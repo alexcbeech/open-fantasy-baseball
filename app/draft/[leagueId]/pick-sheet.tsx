@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
 import { rowPoints } from "@/lib/fantasy/player-view";
@@ -22,6 +23,7 @@ type PickSheetProps = {
 /** Bottom-sheet pick confirmation: player summary, key stats, draft + queue. */
 export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, isQueued, onConfirm, onToggleQueue, onClose }: PickSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock();
 
   useEffect(() => {
     dialogRef.current?.focus();

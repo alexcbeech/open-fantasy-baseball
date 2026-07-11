@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 
 type LeagueInviteButtonProps = {
   leagueId: string;
@@ -26,6 +27,7 @@ export function LeagueInviteButton({ leagueId }: LeagueInviteButtonProps) {
   const [success, setSuccess] = useState<InviteSuccess | null>(null);
   const [copied, setCopied] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock(open);
 
   useEffect(() => {
     if (!open) {

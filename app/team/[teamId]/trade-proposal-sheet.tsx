@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { tradeIssues, type TradeRosterPlayer } from "@/lib/fantasy/trade-evaluation";
 import type { LineupPlayer } from "@/lib/fantasy/types";
@@ -34,6 +35,7 @@ export function TradeProposalSheet({
   onProposed,
 }: TradeProposalSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock();
   const [theirLineup, setTheirLineup] = useState<LineupPlayer[] | null>(null);
   const [myLineup, setMyLineup] = useState<LineupPlayer[] | null>(null);
   const [requested, setRequested] = useState<Set<string>>(new Set());

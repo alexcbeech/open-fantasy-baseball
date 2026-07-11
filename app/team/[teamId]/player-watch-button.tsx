@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import type { PlayerWatchItem } from "@/lib/fantasy/types";
 
 type PlayerWatchButtonProps = {
@@ -15,6 +16,7 @@ type PlayerWatchButtonProps = {
 export function PlayerWatchButton({ items }: PlayerWatchButtonProps) {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock(open);
 
   const count = items.length;
 

@@ -27,7 +27,7 @@ export default async function HomePage() {
   return (
     <main className="app-shell app-shell--flush">
       <header className="topbar">
-        <BrandLockup kicker="Open Fantasy" title="Baseball" />
+        <BrandLockup />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
           {currentUser?.isAdmin ? (

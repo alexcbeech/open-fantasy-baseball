@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import type { LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
@@ -19,6 +20,7 @@ type FillSlotSheetProps = {
 
 export function FillSlotSheet({ slot, lineup, lockedPlayerIds, onSelect, onClose }: FillSlotSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock();
 
   useEffect(() => {
     dialogRef.current?.focus();
