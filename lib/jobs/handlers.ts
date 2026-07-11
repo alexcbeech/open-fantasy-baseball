@@ -1,5 +1,6 @@
 import { finalizeEndedMatchups, recomputeMatchups } from "@/lib/data/matchup-scoring";
 import { drainNotifications } from "@/lib/data/notifications";
+import { setBotLineups } from "./bot-lineups";
 import { runNightlyProcessing } from "./nightly-processing";
 
 /**
@@ -13,6 +14,9 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Waiver resolution + transaction audit. runNightlyProcessing already filters
   // to pending, due claims under `for update`, so a retry is safe.
   nightly_processing: async () => runNightlyProcessing(),
+  // Bot teams run Start Active Players on their own lineups. Re-running finds
+  // nothing left to move, so a retry is a no-op.
+  set_bot_lineups: async () => setBotLineups(),
   // Recompute every active matchup's category battle from current lineups and
   // fresh stats; an upsert-only recompute, safe to repeat. Standings are
   // read-derived from these scores, so this keeps them fresh too.
