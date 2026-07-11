@@ -169,6 +169,12 @@ export type PlayerNextGame = {
   opponent: string | null;
   homeAway: "home" | "away";
   venue: string | null;
+  /** The opponent's projected starter, when the schedule names one. */
+  opposingPitcher?: {
+    name: string;
+    /** Throwing hand code from MLB data: "L", "R", or "S"; null when unknown. */
+    throws: string | null;
+  } | null;
 };
 
 export type PlayerValueMetrics = {

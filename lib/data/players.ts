@@ -166,6 +166,8 @@ type PlayerNextGameRow = {
   venue_name: string | null;
   home_away: "home" | "away";
   opponent: string | null;
+  opposing_pitcher_name: string | null;
+  opposing_pitcher_throws: string | null;
 };
 
 type PlayerNewsRow = {
@@ -282,10 +284,16 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         query<PlayerNextGameRow>(
           `select g.game_date, g.venue_name,
              case when g.home_mlb_team_id = $1 then 'home' else 'away' end as home_away,
-             case when g.home_mlb_team_id = $1 then away.abbreviation else home.abbreviation end as opponent
+             case when g.home_mlb_team_id = $1 then away.abbreviation else home.abbreviation end as opponent,
+             opp_pitcher.full_name as opposing_pitcher_name,
+             opp_pitcher.throws as opposing_pitcher_throws
            from mlb_game g
            left join mlb_team home on home.id = g.home_mlb_team_id
            left join mlb_team away on away.id = g.away_mlb_team_id
+           left join player opp_pitcher on opp_pitcher.id = case
+             when g.home_mlb_team_id = $1 then g.away_probable_pitcher_player_id
+             else g.home_probable_pitcher_player_id
+           end
            where (g.home_mlb_team_id = $1 or g.away_mlb_team_id = $1) and g.game_date >= now()
            order by g.game_date asc
            limit 1`,
@@ -399,6 +407,9 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
               opponent: nextGameRow.opponent,
               homeAway: nextGameRow.home_away,
               venue: nextGameRow.venue_name,
+              opposingPitcher: nextGameRow.opposing_pitcher_name
+                ? { name: nextGameRow.opposing_pitcher_name, throws: nextGameRow.opposing_pitcher_throws }
+                : null,
             }
           : null,
         news: newsResult.rows.map(mapNewsItem),

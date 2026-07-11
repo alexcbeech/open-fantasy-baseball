@@ -317,6 +317,11 @@ function formatGameTime(iso: string) {
   });
 }
 
+/** "R" → "RHP ", "L" → "LHP "; unknown hands add nothing. */
+function formatPitcherHand(throws: string | null) {
+  return throws === "R" || throws === "L" || throws === "S" ? `${throws}HP ` : "";
+}
+
 function LiveGameCard({ status }: { status: LivePlayerStatus }) {
   return (
     <div className="live-game" aria-label="Live game">
@@ -357,6 +362,12 @@ function PlayerOverview({
           <span className="next-game-value">
             {formatGameTime(player.nextGame.date)} {player.nextGame.homeAway === "home" ? "vs" : "@"}{" "}
             {player.nextGame.opponent ?? "TBD"}
+            {player.nextGame.opposingPitcher ? (
+              <span className="next-game-pitcher">
+                Probable: {formatPitcherHand(player.nextGame.opposingPitcher.throws)}
+                {player.nextGame.opposingPitcher.name}
+              </span>
+            ) : null}
           </span>
         </div>
       ) : null}

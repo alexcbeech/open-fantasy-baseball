@@ -69,6 +69,15 @@ type MlbScheduleTeam = {
   };
 };
 
+type MlbPeopleResponse = {
+  people?: Array<{
+    id?: number;
+    pitchHand?: {
+      code?: string;
+    };
+  }>;
+};
+
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
 const rosterTypes = ["active", "40Man"] as const;
 
@@ -154,6 +163,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
     });
 
     const schedulePayload = await fetchSchedulePayload(baseUrl);
+    const pitcherHands = await fetchProbablePitcherHands(schedulePayload, baseUrl);
 
     await client.query("begin");
 
@@ -241,7 +251,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
       );
     }
 
-    const scheduleRowsSeen = await writeMlbSchedule(client, schedulePayload);
+    const scheduleRowsSeen = await writeMlbSchedule(client, schedulePayload, pitcherHands);
     rowsSeen += scheduleRowsSeen;
 
     // The roster feed labels every pitcher "P"; give each a fillable dedicated
@@ -294,7 +304,47 @@ async function fetchSchedulePayload(baseUrl = defaultBaseUrl) {
 }
 
 export async function syncMlbSchedule(client: { query: (sql: string, values?: unknown[]) => Promise<unknown> }, baseUrl = defaultBaseUrl) {
-  return writeMlbSchedule(client, await fetchSchedulePayload(baseUrl));
+  const schedulePayload = await fetchSchedulePayload(baseUrl);
+  const pitcherHands = await fetchProbablePitcherHands(schedulePayload, baseUrl);
+  return writeMlbSchedule(client, schedulePayload, pitcherHands);
+}
+
+/**
+ * Look up throwing hands for the window's probable pitchers. The schedule's
+ * probablePitcher hydration carries only id/name, so this batches the ids
+ * through /people (which does return pitchHand). Best-effort: a failure means
+ * hands stay null and the sync proceeds without them.
+ */
+async function fetchProbablePitcherHands(schedulePayload: MlbScheduleResponse, baseUrl = defaultBaseUrl) {
+  const pitcherIds = new Set<number>();
+
+  for (const scheduleDate of schedulePayload.dates ?? []) {
+    for (const game of scheduleDate.games ?? []) {
+      for (const side of [game.teams?.away, game.teams?.home]) {
+        if (side?.probablePitcher?.id != null) {
+          pitcherIds.add(side.probablePitcher.id);
+        }
+      }
+    }
+  }
+
+  const handByMlbId = new Map<number, string>();
+
+  for (const batch of chunk([...pitcherIds], 100)) {
+    try {
+      const payload = await fetchJson<MlbPeopleResponse>(`/people?personIds=${batch.join(",")}`, baseUrl);
+      for (const person of payload.people ?? []) {
+        const hand = person.pitchHand?.code;
+        if (person.id != null && (hand === "L" || hand === "R" || hand === "S")) {
+          handByMlbId.set(person.id, hand);
+        }
+      }
+    } catch {
+      // Hands are cosmetic; don't fail the whole schedule sync over them.
+    }
+  }
+
+  return handByMlbId;
 }
 
 // Regular season and postseason only. All-Star (A), exhibition (E), and
@@ -306,6 +356,7 @@ const realGameTypes = new Set(["R", "F", "D", "L", "W"]);
 async function writeMlbSchedule(
   client: { query: (sql: string, values?: unknown[]) => Promise<unknown> },
   schedulePayload: MlbScheduleResponse,
+  pitcherHandByMlbId: Map<number, string> = new Map(),
 ) {
   let rowsSeen = 0;
   // A postponed game can appear under two dates with the same gamePk; the
@@ -347,18 +398,20 @@ async function writeMlbSchedule(
   const pitcherIdByMlbId = new Map<number, string>();
   for (const batch of chunk([...pitcherByMlbId.entries()], writeChunkSize)) {
     const result = await client.query(
-      `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
-       select t.mlb_player_id, t.full_name, 'active', t.team_id
-       from unnest($1::integer[], $2::text[], $3::integer[]) as t(mlb_player_id, full_name, team_id)
+      `insert into player (mlb_player_id, full_name, status, current_mlb_team_id, throws)
+       select t.mlb_player_id, t.full_name, 'active', t.team_id, t.throws
+       from unnest($1::integer[], $2::text[], $3::integer[], $4::text[]) as t(mlb_player_id, full_name, team_id, throws)
        on conflict (mlb_player_id) do update set
          full_name = excluded.full_name,
          current_mlb_team_id = coalesce(player.current_mlb_team_id, excluded.current_mlb_team_id),
+         throws = coalesce(excluded.throws, player.throws),
          updated_at = now()
        returning id, mlb_player_id`,
       [
         batch.map(([mlbPlayerId]) => mlbPlayerId),
         batch.map(([, pitcher]) => pitcher.fullName),
         batch.map(([, pitcher]) => pitcher.teamId),
+        batch.map(([mlbPlayerId]) => pitcherHandByMlbId.get(mlbPlayerId) ?? null),
       ],
     );
 
