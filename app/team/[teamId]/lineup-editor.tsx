@@ -109,12 +109,13 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
   );
 }
 
-/** Green check for a pitcher confirmed as today's probable starter. */
+/** Green badge (white check on a filled circle) for today's probable starter. */
 function ProbableStarterCheck() {
   return (
     <span className="probable-start-check" title="Scheduled to start today" aria-label="Scheduled to start today" role="img">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="12" fill="currentColor" />
+        <path d="M6.5 12.5 10.5 16.5 17.5 8" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </span>
   );
