@@ -24,6 +24,8 @@ type LineupEditorProps = {
   initialLineup: LineupPlayer[];
   /** League lock mode: daily per-player locks or whole-lineup first-game. */
   lockMode?: LineupLockMode;
+  /** Latest recent-news headline per player id; players absent have no news. */
+  newsByPlayerId?: Record<string, string>;
 };
 
 type LiveEntry = { state: string | null; points: number; stats?: Record<string, number | string> };
@@ -86,7 +88,28 @@ function slotsFromLineup(lineup: LineupPlayer[]): Record<string, RosterSlot> {
   return Object.fromEntries(lineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>;
 }
 
-export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: LineupEditorProps) {
+/**
+ * Small inline indicator for a player carrying recent news. The row itself
+ * opens the player detail (where the full story lives), so this is a signal,
+ * not a control; the headline surfaces on hover for pointer users.
+ */
+function PlayerNewsIcon({ headline }: { headline: string }) {
+  return (
+    <span className="player-news-icon" title={headline} aria-label={`Recent news: ${headline}`} role="img">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M4 4h13a1 1 0 0 1 1 1v13a2 2 0 0 0 2-2V8h-2M4 4a1 1 0 0 0-1 1v12a3 3 0 0 0 3 3h14M7 8h8M7 12h8M7 16h5"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
+export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsByPlayerId }: LineupEditorProps) {
   const router = useRouter();
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
@@ -368,7 +391,10 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: Line
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >
-                          <span className="player-name">{player.name}</span>
+                          <span className="player-name">
+                            {player.name}
+                            {newsByPlayerId?.[player.id] ? <PlayerNewsIcon headline={newsByPlayerId[player.id]} /> : null}
+                          </span>
                           <span className="player-meta">
                             {player.mlbTeam} &ndash; {player.positions.join(", ")}
                           </span>
