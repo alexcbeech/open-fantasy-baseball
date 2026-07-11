@@ -4,7 +4,6 @@ import { AuthControl } from "@/app/auth-control";
 import { BrandLockup } from "@/app/brand-lockup";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
-import { PlayerWatchButton } from "./player-watch-button";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
@@ -149,12 +148,13 @@ function TeamTab({
   watchItems: PlayerWatchItem[];
   lockMode: LineupLockMode;
 }) {
+  // Recent news renders as a small icon on each affected player's row (the
+  // detail sheet carries the full story), replacing the old Player Watch button.
+  const newsByPlayerId = Object.fromEntries(watchItems.map((item) => [item.id, item.headline]));
+
   return (
     <div className="team-tab">
-      <div className="team-toolbar">
-        <PlayerWatchButton items={watchItems} />
-      </div>
-      <LineupEditor teamId={teamId} initialLineup={lineup} lockMode={lockMode} />
+      <LineupEditor teamId={teamId} initialLineup={lineup} lockMode={lockMode} newsByPlayerId={newsByPlayerId} />
     </div>
   );
 }

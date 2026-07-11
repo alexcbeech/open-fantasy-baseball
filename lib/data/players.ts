@@ -11,9 +11,10 @@ function mockPlayerWatch(): PlayerWatchItem[] {
 }
 
 /**
- * The team's rostered players that currently have news, most-recent first.
- * Backs the Team tab's Player Watch button; falls back to the mock roster's
- * headlines in demo mode.
+ * The team's rostered players that currently have recent news, most-recent
+ * first. Backs the Team tab's per-player news indicators; falls back to the
+ * mock roster's headlines in demo mode. "Recent" is a week: older items are
+ * stale enough that flagging them next to the player reads as noise.
  */
 export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatchItem[]> {
   return withDemoFallback(
@@ -25,7 +26,7 @@ export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatch
          join lateral (
            select headline, published_at
            from player_news pn
-           where pn.player_id = p.id
+           where pn.player_id = p.id and pn.published_at > now() - interval '7 days'
            order by published_at desc
            limit 1
          ) latest_news on true
