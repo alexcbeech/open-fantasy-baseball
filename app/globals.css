@@ -1280,16 +1280,31 @@ button.row {
   white-space: nowrap;
 }
 
+/* Name + status icons on one line: the name ellipsizes, the icons never do.
+   Icons inside the ellipsizing span itself would vanish on long names. */
+.player-name-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.player-name-row .player-name {
+  min-width: 0;
+}
+
 /* Recent-news indicator beside a player's name; the headline is its tooltip. */
 .player-news-icon {
   color: var(--accent);
-  display: inline-block;
-  margin-left: 6px;
-  vertical-align: -1px;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
-.player-news-icon svg {
-  display: inline-block;
+/* Green check for a pitcher confirmed as today's probable starter. */
+.probable-start-check {
+  color: var(--win);
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
 /* Outbound stats link (Baseball Savant) under the player identity. */

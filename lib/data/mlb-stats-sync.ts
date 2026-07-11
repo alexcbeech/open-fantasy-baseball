@@ -552,12 +552,22 @@ export type SyncPlayerBiosResult = {
   source: string;
 };
 
-type MlbPerson = { id?: number; primaryNumber?: string };
+type MlbPerson = {
+  id?: number;
+  primaryNumber?: string;
+  batSide?: { code?: string };
+  pitchHand?: { code?: string };
+};
 type MlbPeopleResponse = { people?: MlbPerson[] };
 
+function handCode(value: string | undefined): string | null {
+  return value === "L" || value === "R" || value === "S" ? value : null;
+}
+
 /**
- * Fill in player bio detail (jersey number) from the MLB Stats API, batching
- * the /people endpoint so ~1,300 players resolve in a dozen requests.
+ * Fill in player bio detail (jersey number, bat side, throwing hand) from the
+ * MLB Stats API, batching the /people endpoint so ~1,300 players resolve in a
+ * dozen requests. Bat/throw hands feed the platoon-aware daily projections.
  */
 export async function syncPlayerBios(baseUrl = defaultBaseUrl): Promise<SyncPlayerBiosResult> {
   const pool = getPool();
@@ -585,13 +595,20 @@ export async function syncPlayerBios(baseUrl = defaultBaseUrl): Promise<SyncPlay
 
         for (const person of payload.people ?? []) {
           rowsSeen += 1;
-          if (person.id == null || !person.primaryNumber) {
+          const bats = handCode(person.batSide?.code);
+          const throws = handCode(person.pitchHand?.code);
+          if (person.id == null || (!person.primaryNumber && !bats && !throws)) {
             continue;
           }
-          const result = await client.query(`update player set jersey_number = $1, updated_at = now() where mlb_player_id = $2`, [
-            person.primaryNumber,
-            person.id,
-          ]);
+          const result = await client.query(
+            `update player set
+               jersey_number = coalesce($1, jersey_number),
+               bats = coalesce($2, bats),
+               throws = coalesce($3, throws),
+               updated_at = now()
+             where mlb_player_id = $4`,
+            [person.primaryNumber ?? null, bats, throws, person.id],
+          );
           rowsWritten += result.rowCount ?? 0;
         }
       }

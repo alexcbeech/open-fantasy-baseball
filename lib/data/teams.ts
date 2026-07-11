@@ -28,6 +28,8 @@ const lineupRowsSql = `
             next_game.opponent,
             todays_game.first_pitch as todays_game_start,
             todays_game.probable_starter as todays_probable_starter,
+            p.bats,
+            todays_game.opposing_pitcher_throws as todays_opposing_pitcher_throws,
             adp.adp,
             0 as matchup_total
           from lineup_entry le
@@ -57,11 +59,18 @@ const lineupRowsSql = `
           left join lateral (
             -- First pitch of the player's MLB game today (baseball's "today" is
             -- the ET official date). Once this passes, the lineup slot locks.
-            -- probable_starter flags pitchers listed as today's probable starter.
+            -- probable_starter flags pitchers listed as today's probable starter;
+            -- opposing_pitcher_throws is the hand of the earliest game's opposing
+            -- probable starter, for platoon-aware daily projections.
             select
               min(g.game_date) as first_pitch,
-              bool_or(g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id) as probable_starter
+              bool_or(g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id) as probable_starter,
+              (array_agg(opp.throws order by g.game_date) filter (where opp.throws is not null))[1] as opposing_pitcher_throws
             from mlb_game g
+            left join player opp on opp.id = case
+              when g.home_mlb_team_id = p.current_mlb_team_id then g.away_probable_pitcher_player_id
+              else g.home_probable_pitcher_player_id
+            end
             where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
               and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
                 = (now() at time zone 'America/New_York')::date
@@ -70,7 +79,7 @@ const lineupRowsSql = `
             and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch,
-            todays_game.probable_starter, adp.adp
+            todays_game.probable_starter, todays_game.opposing_pitcher_throws, adp.adp
           order by le.lineup_date desc, le.id
 `;
 

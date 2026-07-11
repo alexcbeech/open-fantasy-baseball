@@ -37,6 +37,8 @@ export type DbPlayerRow = {
   opponent?: string | null;
   todays_game_start?: Date | string | null;
   todays_probable_starter?: boolean | null;
+  bats?: string | null;
+  todays_opposing_pitcher_throws?: string | null;
   rostered_percent?: string | number | null;
   adp?: string | number | null;
 };
@@ -120,6 +122,8 @@ export function mapPlayer(row: DbPlayerRow): Player {
     nextGame,
     todaysGameStart: row.todays_game_start ? new Date(row.todays_game_start).toISOString() : null,
     probableStarterToday: row.todays_probable_starter ?? null,
+    bats: row.bats ?? null,
+    todaysOpposingPitcherThrows: row.todays_opposing_pitcher_throws ?? null,
     rosteredPercent: row.rostered_percent != null ? Math.round(Number(row.rostered_percent)) : null,
     adp: row.adp != null ? Number(row.adp) : null,
   };

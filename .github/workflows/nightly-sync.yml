@@ -49,6 +49,12 @@ jobs:
         continue-on-error: true
         run: npm run sync:mlb
 
+      # Bio detail (jersey numbers, bat side, throwing hand). Hands feed the
+      # platoon-aware daily projections, so keep them fresh as rosters churn.
+      - name: Sync player bios
+        continue-on-error: true
+        run: npm run sync:bios
+
       - name: Sync player stats (season, splits, game logs)
         run: npm run sync:stats
 

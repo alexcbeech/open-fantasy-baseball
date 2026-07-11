@@ -118,6 +118,33 @@ describe("planActiveLineup", () => {
     expect(next.of).toBe("OF");
   });
 
+  it("prefers the platoon advantage between otherwise-equal hitters", () => {
+    // Same projection, both facing a lefty starter: the righty bat carries the
+    // platoon advantage and takes the lone C slot.
+    const lineup = [
+      entry("C", { id: "lefty-bat", positions: ["C"], projectedStats: proj(200), bats: "L", todaysOpposingPitcherThrows: "L" }),
+      entry("BN", { id: "righty-bat", positions: ["C"], projectedStats: proj(200), bats: "R", todaysOpposingPitcherThrows: "L" }),
+    ];
+
+    const next = planActiveLineup(lineup, new Set(), tightSlots);
+    expect(next["righty-bat"]).toBe("C");
+    expect(next["lefty-bat"]).toBe("BN");
+  });
+
+  it("always seats a probable starter ahead of a higher-projected reliever", () => {
+    // One P slot to fight over: the reliever's team plays today and their
+    // projection dwarfs the starter's, but the confirmed probable wins.
+    const pOnlySlots: Record<RosterSlot, number> = { ...defaultRosterSlots, SP: 0, RP: 0, P: 1 };
+    const lineup = [
+      entry("BN", { id: "big-proj-rp", positions: ["RP"], projectedStats: proj(400) }),
+      entry("BN", { id: "probable-sp", positions: ["SP"], probableStarterToday: true, projectedStats: proj(100) }),
+    ];
+
+    const next = planActiveLineup(lineup, new Set(), pOnlySlots);
+    expect(next["probable-sp"]).toBe("P");
+    expect(next["big-proj-rp"]).toBe("BN");
+  });
+
   it("seats a bat-only DH in the UTIL slot", () => {
     const lineup = [
       entry("BN", { id: "dh", positions: ["UTIL"], projectedStats: proj(400) }),

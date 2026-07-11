@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
+import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
 import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
 import {
   findLineupLockIssues,
@@ -104,6 +105,18 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+      </svg>
+    </span>
+  );
+}
+
+/** Green badge (white check on a filled circle) for today's probable starter. */
+function ProbableStarterCheck() {
+  return (
+    <span className="probable-start-check" title="Scheduled to start today" aria-label="Scheduled to start today" role="img">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="12" fill="currentColor" />
+        <path d="M6.5 12.5 10.5 16.5 17.5 8" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </span>
   );
@@ -346,7 +359,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                 <span>{group.label}</span>
                 <span className="lineup-col-heads" aria-hidden="true">
                   <span>Pts</span>
-                  <span>Proj</span>
+                  <span>Today</span>
                 </span>
               </div>
               {group.rows.map((row) =>
@@ -354,7 +367,10 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                   (() => {
                     const entry = row.entry;
                     const player = entry.player;
-                    const { seasonPts, projPts } = rowPoints(player);
+                    const { seasonPts } = rowPoints(player);
+                    // Expected points from today's game (platoon-aware), the
+                    // number that matters when setting today's lineup.
+                    const todayPts = Math.round(projectTodayPoints(player) * 10) / 10;
                     const liveEntry = live[player.id];
                     const locked = isEntryLocked(entry);
                     const boldPts = liveEntry ? liveEntry.points : seasonPts;
@@ -391,8 +407,9 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >
-                          <span className="player-name">
-                            {player.name}
+                          <span className="player-name-row">
+                            <span className="player-name">{player.name}</span>
+                            {player.probableStarterToday ? <ProbableStarterCheck /> : null}
                             {newsByPlayerId?.[player.id] ? <PlayerNewsIcon headline={newsByPlayerId[player.id]} /> : null}
                           </span>
                           <span className="player-meta">
@@ -407,12 +424,12 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={
                             liveEntry
-                              ? `${player.name}: ${boldPts} live fantasy points, ${projPts} projected`
-                              : `${player.name}: ${seasonPts} season fantasy points, ${projPts} projected`
+                              ? `${player.name}: ${boldPts} live fantasy points, ${todayPts} projected today`
+                              : `${player.name}: ${seasonPts} season fantasy points, ${todayPts} projected today`
                           }
                         >
                           <span className={liveEntry ? "points-live is-live" : "points-live"}>{boldPts}</span>
-                          <span className="points-proj">{projPts}</span>
+                          <span className="points-proj">{todayPts}</span>
                         </button>
                       </div>
                     );
