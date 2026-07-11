@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
@@ -25,20 +24,19 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <Link className="icon-button" href="/" aria-label="Back to all teams">
-          &larr;
-        </Link>
-        <div className="brand-lockup">
-          <span className="brand-kicker">Open Fantasy</span>
-          <span className="brand-title">Sign In</span>
+        <div className="brand-lockup brand-lockup--logo brand-lockup--auth">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="brand-mark" src="/brand/ofb-mark.svg" alt="" width={56} height={56} aria-hidden="true" />
+          <span className="brand-text">
+            <span className="brand-kicker">Open Fantasy</span>
+            <span className="brand-title">Baseball</span>
+          </span>
         </div>
-        <span className="topbar-spacer" aria-hidden="true" />
       </header>
 
       <section className="page auth-page">
         <div className="panel auth-page-panel">
           <h1>Sign in</h1>
-          <p className="subtle">Use your Neon Auth account to manage teams, preferences, and owner API tokens.</p>
           {isNeonAuthConfigured() ? (
             <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
           ) : (

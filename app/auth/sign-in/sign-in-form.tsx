@@ -15,7 +15,7 @@ export function SignInForm({ signupsEnabled, next }: { signupsEnabled: boolean; 
       {next ? <input name="next" type="hidden" value={next} /> : null}
       <label className="field">
         Email
-        <input autoComplete="email" name="email" required type="email" />
+        <input autoComplete="email" autoFocus name="email" required type="email" />
       </label>
       <label className="field">
         Password

@@ -56,5 +56,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Skip Next's build assets and the files served straight out of /public
+  // (the brand marks, the service worker). Without excluding these, the Neon
+  // Auth middleware intercepts them for signed-out visitors and returns the
+  // login page HTML instead of the asset -- which broke the logo on the very
+  // pages (sign-in, sign-up) where the visitor is always signed out.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|sw.js).*)"],
 };
