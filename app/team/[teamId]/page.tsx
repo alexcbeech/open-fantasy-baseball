@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
+import { BrandLockup } from "@/app/brand-lockup";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { PlayerWatchButton } from "./player-watch-button";
@@ -84,10 +85,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup brand-lockup--clip">
-          <span className="brand-kicker">{team.leagueName}</span>
-          <span className="brand-title">{team.teamName}</span>
-        </div>
+        <BrandLockup clip kicker={team.leagueName} title={team.teamName} />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
           <Link className="icon-button" href={`/team/${team.id}?tab=league`} aria-label="Open league and commissioner tools">

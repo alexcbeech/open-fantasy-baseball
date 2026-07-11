@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
+import { BrandLockup } from "./brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listDraftableLeagues } from "@/lib/data/draft";
 import { listTeamsForCurrentUser } from "@/lib/data/teams";
@@ -26,14 +27,7 @@ export default async function HomePage() {
   return (
     <main className="app-shell app-shell--flush">
       <header className="topbar">
-        <div className="brand-lockup brand-lockup--logo">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-mark" src="/brand/ofb-mark.svg" alt="" width={40} height={40} aria-hidden="true" />
-          <span className="brand-text">
-            <span className="brand-kicker">Open Fantasy</span>
-            <span className="brand-title">Baseball</span>
-          </span>
-        </div>
+        <BrandLockup kicker="Open Fantasy" title="Baseball" />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
           {currentUser?.isAdmin ? (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
+import { BrandLockup } from "@/app/brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getDraftLobby, getDraftState, listDraftPlayers } from "@/lib/data/draft";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
@@ -43,10 +44,7 @@ export default async function DraftPage({ params }: DraftPageProps) {
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup brand-lockup--clip">
-          <span className="brand-kicker">{lobby.leagueName}</span>
-          <span className="brand-title">Draft</span>
-        </div>
+        <BrandLockup clip kicker={lobby.leagueName} title="Draft" />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
         </div>

@@ -4,6 +4,7 @@ import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/l
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { getLeagueInviteByToken } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
+import { AuthShell } from "../auth-shell";
 import { SignUpForm } from "./sign-up-form";
 
 export const dynamic = "force-dynamic";
@@ -42,36 +43,21 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup brand-lockup--logo brand-lockup--auth">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-mark" src="/brand/ofb-mark.svg" alt="" width={56} height={56} aria-hidden="true" />
-          <span className="brand-text">
-            <span className="brand-kicker">Open Fantasy</span>
-            <span className="brand-title">Baseball</span>
-          </span>
-        </div>
-      </header>
-
-      <section className="page auth-page">
-        <div className="panel auth-page-panel">
-          <h1>Create account</h1>
-          <p className="subtle">
-            {invite
-              ? `Create your account to join ${invite.leagueName}. Use ${invite.email} — the invite is tied to it.`
-              : "Create an account for OFB team management and API access."}
-          </p>
-          {!isNeonAuthConfigured() ? (
-            <AuthSetupNotice setup={setup} />
-          ) : areSignupsEnabled() || invite ? (
-            <SignUpForm inviteToken={invite?.token} prefillEmail={invite?.email} />
-          ) : (
-            <SignupsClosedNotice />
-          )}
-        </div>
-      </section>
-    </main>
+    <AuthShell>
+      <h1>Create account</h1>
+      <p className="subtle">
+        {invite
+          ? `Create your account to join ${invite.leagueName}. Use ${invite.email} — the invite is tied to it.`
+          : "Create an account for OFB team management and API access."}
+      </p>
+      {!isNeonAuthConfigured() ? (
+        <AuthSetupNotice setup={setup} />
+      ) : areSignupsEnabled() || invite ? (
+        <SignUpForm inviteToken={invite?.token} prefillEmail={invite?.email} />
+      ) : (
+        <SignupsClosedNotice />
+      )}
+    </AuthShell>
   );
 }
 
@@ -81,9 +67,9 @@ function SignupsClosedNotice() {
       <div className="status-banner bad">
         Account creation is temporarily closed while we finish building OFB. Check back soon.
       </div>
-      <Link className="secondary-button" href="/auth/sign-in">
-        Back to sign in
-      </Link>
+      <p className="auth-alt">
+        <Link href="/auth/sign-in">Back to sign in</Link>
+      </p>
     </div>
   );
 }

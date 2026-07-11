@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
+import { BrandLockup } from "@/app/brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listAdminRunHistory } from "@/lib/data/admin-runs";
 import { listRecentFeedback } from "@/lib/data/feedback";
@@ -25,10 +26,7 @@ export default async function AdminPage() {
           <Link className="icon-button" href="/" aria-label="Back to all teams">
             &larr;
           </Link>
-          <div className="brand-lockup">
-            <span className="brand-kicker">Operations</span>
-            <span className="brand-title">Admin</span>
-          </div>
+          <BrandLockup kicker="Operations" title="Admin" />
           <AuthControl enabled={authEnabled} />
         </header>
 
@@ -52,10 +50,7 @@ export default async function AdminPage() {
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup">
-          <span className="brand-kicker">Operations</span>
-          <span className="brand-title">Admin</span>
-        </div>
+        <BrandLockup kicker="Operations" title="Admin" />
         <AuthControl enabled={authEnabled} />
       </header>
 

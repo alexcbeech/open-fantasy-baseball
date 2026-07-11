@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
+import { BrandLockup } from "@/app/brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listApiTokens } from "@/lib/data/api-tokens";
 import { getProfilePreferences } from "@/lib/data/profile";
@@ -28,10 +29,7 @@ export default async function ProfilePage() {
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup">
-          <span className="brand-kicker">Account</span>
-          <span className="brand-title">Preferences</span>
-        </div>
+        <BrandLockup kicker="Account" title="Preferences" />
         <AuthControl enabled={authEnabled} />
       </header>
 

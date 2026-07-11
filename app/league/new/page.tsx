@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLockup } from "@/app/brand-lockup";
 import { LeagueCreateForm } from "./league-create-form";
 import { defaultCreateLeagueInput } from "@/lib/fantasy/league-create";
 import { defaultHitterCategories, defaultPitcherCategories } from "@/lib/fantasy/defaults";
@@ -10,10 +11,7 @@ export default function NewLeaguePage() {
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup">
-          <span className="brand-kicker">Commissioner</span>
-          <span className="brand-title">Create League</span>
-        </div>
+        <BrandLockup kicker="Commissioner" title="Create League" />
         <span className="topbar-spacer" aria-hidden="true" />
       </header>
 
