@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLockup } from "@/app/brand-lockup";
 import { openApiDocument } from "@/lib/api/openapi";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +44,7 @@ export default function ApiDocsPage() {
         <Link className="icon-button" href="/" aria-label="Back to all teams">
           &larr;
         </Link>
-        <div className="brand-lockup">
-          <span className="brand-kicker">Developer</span>
-          <span className="brand-title">API Docs</span>
-        </div>
+        <BrandLockup kicker="Developer" title="API Docs" />
         <a className="icon-button" href="/api/v1/openapi.json" aria-label="Open OpenAPI JSON">
           JSON
         </a>

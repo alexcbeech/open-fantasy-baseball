@@ -28,9 +28,9 @@ export function SignUpForm({ inviteToken, prefillEmail }: { inviteToken?: string
       <button className="primary-button" disabled={pending} type="submit">
         {pending ? "Creating..." : "Create account"}
       </button>
-      <Link className="secondary-button" href="/auth/sign-in">
-        Sign in instead
-      </Link>
+      <p className="auth-alt">
+        Already have an account? <Link href="/auth/sign-in">Sign in</Link>
+      </p>
     </form>
   );
 }

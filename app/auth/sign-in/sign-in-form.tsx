@@ -25,9 +25,9 @@ export function SignInForm({ signupsEnabled, next }: { signupsEnabled: boolean; 
         {pending ? "Signing in..." : "Sign in"}
       </button>
       {signupsEnabled ? (
-        <Link className="secondary-button" href="/auth/sign-up">
-          Create account
-        </Link>
+        <p className="auth-alt">
+          New to OFB? <Link href="/auth/sign-up">Create an account</Link>
+        </p>
       ) : null}
     </form>
   );

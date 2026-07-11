@@ -174,30 +174,15 @@ select {
   line-height: 1.1;
 }
 
-/* Auth pages have no topbar actions competing for space, so the brand can
-   grow into a larger, more prominent lockup that anchors the sign-in screen. */
-.brand-lockup--auth {
-  gap: 14px;
-}
-
-.brand-lockup--auth .brand-mark {
-  height: 56px;
-  width: 56px;
-}
-
-.brand-lockup--auth .brand-kicker {
-  font-size: 14px;
-}
-
-.brand-lockup--auth .brand-title {
-  font-size: 30px;
-}
-
 /* The team page's brand shows a live team name, which can be long enough to
    push the topbar actions off a phone screen. Let that lockup shrink and
    ellipsize (the full name is repeated in the hero below). Other pages keep
    their short static titles intact. */
 .brand-lockup--clip {
+  min-width: 0;
+}
+
+.brand-lockup--clip .brand-text {
   min-width: 0;
 }
 
@@ -2649,24 +2634,98 @@ p.player-meta,
   gap: 12px;
 }
 
-.auth-page {
+/* Signed-out pages drop the app topbar entirely: a full-height navy hero
+   with the brand lockup centered above one elevated card (see AuthShell). */
+.auth-shell {
+  align-content: center;
+  background:
+    radial-gradient(860px 460px at 50% -140px, rgb(94 138 214 / 35%), transparent 72%),
+    linear-gradient(180deg, var(--topbar-end), var(--topbar-start));
   display: grid;
   justify-items: center;
-  align-content: center;
-  /* Fill the viewport below the ~86px topbar so the lone auth card sits
-     centered instead of stranded at the top on tall desktop screens. */
-  min-height: calc(100dvh - 86px);
+  min-height: 100dvh;
+  padding: 40px 16px;
 }
 
-.auth-page-panel {
+.auth-layout {
   display: grid;
-  gap: 12px;
-  max-width: 420px;
+  justify-items: center;
+  max-width: 408px;
   width: 100%;
 }
 
-.auth-page-panel h1 {
-  margin-bottom: 0;
+.auth-brand {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  /* The mark SVG carries whitespace inside its viewBox, so the visual gap
+     is larger than this number suggests. */
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 26px;
+}
+
+.auth-brand-mark {
+  filter: drop-shadow(0 12px 22px rgb(0 0 0 / 35%));
+  flex: 0 0 auto;
+  height: 104px;
+  width: 104px;
+}
+
+.auth-brand .brand-kicker {
+  font-size: 15px;
+}
+
+.auth-brand .brand-title {
+  font-size: 38px;
+}
+
+.auth-card {
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  padding: 26px 24px;
+  width: 100%;
+}
+
+.auth-card h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.auth-card .subtle {
+  margin: 0;
+}
+
+.auth-card .field input {
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.auth-card .primary-button {
+  border-radius: 10px;
+  min-height: 44px;
+}
+
+.auth-alt {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 2px 0 0;
+  padding-top: 14px;
+  text-align: center;
+}
+
+.auth-alt a {
+  color: var(--brand-strong);
+  font-weight: 800;
+}
+
+.auth-alt a:hover {
+  text-decoration: underline;
 }
 
 .auth-form {
@@ -2834,6 +2893,12 @@ button.row {
 
   .auth-name {
     max-width: 74px;
+  }
+
+  /* Clip lockups carry live league/team names; on phones the mark would
+     squeeze that text down to nothing, so the name wins over the logo. */
+  .brand-lockup--clip .brand-mark {
+    display: none;
   }
 }
 

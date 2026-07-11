@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
+import { AuthShell } from "../auth-shell";
 import { SignInForm } from "./sign-in-form";
 
 export const dynamic = "force-dynamic";
@@ -22,29 +23,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup brand-lockup--logo brand-lockup--auth">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="brand-mark" src="/brand/ofb-mark.svg" alt="" width={56} height={56} aria-hidden="true" />
-          <span className="brand-text">
-            <span className="brand-kicker">Open Fantasy</span>
-            <span className="brand-title">Baseball</span>
-          </span>
-        </div>
-      </header>
-
-      <section className="page auth-page">
-        <div className="panel auth-page-panel">
-          <h1>Sign in</h1>
-          {isNeonAuthConfigured() ? (
-            <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
-          ) : (
-            <AuthSetupNotice setup={setup} />
-          )}
-        </div>
-      </section>
-    </main>
+    <AuthShell>
+      <h1>Sign in</h1>
+      <p className="subtle">Welcome back — sign in to run your team.</p>
+      {isNeonAuthConfigured() ? (
+        <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
+      ) : (
+        <AuthSetupNotice setup={setup} />
+      )}
+    </AuthShell>
   );
 }
 

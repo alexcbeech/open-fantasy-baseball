@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
 import { getLeagueInviteByToken, type PendingLeagueInvite } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
+import { AuthShell } from "@/app/auth/auth-shell";
 import { AcceptInviteForm } from "./accept-invite-form";
 
 export const dynamic = "force-dynamic";
@@ -21,20 +22,9 @@ export default async function JoinPage({ params }: JoinPageProps) {
   const { token } = await params;
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-kicker">Open Fantasy</span>
-          <span className="brand-title">League Invite</span>
-        </div>
-      </header>
-
-      <section className="page auth-page">
-        <div className="panel auth-page-panel">
-          <JoinPanel token={token} />
-        </div>
-      </section>
-    </main>
+    <AuthShell kicker="Open Fantasy Baseball" title="League Invite">
+      <JoinPanel token={token} />
+    </AuthShell>
   );
 }
 
