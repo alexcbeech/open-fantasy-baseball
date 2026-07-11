@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
 import type { LineupPlayer } from "@/lib/fantasy/types";
@@ -23,6 +24,7 @@ type TeamLineupSheetProps = {
  */
 export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: TeamLineupSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock();
   const [lineup, setLineup] = useState<LineupPlayer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import type { LivePlayerStatus, PlayerDetail } from "@/lib/fantasy/types";
 import { PlayerDetailView, type PlayerAction, type PlayerActionOptions, type PlayerDetailStatusBanner } from "./player-detail-view";
 
@@ -38,6 +39,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
   const [state, setState] = useState<SheetState>({ kind: "loading", player: null, message: "Loading player..." });
   const [live, setLive] = useState<LivePlayerStatus | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  useBodyScrollLock();
 
   // Live in-game line: poll while the sheet is open so today's stats and points
   // tick up during the game without reopening. Falls back silently when the

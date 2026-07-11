@@ -90,6 +90,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: Line
   const router = useRouter();
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [movingPlayerId, setMovingPlayerId] = useState<string | null>(null);
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
@@ -167,6 +168,14 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: Line
     const timer = setTimeout(() => setError(null), 4000);
     return () => clearTimeout(timer);
   }, [error]);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   /** Persist the committed slots; on rejection, roll back to the prior state. */
   async function persistSlots(nextSlots: Record<string, RosterSlot>, previousSlots: Record<string, RosterSlot>) {
@@ -269,10 +278,15 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: Line
    */
   function startActivePlayers() {
     const next = planActiveLineup(currentLineup, lockedPlayerIds);
-    const changed = currentLineup.some((entry) => next[entry.player.id] !== entry.slot);
+    const moved = currentLineup.filter((entry) => next[entry.player.id] !== entry.slot).length;
 
-    if (changed) {
-      commitSlots(next);
+    if (!moved) {
+      setNotice("Your active players are already starting — no changes needed.");
+      return;
+    }
+
+    if (commitSlots(next)) {
+      setNotice(`Active players are in: ${moved} ${moved === 1 ? "player" : "players"} moved.`);
     }
   }
 
@@ -296,6 +310,10 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily" }: Line
         {error ? (
           <div className="status-banner bad" role="alert">
             {error}
+          </div>
+        ) : notice ? (
+          <div className="status-banner good" role="status">
+            {notice}
           </div>
         ) : null}
         <div className="lineup-list">

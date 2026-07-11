@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import type { FeedbackCategory } from "@/lib/data/feedback-schema";
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -15,6 +16,7 @@ export function FeedbackWidget() {
   const [errorMessage, setErrorMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useBodyScrollLock(open);
 
   useEffect(() => {
     if (open) {

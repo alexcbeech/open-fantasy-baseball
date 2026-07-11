@@ -123,6 +123,17 @@ export function PlayerDetailView({
               {player.positions.join(", ")} &middot; {player.teamName ?? player.mlbTeam}
               {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
             </span>
+            {player.mlbPlayerId ? (
+              <a
+                className="player-external-link"
+                href={`https://baseballsavant.mlb.com/savant-player/${player.mlbPlayerId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Baseball Savant
+                <span aria-hidden="true"> ↗</span>
+              </a>
+            ) : null}
           </div>
         </div>
         <div className="player-detail-header-actions">

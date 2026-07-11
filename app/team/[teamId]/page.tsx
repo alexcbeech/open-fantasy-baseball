@@ -88,9 +88,6 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         <BrandLockup clip kicker={team.leagueName} title={team.teamName} />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
-          <Link className="icon-button" href={`/team/${team.id}?tab=league`} aria-label="Open league and commissioner tools">
-            &#8943;
-          </Link>
         </div>
       </header>
 
