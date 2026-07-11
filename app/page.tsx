@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
 import { BrandLockup } from "./brand-lockup";
+import { TopbarMenu, type TopbarMenuItem } from "./topbar-menu";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listDraftableLeagues } from "@/lib/data/draft";
 import { listTeamsForCurrentUser } from "@/lib/data/teams";
@@ -19,6 +20,13 @@ export default async function HomePage() {
 
   const teams = await listTeamsForCurrentUser(currentUser);
   const draftableLeagues = currentUser ? await listDraftableLeagues(currentUser.userId) : [];
+  // Secondary destinations live behind one menu button so the topbar stays a
+  // single row on phones (loose icons used to wrap into a second line).
+  const menuItems: TopbarMenuItem[] = [
+    ...(currentUser?.isAdmin ? [{ href: "/admin", label: "Admin operations" }] : []),
+    { href: "/league/new", label: "New league" },
+    { href: "/profile", label: "Profile & preferences" },
+  ];
   const shareFor = (team: (typeof teams)[number]) => {
     const total = team.matchup.userScore + team.matchup.opponentScore;
     return total > 0 ? Math.round((team.matchup.userScore / total) * 100) : 50;
@@ -30,17 +38,7 @@ export default async function HomePage() {
         <BrandLockup />
         <div className="topbar-actions">
           <AuthControl enabled={authEnabled} />
-          {currentUser?.isAdmin ? (
-            <Link className="icon-button" href="/admin" aria-label="Open admin operations" data-tooltip="Admin operations">
-              Ops
-            </Link>
-          ) : null}
-          <Link className="icon-button" href="/league/new" aria-label="Create league" data-tooltip="New league">
-            +
-          </Link>
-          <Link className="icon-button" href="/profile" aria-label="Open profile and preferences" data-tooltip="Profile & preferences">
-            ⚙
-          </Link>
+          <TopbarMenu items={menuItems} />
         </div>
       </header>
 
