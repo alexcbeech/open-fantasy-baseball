@@ -1,7 +1,10 @@
+import { projectTodayPoints, startsToday } from "./daily-projection";
 import { defaultRosterSlots } from "./defaults";
 import { isSlotEligibleForPlayer } from "./roster-validation";
 import { calculateFantasyPoints } from "./scoring";
 import type { LineupPlayer, Player, RosterSlot } from "./types";
+
+export { startsToday } from "./daily-projection";
 
 // Dedicated slots are tried before flex so a multi-eligible player leaves
 // UTIL/P open for players who have nowhere else to go.
@@ -9,37 +12,13 @@ const dedicatedStartingSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF",
 const flexStartingSlots: RosterSlot[] = ["UTIL", "P"];
 const startingSlots: RosterSlot[] = [...dedicatedStartingSlots, ...flexStartingSlots];
 
-const batterPositions: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF"];
-
-/**
- * Whether the player counts as "active today" for Start Active Players:
- * their MLB team plays today and they're healthy enough to appear. Hitters
- * and relievers qualify whenever their team has a game (confirmed batting
- * orders aren't posted until shortly before first pitch); a pitcher who is
- * only SP-eligible qualifies only when they're a probable starter today.
- */
-export function startsToday(player: Player): boolean {
-  if (!player.todaysGameStart) {
-    return false;
-  }
-
-  if (player.status === "injured" || player.status === "minors") {
-    return false;
-  }
-
-  // "UTIL" as a position = a bat-only (DH-type) player: an everyday hitter.
-  const everydayEligible = player.positions.some(
-    (position) => batterPositions.includes(position) || position === "UTIL" || position === "RP" || position === "P",
-  );
-  return everydayEligible || player.probableStarterToday === true;
-}
-
 /**
  * Start Active Players priority: players in (or likely in) today's MLB
  * starting lineup first, with today's confirmed probable starters ahead of
- * everyone else in that tier, then higher projected fantasy points, then
- * better (numerically lower) ADP, with name as a deterministic final
- * tiebreaker.
+ * everyone else in that tier, then higher expected points from TODAY's game
+ * (matchup-aware — see projectTodayPoints), then higher rest-of-season
+ * projection, then better (numerically lower) ADP, with name as a
+ * deterministic final tiebreaker.
  */
 function comparePriority(a: Player, b: Player): number {
   const startDiff = Number(startsToday(b)) - Number(startsToday(a));
@@ -54,6 +33,14 @@ function comparePriority(a: Player, b: Player): number {
   const probableDiff = Number(b.probableStarterToday === true) - Number(a.probableStarterToday === true);
   if (probableDiff !== 0) {
     return probableDiff;
+  }
+
+  // Today's expected points differentiate players with a game (platoon
+  // matchups, start vs. relief value); for two players sitting out it's 0-0
+  // and the rest-of-season projection below decides.
+  const todayDiff = projectTodayPoints(b) - projectTodayPoints(a);
+  if (todayDiff !== 0) {
+    return todayDiff;
   }
 
   const projDiff = calculateFantasyPoints(b.projectedStats) - calculateFantasyPoints(a.projectedStats);

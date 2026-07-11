@@ -118,6 +118,14 @@ export type Player = {
    * don't get a confirmed-starter signal, so this only ever flags pitchers.
    */
   probableStarterToday?: boolean | null;
+  /** Bat side from MLB data: "L", "R", or "S"; null when unknown. */
+  bats?: string | null;
+  /**
+   * Throwing hand of the opposing probable starter in today's game ("L"/"R"),
+   * for platoon-aware daily projections; null when no game today or the
+   * opponent hasn't named a starter.
+   */
+  todaysOpposingPitcherThrows?: string | null;
   /** Average draft position (lower = drafted earlier); null when unknown. */
   adp?: number | null;
 };

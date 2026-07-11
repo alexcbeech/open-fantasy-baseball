@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
+import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
 import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
 import {
   findLineupLockIssues,
@@ -358,7 +359,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                 <span>{group.label}</span>
                 <span className="lineup-col-heads" aria-hidden="true">
                   <span>Pts</span>
-                  <span>Proj</span>
+                  <span>Today</span>
                 </span>
               </div>
               {group.rows.map((row) =>
@@ -366,7 +367,10 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                   (() => {
                     const entry = row.entry;
                     const player = entry.player;
-                    const { seasonPts, projPts } = rowPoints(player);
+                    const { seasonPts } = rowPoints(player);
+                    // Expected points from today's game (platoon-aware), the
+                    // number that matters when setting today's lineup.
+                    const todayPts = Math.round(projectTodayPoints(player) * 10) / 10;
                     const liveEntry = live[player.id];
                     const locked = isEntryLocked(entry);
                     const boldPts = liveEntry ? liveEntry.points : seasonPts;
@@ -420,12 +424,12 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={
                             liveEntry
-                              ? `${player.name}: ${boldPts} live fantasy points, ${projPts} projected`
-                              : `${player.name}: ${seasonPts} season fantasy points, ${projPts} projected`
+                              ? `${player.name}: ${boldPts} live fantasy points, ${todayPts} projected today`
+                              : `${player.name}: ${seasonPts} season fantasy points, ${todayPts} projected today`
                           }
                         >
                           <span className={liveEntry ? "points-live is-live" : "points-live"}>{boldPts}</span>
-                          <span className="points-proj">{projPts}</span>
+                          <span className="points-proj">{todayPts}</span>
                         </button>
                       </div>
                     );
