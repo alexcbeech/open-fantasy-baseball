@@ -249,6 +249,12 @@ export type MatchupDetails = {
 export type LiveMatchupUpdate = {
   /** True when at least one active player on either side has a game in progress. */
   live: boolean;
+  /**
+   * True when today's boxscore lines (in-progress or finished games) are
+   * folded into the values below. When false the update carries no data and
+   * callers should keep showing the stored nightly numbers.
+   */
+  hasTodayStats: boolean;
   /** Categories won by the viewing team / opponent, live-adjusted. */
   userScore: number;
   opponentScore: number;

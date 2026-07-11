@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
 import { BrandLockup } from "./brand-lockup";
+import { LiveScoreRow } from "./live-score-row";
 import { TopbarMenu, type TopbarMenuItem } from "./topbar-menu";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listDraftableLeagues } from "@/lib/data/draft";
@@ -27,11 +28,6 @@ export default async function HomePage() {
     { href: "/league/new", label: "New league" },
     { href: "/profile", label: "Profile & preferences" },
   ];
-  const shareFor = (team: (typeof teams)[number]) => {
-    const total = team.matchup.userScore + team.matchup.opponentScore;
-    return total > 0 ? Math.round((team.matchup.userScore / total) * 100) : 50;
-  };
-
   return (
     <main className="app-shell app-shell--flush">
       <header className="topbar">
@@ -89,21 +85,15 @@ export default async function HomePage() {
                   <span className={isWinning ? "pill" : "pill loss"}>Rank #{team.rank}</span>
                 </div>
 
-                <div className="score-row" aria-label={`${team.teamName} score against ${team.matchup.opponentName}`}>
-                  <div className="score-team">
-                    <span className="score-name">{team.teamName}</span>
-                    <span className="score-value">{team.matchup.userScore}</span>
-                  </div>
-                  <span className="versus">{team.matchup.periodLabel}</span>
-                  <div className="score-team">
-                    <span className="score-name">{team.matchup.opponentName}</span>
-                    <span className="score-value">{team.matchup.opponentScore}</span>
-                  </div>
-                </div>
-
-                <div className="progress" aria-label={`${shareFor(team)}% score share`}>
-                  <span style={{ width: `${shareFor(team)}%` }} />
-                </div>
+                <LiveScoreRow
+                  teamId={team.id}
+                  teamName={team.teamName}
+                  opponentName={team.matchup.opponentName}
+                  periodLabel={team.matchup.periodLabel}
+                  initialUserScore={team.matchup.userScore}
+                  initialOpponentScore={team.matchup.opponentScore}
+                  showShareBar
+                />
               </Link>
             );
           })}

@@ -92,6 +92,14 @@ export async function periodLineupStats(
   teamId: string,
   periodStartsAt: Date | string,
   periodEndsAt: Date | string,
+  options: {
+    /**
+     * An ET date (YYYY-MM-DD) whose game logs should be skipped — the live
+     * recalc supplies today's lines from live boxscores instead, so a game
+     * log for today (e.g. from a manual mid-day sync) must not double count.
+     */
+    excludeEtDate?: string;
+  } = {},
 ) {
   const result = await client.query(
     `select psl.stats
@@ -107,8 +115,9 @@ export async function periodLineupStats(
        and psl.player_id in (select player_id from lineup_entry where team_id = $1)
        and psl.stat_date >= ($2::timestamptz at time zone 'America/New_York')::date
        and psl.stat_date < ($3::timestamptz at time zone 'America/New_York')::date
+       and ($4::date is null or psl.stat_date <> $4::date)
        and lineup_on_date.slot not in ('BN', 'IL', 'NA')`,
-    [teamId, periodStartsAt, periodEndsAt],
+    [teamId, periodStartsAt, periodEndsAt, options.excludeEtDate ?? null],
   );
   return result.rows.map((row) => row.stats);
 }

@@ -104,7 +104,8 @@ export function __clearLiveCache() {
   inFlight.clear();
 }
 
-function todayIso(now: Date) {
+/** Today's ET official date (YYYY-MM-DD), the day unit MLB schedules use. */
+export function todayEtDate(now: Date = new Date()) {
   // MLB schedule dates are ET official dates: a 10pm ET game is already
   // "tomorrow" in UTC, so a UTC calendar day would go dark at 8pm ET.
   return new Intl.DateTimeFormat("en-CA", {
@@ -114,6 +115,8 @@ function todayIso(now: Date) {
     day: "2-digit",
   }).format(now);
 }
+
+const todayIso = todayEtDate;
 
 /** The gamePk of the team's in-progress game today, or null if none is live. */
 async function findLiveGamePk(baseUrl: string, mlbTeamId: number, now: Date): Promise<number | null> {
@@ -273,6 +276,84 @@ export async function getLiveLinesForPlayers(
     result[player.id] = { state: data.state, stats, points: livePoints(stats) };
   }
   return result;
+}
+
+export type TodayLines = {
+  /** Boxscore lines from today's in-progress AND finished games, by player id. */
+  lines: Record<string, LiveLineupEntry>;
+  /** True while at least one of these players' games is still in progress. */
+  liveGameInProgress: boolean;
+};
+
+/**
+ * Today's boxscore lines for a set of players — in-progress games AND games
+ * that already finished today. Finished games matter because the nightly sync
+ * hasn't written their game logs yet: without them a day's production would
+ * vanish from live scoring the moment the final out is recorded. Fetch cost is
+ * bounded by the number of games, same as getLiveLinesForPlayers.
+ */
+export async function getTodayLinesForPlayers(
+  players: LivePlayerRef[],
+  baseUrl = defaultBaseUrl,
+  now = new Date(),
+): Promise<TodayLines> {
+  const none: TodayLines = { lines: {}, liveGameInProgress: false };
+  if (!players.length) {
+    return none;
+  }
+
+  const schedule = await cachedFetchJson<ScheduleResponse>(`/schedule?sportId=1&date=${todayIso(now)}`, baseUrl, SCHEDULE_TTL_MS);
+  const games = schedule?.dates?.[0]?.games ?? [];
+  const gameByTeam = new Map<number, { gamePk: number; live: boolean }>();
+  for (const game of games) {
+    const state = game.status?.abstractGameState;
+    if (state !== "Live" && state !== "Final") {
+      continue;
+    }
+    const entry = { gamePk: game.gamePk, live: state === "Live" };
+    const home = game.teams?.home?.team?.id;
+    const away = game.teams?.away?.team?.id;
+    if (home) gameByTeam.set(home, entry);
+    if (away) gameByTeam.set(away, entry);
+  }
+
+  const neededGames = new Map<number, boolean>();
+  for (const player of players) {
+    const game = gameByTeam.get(player.current_mlb_team_id);
+    if (game) {
+      neededGames.set(game.gamePk, game.live);
+    }
+  }
+  if (!neededGames.size) {
+    return none;
+  }
+
+  const gameData = new Map<number, { box: BoxscoreResponse | null; state: string | null }>();
+  await Promise.all(
+    [...neededGames].map(async ([gamePk, live]) => {
+      const [box, state] = await Promise.all([
+        cachedFetchJson<BoxscoreResponse>(`/game/${gamePk}/boxscore`, baseUrl, GAME_TTL_MS),
+        live ? fetchGameState(baseUrl, gamePk) : Promise.resolve("Final"),
+      ]);
+      gameData.set(gamePk, { box, state });
+    }),
+  );
+
+  const lines: Record<string, LiveLineupEntry> = {};
+  let liveGameInProgress = false;
+  for (const player of players) {
+    const game = gameByTeam.get(player.current_mlb_team_id);
+    const data = game ? gameData.get(game.gamePk) : undefined;
+    if (!game || !data) {
+      continue;
+    }
+    if (game.live) {
+      liveGameInProgress = true;
+    }
+    const stats = extractLine(data.box, player.mlb_player_id);
+    lines[player.id] = { state: data.state, stats, points: livePoints(stats) };
+  }
+  return { lines, liveGameInProgress };
 }
 
 /**

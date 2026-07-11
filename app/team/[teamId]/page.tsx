@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
 import { BrandLockup } from "@/app/brand-lockup";
+import { LiveScoreRow } from "@/app/live-score-row";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
@@ -98,17 +99,14 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
               {formatScoringType(team.scoringType)} - {team.record} - Rank #{team.rank}
             </div>
           </div>
-          <div className="score-row">
-            <div className="score-team">
-              <span className="score-name">{team.teamName}</span>
-              <span className="score-value">{team.matchup.userScore}</span>
-            </div>
-            <span className="versus">{team.matchup.periodLabel}</span>
-            <div className="score-team">
-              <span className="score-name">{team.matchup.opponentName}</span>
-              <span className="score-value">{team.matchup.opponentScore}</span>
-            </div>
-          </div>
+          <LiveScoreRow
+            teamId={team.id}
+            teamName={team.teamName}
+            opponentName={team.matchup.opponentName}
+            periodLabel={team.matchup.periodLabel}
+            initialUserScore={team.matchup.userScore}
+            initialOpponentScore={team.matchup.opponentScore}
+          />
         </div>
 
         <nav className="tabbar" aria-label="Team sections">
