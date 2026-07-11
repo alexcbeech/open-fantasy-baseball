@@ -209,10 +209,45 @@ select {
 
 .topbar-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   min-width: 0;
+}
+
+/* Topbar overflow menu: secondary destinations behind one button so the bar
+   never wraps to a second row on phones. */
+.topbar-menu {
+  position: relative;
+}
+
+.topbar-menu-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: grid;
+  min-width: 210px;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+}
+
+.topbar-menu-item {
+  border-radius: 6px;
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.topbar-menu-item:hover,
+.topbar-menu-item:focus-visible {
+  background: var(--surface-strong);
 }
 
 /* Hover/focus tooltips for icon-only controls. The accessible name still
