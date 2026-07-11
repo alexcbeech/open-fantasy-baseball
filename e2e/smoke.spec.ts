@@ -40,17 +40,16 @@ test.describe("team tabs", () => {
     await expect(page.getByRole("heading", { name: "Commissioner" })).toBeVisible();
   });
 
-  test("opens player watch news from the badged button", async ({ page }) => {
+  test("flags players carrying recent news with a row icon", async ({ page }) => {
     await page.goto("/team/team-1");
 
-    // Player Watch is now a badged button, not a persistent side panel.
-    const watch = page.getByRole("button", { name: /Player Watch/ });
-    await expect(watch).toBeVisible();
-    await watch.click();
+    // The Player Watch button is gone; recent news is a per-row icon whose
+    // accessible name carries the headline (the detail sheet has the story).
+    await expect(page.getByRole("heading", { name: "Lineup", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Player Watch/ })).toHaveCount(0);
 
-    const sheet = page.getByRole("dialog", { name: "Player Watch" });
-    await expect(sheet).toBeVisible();
-    await expect(sheet.getByText("Homered and stole a base in Monday's win.")).toBeVisible();
+    const newsIcon = page.getByRole("img", { name: "Recent news: Homered and stole a base in Monday's win." });
+    await expect(newsIcon).toBeVisible();
   });
 });
 
