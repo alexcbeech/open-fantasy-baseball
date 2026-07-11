@@ -36,13 +36,24 @@ export function startsToday(player: Player): boolean {
 
 /**
  * Start Active Players priority: players in (or likely in) today's MLB
- * starting lineup first, then higher projected fantasy points, then better
- * (numerically lower) ADP, with name as a deterministic final tiebreaker.
+ * starting lineup first, with today's confirmed probable starters ahead of
+ * everyone else in that tier, then higher projected fantasy points, then
+ * better (numerically lower) ADP, with name as a deterministic final
+ * tiebreaker.
  */
 function comparePriority(a: Player, b: Player): number {
   const startDiff = Number(startsToday(b)) - Number(startsToday(a));
   if (startDiff !== 0) {
     return startDiff;
+  }
+
+  // A pitcher taking the mound today always outranks a reliever or bench arm
+  // whose team merely plays, whatever their projections say. Only pitchers
+  // carry this flag, and pitchers never contest batter slots, so hitters are
+  // unaffected by this tier.
+  const probableDiff = Number(b.probableStarterToday === true) - Number(a.probableStarterToday === true);
+  if (probableDiff !== 0) {
+    return probableDiff;
   }
 
   const projDiff = calculateFantasyPoints(b.projectedStats) - calculateFantasyPoints(a.projectedStats);

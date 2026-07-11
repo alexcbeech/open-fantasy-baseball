@@ -109,6 +109,17 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
   );
 }
 
+/** Green check for a pitcher confirmed as today's probable starter. */
+function ProbableStarterCheck() {
+  return (
+    <span className="probable-start-check" title="Scheduled to start today" aria-label="Scheduled to start today" role="img">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  );
+}
+
 export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsByPlayerId }: LineupEditorProps) {
   const router = useRouter();
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
@@ -391,8 +402,9 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >
-                          <span className="player-name">
-                            {player.name}
+                          <span className="player-name-row">
+                            <span className="player-name">{player.name}</span>
+                            {player.probableStarterToday ? <ProbableStarterCheck /> : null}
                             {newsByPlayerId?.[player.id] ? <PlayerNewsIcon headline={newsByPlayerId[player.id]} /> : null}
                           </span>
                           <span className="player-meta">
