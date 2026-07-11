@@ -174,6 +174,25 @@ select {
   line-height: 1.1;
 }
 
+/* Auth pages have no topbar actions competing for space, so the brand can
+   grow into a larger, more prominent lockup that anchors the sign-in screen. */
+.brand-lockup--auth {
+  gap: 14px;
+}
+
+.brand-lockup--auth .brand-mark {
+  height: 56px;
+  width: 56px;
+}
+
+.brand-lockup--auth .brand-kicker {
+  font-size: 14px;
+}
+
+.brand-lockup--auth .brand-title {
+  font-size: 30px;
+}
+
 /* The team page's brand shows a live team name, which can be long enough to
    push the topbar actions off a phone screen. Let that lockup shrink and
    ellipsize (the full name is repeated in the hero below). Other pages keep
@@ -2633,6 +2652,10 @@ p.player-meta,
 .auth-page {
   display: grid;
   justify-items: center;
+  align-content: center;
+  /* Fill the viewport below the ~86px topbar so the lone auth card sits
+     centered instead of stranded at the top on tall desktop screens. */
+  min-height: calc(100dvh - 86px);
 }
 
 .auth-page-panel {
