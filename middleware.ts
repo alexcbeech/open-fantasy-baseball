@@ -17,6 +17,10 @@ const runNeonAuthMiddleware = neonAuthConfigured
       cookies: {
         secret: process.env.NEON_AUTH_COOKIE_SECRET!,
         sessionDataTtl: 300,
+        // The SDK defaults to SameSite=Strict, which the browser drops on the
+        // cross-site redirect back from Google -- without the challenge cookie
+        // the OAuth verifier exchange never runs and sign-in dead-ends.
+        sameSite: "lax",
       },
       logLevel: process.env.NODE_ENV === "test" ? "silent" : "warn",
     }).middleware({ loginUrl: "/auth/sign-in" })
