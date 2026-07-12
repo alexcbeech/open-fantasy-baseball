@@ -9,6 +9,19 @@
       "autoPort": true
     },
     {
+      "name": "dev-admin-db",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "autoPort": true,
+      "env": {
+        "NEON_AUTH_BASE_URL": "",
+        "NEON_AUTH_COOKIE_SECRET": "",
+        "GITHUB_TOKEN": "",
+        "GITHUB_FEEDBACK_REPO": ""
+      }
+    },
+    {
       "name": "dev-demo",
       "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev"],

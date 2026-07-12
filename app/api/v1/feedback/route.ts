@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
+import { requireAdminUser } from "@/lib/auth/admin";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
-import { feedbackSubmissionSchema, submitFeedback } from "@/lib/data/feedback";
+import { feedbackSubmissionSchema, listRecentFeedback, submitFeedback } from "@/lib/data/feedback";
 import { clientKeyForRequest, isRateLimited } from "@/lib/rate-limit";
+
+export async function GET() {
+  const admin = await requireAdminUser();
+
+  if (admin.response) {
+    return admin.response;
+  }
+
+  const feedback = await listRecentFeedback();
+
+  return NextResponse.json({ feedback });
+}
 
 export async function POST(request: Request) {
   // Feedback intake is intentionally open to signed-out users, so throttle it:
   // it writes to a PII table and feeds the admin triage queue.
-  if (isRateLimited(`feedback:${clientKeyForRequest(request)}`, { limit: 5, windowMs: 10 * 60 * 1000 })) {
+  if (isRateLimited(`feedback:${clientKeyForRequest(request)}`, { limit: 20, windowMs: 10 * 60 * 1000 })) {
     return NextResponse.json({ error: "Too many feedback submissions. Please try again later." }, { status: 429 });
   }
 
