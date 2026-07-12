@@ -177,7 +177,9 @@ export function TradesPanel({ leagueId, viewerTeamId }: TradesPanelProps) {
 
               {trade.status === "accepted" ? (
                 <p className="trade-line subtle">
-                  {trade.reviewEndsAt ? `Review ends ${new Date(trade.reviewEndsAt).toLocaleString()}.` : ""}
+                  {trade.reviewEndsAt
+                    ? `Review ends ${new Date(trade.reviewEndsAt).toLocaleString()}; rosters swap during overnight processing.`
+                    : ""}
                   {trade.votesNeeded !== null
                     ? ` Votes against: ${trade.votesAgainst}/${trade.votesNeeded}.`
                     : ""}
