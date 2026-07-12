@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { getPool } from "@/lib/db/client";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
+import { hasActiveScoringPeriod, startedGameTodaySql } from "@/lib/data/game-locks";
 import { enqueueNotificationForTeam } from "@/lib/data/notifications";
 import { planInitialLineup, type AssignablePlayer } from "@/lib/draft/lineup-assignment";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
@@ -317,26 +318,115 @@ async function assignIncomingLineupSlots(
 }
 
 /**
- * Lazily resolve accepted trades whose review window has ended, mirroring the
- * draft's lazy clock: every trade read/mutation calls this first, so trades
- * process on the next touch after the window closes with no worker needed.
+ * Whether any player involved in the trade has an MLB game today that already
+ * started. Executing then would delete or rewrite locked lineup rows — the
+ * same mid-game stat manipulation the player-actions API blocks — so due
+ * trades wait for a run when everyone involved is idle (the nightly window).
+ * Leagues without an active scoring period have no lineup to protect.
  */
-async function resolveDueTrades(client: PoolClient, leagueId: string): Promise<void> {
-  const due = await client.query<TradeRow>(
-    `select * from trade_proposal
-     where league_id = $1 and status = 'accepted' and review_ends_at <= now()
-     for update`,
-    [leagueId],
-  );
-
-  if (!due.rows.length) {
-    return;
+async function tradeHasGameLockedPlayers(client: PoolClient, trade: TradeRow): Promise<boolean> {
+  if (!(await hasActiveScoringPeriod(client, trade.league_id))) {
+    return false;
   }
 
-  const context = await getLeagueContext(client, leagueId);
+  const involved = [
+    ...new Set([
+      ...trade.offered_player_ids,
+      ...trade.requested_player_ids,
+      ...trade.from_drop_player_ids,
+      ...trade.to_drop_player_ids,
+    ]),
+  ];
 
-  for (const trade of due.rows) {
-    await executeTrade(client, context, trade);
+  if (!involved.length) {
+    return false;
+  }
+
+  const result = await client.query<{ locked: boolean }>(
+    `select exists (
+       select 1 from unnest($1::uuid[]) as pid(id)
+       where ${startedGameTodaySql("pid.id")}
+     ) as locked`,
+    [involved],
+  );
+  return result.rows[0]?.locked ?? false;
+}
+
+export type DueTradeProcessingSummary = {
+  tradesProcessed: number;
+  tradesFailed: number;
+  tradesDeferred: number;
+};
+
+/**
+ * Execute accepted trades whose review window has ended. Runs from nightly
+ * processing rather than lazily on trade reads: rosters swap overnight when
+ * no games are being played, never mid-day. A trade involving a player whose
+ * game already started (possible only when the job is triggered manually
+ * during the day) is deferred untouched to the next run.
+ */
+export async function processDueTrades(now = new Date()): Promise<DueTradeProcessingSummary> {
+  const client = await getPool().connect();
+  const summary: DueTradeProcessingSummary = { tradesProcessed: 0, tradesFailed: 0, tradesDeferred: 0 };
+
+  try {
+    await client.query("begin");
+
+    // Advisory locks first, rows second — the same order interactive trade
+    // mutations use (withTradeTransaction), so the two can never deadlock.
+    const leagues = await client.query<{ league_id: string }>(
+      `select distinct league_id from trade_proposal
+       where status = 'accepted' and review_ends_at <= $1
+       order by league_id`,
+      [now],
+    );
+
+    if (!leagues.rows.length) {
+      await client.query("commit");
+      return summary;
+    }
+
+    const leagueIds = leagues.rows.map((row) => row.league_id);
+
+    for (const leagueId of leagueIds) {
+      await client.query("select pg_advisory_xact_lock(hashtext($1))", ["trade:" + leagueId]);
+    }
+
+    const due = await client.query<TradeRow>(
+      `select * from trade_proposal
+       where status = 'accepted' and review_ends_at <= $1 and league_id = any($2::uuid[])
+       order by league_id, created_at
+       for update`,
+      [now, leagueIds],
+    );
+    const contexts = new Map<string, LeagueContext>();
+
+    for (const trade of due.rows) {
+      if (!contexts.has(trade.league_id)) {
+        contexts.set(trade.league_id, await getLeagueContext(client, trade.league_id));
+      }
+
+      if (await tradeHasGameLockedPlayers(client, trade)) {
+        summary.tradesDeferred += 1;
+        continue;
+      }
+
+      const status = await executeTrade(client, contexts.get(trade.league_id)!, trade);
+
+      if (status === "processed") {
+        summary.tradesProcessed += 1;
+      } else {
+        summary.tradesFailed += 1;
+      }
+    }
+
+    await client.query("commit");
+    return summary;
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -476,6 +566,8 @@ export async function respondToTrade(
 
     const reviewDays = context.settings.tradeReview === "none" ? 0 : context.settings.tradeReviewDays;
 
+    // Accepted trades never swap rosters inline — even with no review window,
+    // execution waits for the nightly run so rosters never change mid-game.
     await client.query(
       `update trade_proposal
        set status = 'accepted', to_drop_player_ids = $2::uuid[],
@@ -484,16 +576,15 @@ export async function respondToTrade(
       [trade.id, input.toDropPlayerIds ?? [], reviewDays],
     );
 
-    if (reviewDays === 0) {
-      await executeTrade(client, context, { ...withDrops, status: "accepted" });
-    } else {
-      await enqueueNotificationForTeam(client, trade.from_team_id, {
-        type: "trade_review",
-        title: "Trade accepted",
-        body: `Your trade offer was accepted and is under league review for ${reviewDays} day${reviewDays === 1 ? "" : "s"}.`,
-        url: `/team/${trade.from_team_id}?tab=league`,
-      });
-    }
+    await enqueueNotificationForTeam(client, trade.from_team_id, {
+      type: "trade_review",
+      title: "Trade accepted",
+      body:
+        reviewDays === 0
+          ? "Your trade offer was accepted. Rosters swap during overnight processing."
+          : `Your trade offer was accepted and is under league review for ${reviewDays} day${reviewDays === 1 ? "" : "s"}. It processes overnight after the review ends.`,
+      url: `/team/${trade.from_team_id}?tab=league`,
+    });
 
     return trade.id;
   });
@@ -599,8 +690,8 @@ export async function vetoTrade(leagueId: string, tradeId: string, identity: Api
 }
 
 /**
- * Run a trade mutation: resolve due trades first (lazy processing), do the
- * work, then return the updated summary — all in one transaction.
+ * Run a trade mutation and return the updated summary in one transaction.
+ * Due trades are executed by nightly processing (processDueTrades), not here.
  */
 async function withTradeTransaction(
   leagueId: string,
@@ -613,7 +704,6 @@ async function withTradeTransaction(
     await client.query("begin");
     // Serialize trade mutations per league; same pattern as lineup saves.
     await client.query("select pg_advisory_xact_lock(hashtext($1))", ["trade:" + leagueId]);
-    await resolveDueTrades(client, leagueId);
     const context = await getLeagueContext(client, leagueId);
     const tradeId = await work(client, context);
     const summaries = await queryTradeSummaries(client, leagueId, identity, tradeId);
@@ -635,16 +725,10 @@ async function withTradeTransaction(
 export async function listTradesForLeague(leagueId: string, identity: ApiIdentity): Promise<TradeSummary[]> {
   const client = await getPool().connect();
 
+  // A pure read: due trades execute in nightly processing, so listing no
+  // longer mutates anything and needs no advisory lock.
   try {
-    await client.query("begin");
-    await client.query("select pg_advisory_xact_lock(hashtext($1))", ["trade:" + leagueId]);
-    await resolveDueTrades(client, leagueId);
-    const summaries = await queryTradeSummaries(client, leagueId, identity);
-    await client.query("commit");
-    return summaries;
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
+    return await queryTradeSummaries(client, leagueId, identity);
   } finally {
     client.release();
   }

@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
 import { assignLineupSlotForAdd } from "@/lib/data/player-actions";
+import { processDueTrades } from "@/lib/data/trades";
 
 // What this job actually does — surfaced verbatim in the admin panel, so it
 // must not promise work that other jobs (or nothing) performs.
@@ -9,7 +10,8 @@ export const nightlyProcessingTasks = [
   "Resolve due waiver claims by FAAB bid, waiver priority, and claim time.",
   "Apply winning claims: roster add/drop, lineup slot, and audit records.",
   "Debit FAAB budgets and advance rolling waiver priorities after each win.",
-  "Queue notifications for waiver results.",
+  "Execute accepted trades whose review window has ended (deferred while involved players are in a live game).",
+  "Queue notifications for waiver and trade results.",
 ] as const;
 
 export type NightlyProcessingSummary = {
@@ -21,6 +23,9 @@ export type NightlyProcessingSummary = {
   waiverClaimsWon: number;
   waiverClaimsLost: number;
   transactionsCreated: number;
+  tradesProcessed: number;
+  tradesFailed: number;
+  tradesDeferred: number;
   tasks: typeof nightlyProcessingTasks;
 };
 
@@ -99,6 +104,9 @@ export async function runNightlyProcessing(now = new Date()): Promise<NightlyPro
       waiverClaimsWon: 0,
       waiverClaimsLost: 0,
       transactionsCreated: 0,
+      tradesProcessed: 0,
+      tradesFailed: 0,
+      tradesDeferred: 0,
       tasks: nightlyProcessingTasks,
     };
   }
@@ -124,6 +132,9 @@ export async function runNightlyProcessing(now = new Date()): Promise<NightlyPro
 
   try {
     const summary = await processDueWaivers(client, now, jobRunId);
+    // After waivers so trade re-validation sees post-waiver rosters. Uses its
+    // own connection/transaction; failures fail the run like waivers do.
+    const tradeSummary = await processDueTrades(now);
     const finishedAt = new Date();
     const result: NightlyProcessingSummary = {
       jobRunId,
@@ -131,6 +142,7 @@ export async function runNightlyProcessing(now = new Date()): Promise<NightlyPro
       finishedAt: finishedAt.toISOString(),
       tasks: nightlyProcessingTasks,
       ...summary,
+      ...tradeSummary,
     };
 
     await client.query(
