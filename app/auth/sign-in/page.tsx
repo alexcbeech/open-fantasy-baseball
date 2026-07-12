@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthSetupStatus, getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { AuthShell } from "../auth-shell";
+import { GoogleSignInButton } from "../google-sign-in-button";
 import { SignInForm } from "./sign-in-form";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +10,22 @@ export const dynamic = "force-dynamic";
 type SignInPageProps = {
   searchParams: Promise<{
     next?: string;
+    error?: string;
   }>;
 };
 
+/** Errors the OAuth callback route can bounce back with (it has no form state). */
+const callbackErrorMessages: Record<string, string> = {
+  "signups-closed":
+    "That Google account doesn't have an OFB account yet, and account creation is currently disabled.",
+  google: "Google sign-in didn't complete. Please try again.",
+};
+
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const { next: rawNext } = await searchParams;
+  const { next: rawNext, error } = await searchParams;
   // Only league-invite landings may override the destination (no open redirect).
   const next = rawNext?.startsWith("/join/") ? rawNext : undefined;
+  const callbackError = error ? callbackErrorMessages[error] : undefined;
   const [currentUser, setup] = await Promise.all([getCurrentOfbUser(), Promise.resolve(getAuthSetupStatus())]);
 
   if (currentUser && isNeonAuthConfigured()) {
@@ -26,8 +36,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     <AuthShell>
       <h1>Sign in</h1>
       <p className="subtle">Welcome back — sign in to run your team.</p>
+      {callbackError ? <div className="status-banner bad">{callbackError}</div> : null}
       {isNeonAuthConfigured() ? (
-        <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
+        <>
+          <SignInForm next={next} signupsEnabled={areSignupsEnabled()} />
+          <GoogleSignInButton label="Sign in with Google" next={next} />
+        </>
       ) : (
         <AuthSetupNotice setup={setup} />
       )}

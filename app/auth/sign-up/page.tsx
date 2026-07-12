@@ -5,6 +5,7 @@ import { areSignupsEnabled } from "@/lib/auth/signups";
 import { getLeagueInviteByToken } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
 import { AuthShell } from "../auth-shell";
+import { GoogleSignInButton } from "../google-sign-in-button";
 import { SignUpForm } from "./sign-up-form";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,13 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
       {!isNeonAuthConfigured() ? (
         <AuthSetupNotice setup={setup} />
       ) : areSignupsEnabled() || invite ? (
-        <SignUpForm inviteToken={invite?.token} prefillEmail={invite?.email} />
+        <>
+          <SignUpForm inviteToken={invite?.token} prefillEmail={invite?.email} />
+          <GoogleSignInButton
+            label="Continue with Google"
+            next={invite ? `/join/${encodeURIComponent(invite.token)}` : undefined}
+          />
+        </>
       ) : (
         <SignupsClosedNotice />
       )}

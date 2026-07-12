@@ -88,6 +88,29 @@ export async function getCurrentOfbUserOrDemo(): Promise<OfbCurrentUser> {
   return (await getCurrentOfbUser()) ?? getDemoCurrentUser();
 }
 
+/**
+ * Whether a Neon Auth user already has an OFB account (an app_user row by
+ * email, or a linked identity by provider subject). The OAuth callback uses
+ * this to tell sign-in apart from account creation while signups are closed.
+ * Fails closed: an unreachable database reports "no account".
+ */
+export async function hasExistingOfbAccount(email: string, providerSubject: string): Promise<boolean> {
+  return tryDatabase(
+    async () => {
+      const result = await getPool().query(
+        `select 1 from app_user where email = $1
+         union all
+         select 1 from auth_identity where provider = 'neon-auth' and provider_subject = $2
+         limit 1`,
+        [email, providerSubject],
+      );
+
+      return (result.rowCount ?? 0) > 0;
+    },
+    () => false,
+  );
+}
+
 async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurrentUser> {
   return tryDatabase(
     async () => {
