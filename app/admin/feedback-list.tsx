@@ -26,6 +26,8 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
   const [filter, setFilter] = useState<Filter>("all");
   const [savingId, setSavingId] = useState<string | null>(null);
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPromotingAll, setIsPromotingAll] = useState(false);
   const [error, setError] = useState("");
 
   const counts = useMemo(() => {
@@ -36,7 +38,16 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
     return base;
   }, [items]);
 
-  const visible = filter === "all" ? items : items.filter((item) => item.status === filter);
+  // The New tab is a triage queue, so it reads oldest-first; other views stay newest-first.
+  const visible = useMemo(() => {
+    if (filter === "all") {
+      return items;
+    }
+    const filtered = items.filter((item) => item.status === filter);
+    return filter === "new" ? filtered.slice().reverse() : filtered;
+  }, [items, filter]);
+
+  const promotable = filter === "new" ? visible.filter((item) => !item.githubIssueUrl) : [];
 
   async function setStatus(id: string, status: FeedbackStatus) {
     const previous = items;
@@ -87,25 +98,107 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
     }
   }
 
+  async function refresh() {
+    setIsRefreshing(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/v1/feedback");
+      const result = (await response.json().catch(() => ({}))) as { error?: string; feedback?: FeedbackRecord[] };
+
+      if (!response.ok || !result.feedback) {
+        setError(result.error ?? "Feedback could not be refreshed.");
+        return;
+      }
+
+      setItems(result.feedback);
+    } catch {
+      setError("Feedback could not be refreshed. Check your connection and try again.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function promoteAll() {
+    setIsPromotingAll(true);
+    setError("");
+    let failures = 0;
+
+    // Sequential on purpose: each promote hits the GitHub API, and parallel
+    // bursts are what its secondary rate limits punish.
+    for (const item of promotable) {
+      setPromotingId(item.id);
+
+      try {
+        const response = await fetch(`/api/v1/feedback/${item.id}/promote`, { method: "POST" });
+        const result = (await response.json().catch(() => ({}))) as { feedback?: FeedbackRecord };
+
+        if (!response.ok || !result.feedback) {
+          failures += 1;
+          continue;
+        }
+
+        const updated = result.feedback;
+        setItems((current) => current.map((entry) => (entry.id === item.id ? updated : entry)));
+      } catch {
+        failures += 1;
+      }
+    }
+
+    if (failures) {
+      setError(`${failures} of ${promotable.length} feedback item${promotable.length === 1 ? "" : "s"} could not be promoted.`);
+    }
+
+    setPromotingId(null);
+    setIsPromotingAll(false);
+  }
+
   if (!items.length) {
-    return <div className="empty-state">No feedback yet</div>;
+    return (
+      <>
+        <div className="feedback-admin-toolbar">
+          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing}>
+            {isRefreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+        {error ? <div className="status-banner bad">{error}</div> : null}
+        <div className="empty-state">No feedback yet</div>
+      </>
+    );
   }
 
   return (
     <>
-      <div className="feedback-admin-filters" role="group" aria-label="Filter feedback by status">
-        {filterOrder.map((key) => (
-          <button
-            key={key}
-            type="button"
-            className="feedback-filter"
-            aria-pressed={filter === key}
-            onClick={() => setFilter(key)}
-          >
-            {key === "all" ? "All" : statusLabels[key]}
-            <span className="feedback-filter-count">{counts[key]}</span>
+      <div className="feedback-admin-toolbar">
+        <div className="feedback-admin-filters" role="group" aria-label="Filter feedback by status">
+          {filterOrder.map((key) => (
+            <button
+              key={key}
+              type="button"
+              className="feedback-filter"
+              aria-pressed={filter === key}
+              onClick={() => setFilter(key)}
+            >
+              {key === "all" ? "All" : statusLabels[key]}
+              <span className="feedback-filter-count">{counts[key]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="feedback-admin-toolbar-actions">
+          {filter === "new" && promotable.length ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={promoteAll}
+              disabled={isPromotingAll}
+            >
+              {isPromotingAll ? "Promoting..." : `Promote all to issues (${promotable.length})`}
+            </button>
+          ) : null}
+          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing || isPromotingAll}>
+            {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
-        ))}
+        </div>
       </div>
 
       {error ? <div className="status-banner bad">{error}</div> : null}
@@ -137,7 +230,7 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
                     <button
                       type="button"
                       className="feedback-promote"
-                      disabled={promotingId === item.id}
+                      disabled={promotingId === item.id || isPromotingAll}
                       onClick={() => promote(item.id)}
                     >
                       {promotingId === item.id ? "Creating…" : "Promote to issue"}

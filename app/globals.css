@@ -3628,6 +3628,25 @@ button.row {
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
+.feedback-admin-toolbar {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.feedback-admin-toolbar .feedback-admin-filters {
+  margin-bottom: 0;
+}
+
+.feedback-admin-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .feedback-admin-filters {
   display: flex;
   flex-wrap: wrap;
