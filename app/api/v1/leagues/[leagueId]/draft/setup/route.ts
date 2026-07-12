@@ -9,6 +9,7 @@ const setupSchema = z.object({
   order: z.array(z.string().uuid()).optional(),
   fillWithBots: z.coerce.boolean().default(true),
   myTeamName: z.string().trim().min(3).max(40),
+  scheduledStartAt: z.string().datetime({ offset: true }).nullish(),
 });
 
 /** Commissioner-only: create seats (own team + bots) and the draft order. */

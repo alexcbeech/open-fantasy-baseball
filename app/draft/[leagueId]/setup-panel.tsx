@@ -15,10 +15,20 @@ type SetupPanelProps = {
  * Commissioner draft setup: name your team, pick the clock, fill open seats
  * with bots, randomize or nudge the order, then start the draft.
  */
+/** ISO timestamp → the local-time value a datetime-local input expects. */
+function toDatetimeLocalValue(iso: string): string {
+  const date = new Date(iso);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
   const [teamName, setTeamName] = useState(lobby.myTeamName ?? "");
   const [pickSeconds, setPickSeconds] = useState(draft?.pickSeconds ?? lobby.defaultPickSeconds);
   const [fillWithBots, setFillWithBots] = useState(true);
+  const [scheduledStart, setScheduledStart] = useState(
+    draft?.scheduledStartAt ? toDatetimeLocalValue(draft.scheduledStartAt) : "",
+  );
   const [order, setOrder] = useState<string[] | null>(null);
   const [message, setMessage] = useState<{ kind: "error" | "good"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -27,6 +37,7 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
   const orderedTeams = order
     ? order.map((teamId) => teams.find((team) => team.teamId === teamId)!).filter(Boolean)
     : teams;
+  const openSeats = Math.max(0, lobby.teamCount - teams.length);
 
   async function postSetup(explicitOrder?: string[], randomize = false) {
     setBusy(true);
@@ -40,8 +51,11 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
           pickSeconds,
           randomizeOrder: randomize,
           order: explicitOrder,
-          fillWithBots,
+          // A scheduled draft keeps its seats open until start time, when
+          // bots fill whatever is still empty.
+          fillWithBots: scheduledStart ? false : fillWithBots,
           myTeamName: teamName,
+          scheduledStartAt: scheduledStart ? new Date(scheduledStart).toISOString() : null,
         }),
       });
       const result = (await response.json()) as { error?: string; draft?: DraftState };
@@ -115,11 +129,28 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
             ))}
           </select>
         </label>
+        <label className="field">
+          <span>Scheduled Start (optional)</span>
+          <input
+            type="datetime-local"
+            value={scheduledStart}
+            onChange={(event) => setScheduledStart(event.target.value)}
+          />
+        </label>
+      </div>
+
+      {scheduledStart ? (
+        <p className="subtle">
+          The draft starts automatically at the scheduled time. Seats stay open for managers until then; any still
+          empty are filled with bots at start. League members are notified when you save the schedule and again
+          shortly before the draft.
+        </p>
+      ) : (
         <label className="check-row draft-setup-bots">
           <input type="checkbox" checked={fillWithBots} onChange={(event) => setFillWithBots(event.target.checked)} />
           <span>Fill open seats with bots</span>
         </label>
-      </div>
+      )}
 
       <div className="draft-setup-actions">
         <button className="primary-button" type="button" disabled={busy || teamName.trim().length < 3} onClick={() => postSetup()}>
@@ -165,16 +196,17 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
             </button>
           ) : null}
 
-          <button
-            className="primary-button draft-start-button"
-            type="button"
-            disabled={busy || teams.length !== lobby.teamCount}
-            onClick={startDraft}
-          >
-            {teams.length === lobby.teamCount
+          <button className="primary-button draft-start-button" type="button" disabled={busy} onClick={startDraft}>
+            {openSeats === 0
               ? "Start Draft"
-              : `Waiting for ${lobby.teamCount - teams.length} more team${lobby.teamCount - teams.length === 1 ? "" : "s"}`}
+              : `Start Draft Now (fills ${openSeats} open seat${openSeats === 1 ? "" : "s"} with bots)`}
           </button>
+          {draft?.scheduledStartAt ? (
+            <p className="subtle">
+              Scheduled to start {new Date(draft.scheduledStartAt).toLocaleString()}
+              {openSeats > 0 ? `; ${openSeats} open seat${openSeats === 1 ? "" : "s"} will be filled with bots.` : "."}
+            </p>
+          ) : null}
         </>
       ) : (
         <p className="subtle">

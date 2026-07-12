@@ -71,6 +71,7 @@ export function mockDraftState(now = new Date()): DraftState {
     myQueue: [],
     myAutoPick: false,
     autoPickTeamIds: teams.filter((team) => team.isBot).map((team) => team.teamId),
+    scheduledStartAt: null,
   };
 }
 

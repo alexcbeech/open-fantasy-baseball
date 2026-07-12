@@ -13,10 +13,13 @@ import {
   type DraftTeam,
   type QueuedPlayer,
 } from "@/lib/draft/types";
+import { draftReminderTime, formatDraftTime } from "@/lib/draft/schedule";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import type { DraftType, LeagueSettings, PlayerPool, RosterSlot } from "@/lib/fantasy/types";
 import { getPool, isDatabaseConfigured, tryDatabase, withDemoFallback } from "@/lib/db/client";
+import { enqueue } from "@/lib/jobs/queue";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
+import { drainNotifications } from "./notifications";
 import { sendPushToUser } from "./push-subscriptions";
 import { ensureSeasonSchedule } from "./season";
 
@@ -56,6 +59,7 @@ type DraftRow = {
   current_overall_pick: number;
   current_pick_deadline: Date | null;
   paused_remaining_seconds: string | number | null;
+  scheduled_start_at: Date | null;
 };
 
 type LeagueRow = {
@@ -609,6 +613,7 @@ function buildDraftState(
     myQueue: viewerQueue,
     myAutoPick: myTeam?.auto_pick ?? false,
     autoPickTeamIds: teams.filter((team) => team.auto_pick || team.is_bot).map((team) => team.team_id),
+    scheduledStartAt: draft.scheduled_start_at ? draft.scheduled_start_at.toISOString() : null,
   };
 }
 
@@ -664,6 +669,17 @@ export async function getDraftState(leagueId: string, viewerUserId: string): Pro
         if (!context) {
           await client.query("rollback").catch(() => undefined);
           return null;
+        }
+
+        // Lazy scheduled start, mirroring the pick clock: the first room poll
+        // at or after the scheduled time starts the draft (bots fill any open
+        // seats), with no worker needed.
+        if (
+          context.draft.status === "setup" &&
+          context.draft.scheduled_start_at &&
+          context.draft.scheduled_start_at <= new Date()
+        ) {
+          await startDraftInternal(client, context);
         }
 
         await advanceExpiredTurns(client, context, new Date(), notifications);
@@ -920,7 +936,99 @@ export type SetupDraftInput = {
   order?: string[];
   fillWithBots: boolean;
   myTeamName: string;
+  /** ISO future start time; the draft auto-starts when it passes. Null clears it. */
+  scheduledStartAt?: string | null;
 };
+
+/**
+ * Insert bot teams until the league has `teamCount` seats. Returns the new
+ * team ids in insert order; the caller owns the transaction and any
+ * draft-order bookkeeping.
+ */
+async function fillOpenSeatsWithBots(client: PoolClient, leagueId: string, teamCount: number): Promise<string[]> {
+  const seatCount = await client.query<{ count: string }>(
+    `select count(*)::text as count from fantasy_team where league_id = $1`,
+    [leagueId],
+  );
+  const missing = teamCount - Number(seatCount.rows[0].count);
+
+  if (missing <= 0) {
+    return [];
+  }
+
+  const sentinel = await client.query<{ id: string }>(
+    `insert into app_user (email, display_name) values ($1, 'OFB Bot')
+     on conflict (email) do update set display_name = excluded.display_name
+     returning id`,
+    [BOT_SENTINEL_EMAIL],
+  );
+  const botUserId = sentinel.rows[0].id;
+  const takenNames = await client.query<{ name: string }>(`select name from fantasy_team where league_id = $1`, [
+    leagueId,
+  ]);
+  const taken = new Set(takenNames.rows.map((row) => row.name));
+  const available = botTeamNames.filter((name) => !taken.has(name));
+  const newTeamIds: string[] = [];
+
+  for (let index = 0; index < missing; index++) {
+    const name = available[index] ?? `Bot Team ${index + 1}`;
+    const inserted = await client.query<{ id: string }>(
+      `insert into fantasy_team (league_id, manager_user_id, name, is_bot)
+       values ($1, $2, $3, true)
+       returning id`,
+      [leagueId, botUserId, name],
+    );
+    newTeamIds.push(inserted.rows[0].id);
+  }
+
+  return newTeamIds;
+}
+
+/**
+ * Flip a set-up draft to in_progress: top up open seats with bots (issue #94
+ * allows empty seats until the draft actually begins), put the first team on
+ * the clock, and mark the league as drafting. Runs on the caller's transaction
+ * and mutates `context` so post-start reads see the started draft.
+ */
+async function startDraftInternal(client: PoolClient, context: DraftContext, now: Date = new Date()): Promise<void> {
+  const teamCount = context.league.settings.teamCount;
+
+  if (context.teams.length < teamCount) {
+    const newTeamIds = await fillOpenSeatsWithBots(client, context.league.id, teamCount);
+    const maxPosition = context.teams.reduce((max, team) => Math.max(max, team.position), 0);
+
+    for (const [index, teamId] of newTeamIds.entries()) {
+      await client.query(`insert into draft_order (draft_id, position, team_id) values ($1, $2, $3)`, [
+        context.draft.id,
+        maxPosition + index + 1,
+        teamId,
+      ]);
+    }
+
+    context.teams = await getOrderedTeams(client, context.draft.id);
+  }
+
+  if (context.teams.length !== teamCount) {
+    throw new DraftError(
+      `The league needs ${teamCount} teams before drafting (currently ${context.teams.length}).`,
+      409,
+    );
+  }
+
+  const firstTeam = teamForPick(context, 1);
+  const deadline = deadlineForTurn(now, firstTeam.is_bot, context.draft.pick_seconds, context.draft.bot_pick_seconds);
+
+  await client.query(
+    `update draft set status = 'in_progress', started_at = now(), current_overall_pick = 1, current_pick_deadline = $2, updated_at = now()
+     where id = $1`,
+    [context.draft.id, deadline],
+  );
+  await client.query(`update league set status = 'drafting', updated_at = now() where id = $1`, [context.league.id]);
+
+  context.draft.status = "in_progress";
+  context.draft.current_overall_pick = 1;
+  context.draft.current_pick_deadline = deadline;
+}
 
 /**
  * Commissioner draft setup: creates the commissioner's team if missing, fills
@@ -969,35 +1077,7 @@ export async function setupDraft(leagueId: string, viewerUserId: string, input: 
     }
 
     if (input.fillWithBots) {
-      const seatCount = await client.query<{ count: string }>(
-        `select count(*)::text as count from fantasy_team where league_id = $1`,
-        [leagueId],
-      );
-      const missing = league.settings.teamCount - Number(seatCount.rows[0].count);
-
-      if (missing > 0) {
-        const sentinel = await client.query<{ id: string }>(
-          `insert into app_user (email, display_name) values ($1, 'OFB Bot')
-           on conflict (email) do update set display_name = excluded.display_name
-           returning id`,
-          [BOT_SENTINEL_EMAIL],
-        );
-        const botUserId = sentinel.rows[0].id;
-        const takenNames = await client.query<{ name: string }>(`select name from fantasy_team where league_id = $1`, [
-          leagueId,
-        ]);
-        const taken = new Set(takenNames.rows.map((row) => row.name));
-        const available = botTeamNames.filter((name) => !taken.has(name));
-
-        for (let index = 0; index < missing; index++) {
-          const name = available[index] ?? `Bot Team ${index + 1}`;
-          await client.query(
-            `insert into fantasy_team (league_id, manager_user_id, name, is_bot)
-             values ($1, $2, $3, true)`,
-            [leagueId, botUserId, name],
-          );
-        }
-      }
+      await fillOpenSeatsWithBots(client, leagueId, league.settings.teamCount);
     }
 
     const teams = await client.query<{ id: string }>(
@@ -1018,16 +1098,33 @@ export async function setupDraft(leagueId: string, viewerUserId: string, input: 
       orderedTeamIds = shuffle(orderedTeamIds);
     }
 
+    const scheduledStartAt = input.scheduledStartAt ? new Date(input.scheduledStartAt) : null;
+
+    if (scheduledStartAt && Number.isNaN(scheduledStartAt.getTime())) {
+      throw new DraftError("The scheduled start time is not a valid date.", 422);
+    }
+
+    if (scheduledStartAt && scheduledStartAt <= new Date()) {
+      throw new DraftError("The scheduled start time must be in the future.", 422);
+    }
+
+    const previousSchedule = await client.query<{ scheduled_start_at: Date | null }>(
+      `select scheduled_start_at from draft where league_id = $1`,
+      [leagueId],
+    );
+    const previousStartAt = previousSchedule.rows[0]?.scheduled_start_at ?? null;
+
     const rounds = draftRounds(league.settings.rosterSlots);
     const draftResult = await client.query<{ id: string }>(
-      `insert into draft (league_id, draft_type, status, pick_seconds, rounds)
-       values ($1, $2, 'setup', $3, $4)
+      `insert into draft (league_id, draft_type, status, pick_seconds, rounds, scheduled_start_at)
+       values ($1, $2, 'setup', $3, $4, $5)
        on conflict (league_id) do update set
          pick_seconds = excluded.pick_seconds,
          rounds = excluded.rounds,
+         scheduled_start_at = excluded.scheduled_start_at,
          updated_at = now()
        returning id`,
-      [leagueId, league.settings.draftType, input.pickSeconds, rounds],
+      [leagueId, league.settings.draftType, input.pickSeconds, rounds, scheduledStartAt],
     );
     const draftId = draftResult.rows[0].id;
 
@@ -1041,7 +1138,37 @@ export async function setupDraft(leagueId: string, viewerUserId: string, input: 
       ]);
     }
 
+    // Announce a new or moved start time to every league member, atomically
+    // with the schedule write itself.
+    const scheduleChanged = (scheduledStartAt?.getTime() ?? null) !== (previousStartAt?.getTime() ?? null);
+
+    if (scheduledStartAt && scheduleChanged) {
+      await client.query(
+        `insert into notification_outbox (user_id, type, title, body, url)
+         select lm.user_id, 'draft_scheduled', $2, $3, $4
+         from league_member lm
+         where lm.league_id = $1`,
+        [
+          leagueId,
+          "Draft scheduled",
+          `The ${league.name} draft is scheduled for ${formatDraftTime(scheduledStartAt)}. Open seats will be filled with bots when it starts.`,
+          `/draft/${leagueId}`,
+        ],
+      );
+    }
+
     await client.query("commit");
+
+    if (scheduledStartAt && scheduleChanged) {
+      // Best-effort follow-ups: push the announcement out now and queue the
+      // "starts soon" reminder for roughly an hour before the start.
+      void drainNotifications();
+      await enqueue("draft_reminder", {
+        payload: { leagueId, scheduledStartAt: scheduledStartAt.toISOString() },
+        dedupKey: `draft_reminder:${draftId}:${scheduledStartAt.toISOString()}`,
+        runAt: draftReminderTime(scheduledStartAt),
+      });
+    }
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
@@ -1078,22 +1205,7 @@ export async function startDraft(leagueId: string, viewerUserId: string): Promis
       throw new DraftError("The draft has already started.", 409);
     }
 
-    if (context.teams.length !== context.league.settings.teamCount) {
-      throw new DraftError(
-        `The league needs ${context.league.settings.teamCount} teams before drafting (currently ${context.teams.length}). Fill open seats with bots in draft setup.`,
-        409,
-      );
-    }
-
-    const firstTeam = teamForPick(context, 1);
-    const deadline = deadlineForTurn(new Date(), firstTeam.is_bot, context.draft.pick_seconds, context.draft.bot_pick_seconds);
-
-    await client.query(
-      `update draft set status = 'in_progress', started_at = now(), current_overall_pick = 1, current_pick_deadline = $2, updated_at = now()
-       where id = $1`,
-      [context.draft.id, deadline],
-    );
-    await client.query(`update league set status = 'drafting', updated_at = now() where id = $1`, [leagueId]);
+    await startDraftInternal(client, context);
     await client.query("commit");
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
