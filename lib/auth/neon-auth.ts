@@ -46,6 +46,9 @@ export function getNeonAuth() {
     cookies: {
       secret: process.env.NEON_AUTH_COOKIE_SECRET!,
       sessionDataTtl: 300,
+      // Must match middleware.ts: Lax (not the SDK's Strict default) so the
+      // OAuth challenge cookie survives the cross-site return from Google.
+      sameSite: "lax",
     },
     logLevel: process.env.NODE_ENV === "test" ? "silent" : "warn",
   });
