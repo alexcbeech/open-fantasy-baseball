@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorizeApiRequest } from "@/lib/auth/bearer-token";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { getProfilePreferences, profilePreferenceUpdateSchema, updateProfilePreferences } from "@/lib/data/profile";
 
 export async function GET(request: Request) {
@@ -48,6 +49,13 @@ export async function PATCH(request: Request) {
   }
 
   const profile = await updateProfilePreferences(parsed.data, currentUser.email);
+
+  void recordAuditEvent({
+    action: "profile.update",
+    actor: { userId: currentUser.userId, email: currentUser.email },
+    detail: { changedFields: Object.keys(parsed.data) },
+    request,
+  });
 
   return NextResponse.json({ profile });
 }

@@ -3610,6 +3610,80 @@ button.row {
   justify-content: space-between;
 }
 
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.audit-filters input {
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: inherit;
+  flex: 1 1 200px;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-row {
+  background: var(--surface-strong);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.audit-row-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.audit-row-head .subtle {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.audit-action {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.audit-actor {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.audit-row-meta {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 12px;
+}
+
+.audit-detail {
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.audit-load-more {
+  margin-top: 12px;
+}
+
 .feedback-admin-message {
   margin: 0;
   white-space: pre-wrap;

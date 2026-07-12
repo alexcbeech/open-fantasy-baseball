@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { feedbackStatusUpdateSchema, updateFeedbackStatus } from "@/lib/data/feedback";
 import { isUuid } from "@/lib/db/client";
 
@@ -49,6 +50,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (!updated) {
     return NextResponse.json({ error: "Feedback was not found." }, { status: 404 });
   }
+
+  void recordAuditEvent({
+    action: "feedback.status_update",
+    actor: admin.user ? { userId: admin.user.userId, email: admin.user.email } : null,
+    entityType: "feedback",
+    entityId: id,
+    detail: { status: parsed.data.status },
+    request,
+  });
 
   return NextResponse.json({ feedback: updated });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { feedbackSubmissionSchema, listRecentFeedback, submitFeedback } from "@/lib/data/feedback";
 import { clientKeyForRequest, isRateLimited } from "@/lib/rate-limit";
 
@@ -49,6 +50,15 @@ export async function POST(request: Request) {
     userEmail: currentUser?.email ?? null,
     authUserId: currentUser?.userId ?? null,
     userAgent: request.headers.get("user-agent"),
+  });
+
+  void recordAuditEvent({
+    action: "feedback.submit",
+    actor: currentUser ? { userId: currentUser.userId, email: currentUser.email } : null,
+    entityType: "feedback",
+    entityId: result.id,
+    detail: { category: parsed.data.category },
+    request,
   });
 
   return NextResponse.json({ ok: true, id: result.id }, { status: 201 });

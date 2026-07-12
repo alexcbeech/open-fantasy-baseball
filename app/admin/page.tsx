@@ -4,8 +4,10 @@ import { AuthControl } from "@/app/auth-control";
 import { BrandLockup } from "@/app/brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listAdminRunHistory } from "@/lib/data/admin-runs";
+import { listAuditEvents } from "@/lib/data/audit";
 import { listRecentFeedback } from "@/lib/data/feedback";
 import { nightlyProcessingTasks, getNightlyProcessingWindow } from "@/lib/jobs/nightly-processing";
+import { AdminAuditLog } from "./audit-log";
 import { AdminOperationsPanel } from "./operations-panel";
 import { AdminFeedbackList } from "./feedback-list";
 
@@ -43,6 +45,7 @@ export default async function AdminPage() {
   const window = getNightlyProcessingWindow();
   const history = await listAdminRunHistory();
   const feedback = await listRecentFeedback();
+  const auditEvents = await listAuditEvents();
 
   return (
     <main className="app-shell">
@@ -94,6 +97,15 @@ export default async function AdminPage() {
           </div>
 
           <AdminFeedbackList initialFeedback={feedback} />
+        </section>
+
+        <section className="panel feedback-admin-panel" aria-labelledby="audit-log-heading">
+          <div className="section-title">
+            <h2 id="audit-log-heading">Audit Log</h2>
+            <span className="subtle">newest first</span>
+          </div>
+
+          <AdminAuditLog initialEvents={auditEvents} />
         </section>
       </section>
     </main>

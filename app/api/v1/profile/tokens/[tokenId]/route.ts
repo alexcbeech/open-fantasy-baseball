@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authorizeApiRequest } from "@/lib/auth/bearer-token";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
 import { revokeApiToken } from "@/lib/data/api-tokens";
+import { recordAuditEvent } from "@/lib/data/audit";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,15 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
   if (!revokedToken) {
     return NextResponse.json({ error: "API token not found." }, { status: 404 });
   }
+
+  void recordAuditEvent({
+    action: "token.revoke",
+    actor: { userId: currentUser.userId, email: currentUser.email },
+    entityType: "api_token",
+    entityId: tokenId,
+    detail: { name: revokedToken.name },
+    request: _request,
+  });
 
   return NextResponse.json({ token: revokedToken });
 }

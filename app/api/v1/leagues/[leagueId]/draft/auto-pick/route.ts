@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { setAutoPick } from "@/lib/data/draft";
 import { draftErrorResponse, guardMutableDraftRoute, resolveDraftViewer, type DraftRouteContext } from "../route-helpers";
 
@@ -33,6 +34,15 @@ export async function POST(request: Request, { params }: DraftRouteContext) {
 
   try {
     const state = await setAutoPick(leagueId, parsed.data.enabled, viewer.userId);
+    void recordAuditEvent({
+      action: "draft.auto_pick",
+      actor: { userId: viewer.userId },
+      entityType: "league",
+      entityId: leagueId,
+      leagueId,
+      detail: { enabled: parsed.data.enabled },
+      request,
+    });
     return NextResponse.json({ draft: state });
   } catch (error) {
     return draftErrorResponse(error);

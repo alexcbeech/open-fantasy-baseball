@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { respondToTrade, TradeError, vetoTrade, voteAgainstTrade, withdrawTrade } from "@/lib/data/trades";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 
@@ -62,6 +63,16 @@ export async function POST(request: Request, { params }: RouteContext) {
           : action === "vote"
             ? await voteAgainstTrade(leagueId, tradeId, auth.identity)
             : await vetoTrade(leagueId, tradeId, auth.identity);
+
+    void recordAuditEvent({
+      action: `trade.${action}`,
+      actor: auth.identity,
+      entityType: "trade",
+      entityId: tradeId,
+      leagueId,
+      detail: dropPlayerIds?.length ? { dropPlayerIds } : {},
+      request,
+    });
 
     return NextResponse.json({ trade });
   } catch (error) {

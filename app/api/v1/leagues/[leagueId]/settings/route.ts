@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { isLeagueCommissioner, requireLeagueViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { getLeagueSettings, updateLeagueSettings } from "@/lib/data/leagues";
 import { commissionerEditableSettings } from "@/lib/fantasy/defaults";
 import { getSettingsForScoringType, lineupLockModes, tradeReviewModes, waiverModes } from "@/lib/fantasy/settings-matrix";
@@ -90,5 +91,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 
   const settings = await updateLeagueSettings(leagueId, parsed.data);
+  void recordAuditEvent({
+    action: "league.settings_update",
+    actor: auth.identity,
+    entityType: "league",
+    entityId: leagueId,
+    leagueId,
+    detail: { changes: parsed.data },
+    request,
+  });
   return NextResponse.json({ leagueId, settings });
 }

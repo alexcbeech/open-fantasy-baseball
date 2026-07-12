@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { startDraft } from "@/lib/data/draft";
 import { draftErrorResponse, guardMutableDraftRoute, resolveDraftViewer, type DraftRouteContext } from "../route-helpers";
 
@@ -19,6 +20,14 @@ export async function POST(request: Request, { params }: DraftRouteContext) {
 
   try {
     const state = await startDraft(leagueId, viewer.userId);
+    void recordAuditEvent({
+      action: "draft.start",
+      actor: { userId: viewer.userId },
+      entityType: "league",
+      entityId: leagueId,
+      leagueId,
+      request,
+    });
     return NextResponse.json({ draft: state });
   } catch (error) {
     return draftErrorResponse(error);
