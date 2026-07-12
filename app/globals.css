@@ -2788,6 +2788,38 @@ p.player-meta,
   gap: 12px;
 }
 
+.auth-divider {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 10px;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  background: var(--line);
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
+.google-button {
+  align-items: center;
+  border-radius: 10px;
+  display: inline-flex;
+  gap: 10px;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.google-button svg {
+  height: 18px;
+  width: 18px;
+}
+
 .api-operation-list {
   display: grid;
   gap: 8px;
