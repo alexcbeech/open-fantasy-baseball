@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { setupDraft } from "@/lib/data/draft";
 import { draftErrorResponse, guardMutableDraftRoute, resolveDraftViewer, type DraftRouteContext } from "../route-helpers";
 
@@ -38,6 +39,19 @@ export async function POST(request: Request, { params }: DraftRouteContext) {
 
   try {
     const state = await setupDraft(leagueId, viewer.userId, parsed.data);
+    void recordAuditEvent({
+      action: "draft.setup",
+      actor: { userId: viewer.userId },
+      entityType: "league",
+      entityId: leagueId,
+      leagueId,
+      detail: {
+        pickSeconds: parsed.data.pickSeconds,
+        fillWithBots: parsed.data.fillWithBots,
+        ...(parsed.data.scheduledStartAt ? { scheduledStartAt: parsed.data.scheduledStartAt } : {}),
+      },
+      request,
+    });
     return NextResponse.json({ draft: state }, { status: 201 });
   } catch (error) {
     return draftErrorResponse(error);

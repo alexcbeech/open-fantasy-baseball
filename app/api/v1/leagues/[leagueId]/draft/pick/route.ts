@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { makePick } from "@/lib/data/draft";
 import { draftErrorResponse, guardMutableDraftRoute, resolveDraftViewer, type DraftRouteContext } from "../route-helpers";
 
@@ -33,6 +34,14 @@ export async function POST(request: Request, { params }: DraftRouteContext) {
 
   try {
     const state = await makePick(leagueId, parsed.data.playerId, viewer.userId);
+    void recordAuditEvent({
+      action: "draft.pick",
+      actor: { userId: viewer.userId },
+      entityType: "player",
+      entityId: parsed.data.playerId,
+      leagueId,
+      request,
+    });
     return NextResponse.json({ draft: state });
   } catch (error) {
     return draftErrorResponse(error);

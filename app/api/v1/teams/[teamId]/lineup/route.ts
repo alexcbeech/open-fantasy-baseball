@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamManager, requireTeamViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { getLeagueSettings } from "@/lib/data/leagues";
 import { getLineupForTeam, getTeamSummary, LineupSaveError, saveLineupSlots } from "@/lib/data/teams";
 import { isDatabaseConfigured } from "@/lib/db/client";
@@ -155,6 +156,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
     throw error;
   }
+
+  void recordAuditEvent({
+    action: "lineup.save",
+    actor: auth.identity,
+    entityType: "team",
+    entityId: teamId,
+    teamId,
+    leagueId: team.leagueId,
+    detail: { entries: body.entries.map((entry) => ({ playerId: entry.playerId, slot: entry.slot })) },
+    request,
+  });
 
   return NextResponse.json(
     {

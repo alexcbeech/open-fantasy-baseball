@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { createLeague } from "@/lib/data/leagues";
 import { createLeagueInputSchema } from "@/lib/fantasy/league-create";
 
@@ -33,6 +34,18 @@ export async function POST(request: Request) {
     parsed.data,
     currentUser ? { email: currentUser.email, displayName: currentUser.displayName } : undefined,
   );
+
+  if (league.id !== "pending-persistence") {
+    void recordAuditEvent({
+      action: "league.create",
+      actor: currentUser ? { userId: currentUser.userId, email: currentUser.email } : null,
+      entityType: "league",
+      entityId: league.id,
+      leagueId: league.id,
+      detail: { name: parsed.data.name, teamCount: parsed.data.teamCount, scoringType: parsed.data.scoringType },
+      request,
+    });
+  }
 
   return NextResponse.json(
     {

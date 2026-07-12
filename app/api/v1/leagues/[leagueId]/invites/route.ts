@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { createLeagueInvite, LeagueInviteError, leagueInviteCreateSchema } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
 import { isEmailConfigured, sendEmail } from "@/lib/notifications/email";
@@ -100,6 +101,17 @@ export async function POST(request: Request, { params }: RouteContext) {
   const sendResult = isEmailConfigured()
     ? await sendEmail(message)
     : { ok: false as const, reason: "Email is not configured; share the join link manually." };
+
+  // Never include the invite token: audit rows must not hold secrets.
+  void recordAuditEvent({
+    action: "league.invite_create",
+    actor: auth.identity,
+    entityType: "league",
+    entityId: leagueId,
+    leagueId,
+    detail: { invitedEmail: invite.summary.email, emailSent: sendResult.ok },
+    request,
+  });
 
   return NextResponse.json(
     {

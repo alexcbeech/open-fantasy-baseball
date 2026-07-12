@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireLeagueViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { listTradesForLeague, proposeTrade, TradeError } from "@/lib/data/trades";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 
@@ -77,6 +78,20 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   try {
     const trade = await proposeTrade(leagueId, parsed.data, auth.identity);
+    void recordAuditEvent({
+      action: "trade.propose",
+      actor: auth.identity,
+      entityType: "trade",
+      entityId: trade.id,
+      leagueId,
+      teamId: parsed.data.fromTeamId,
+      detail: {
+        toTeamId: parsed.data.toTeamId,
+        offeredPlayerIds: parsed.data.offeredPlayerIds,
+        requestedPlayerIds: parsed.data.requestedPlayerIds,
+      },
+      request,
+    });
     return NextResponse.json({ trade }, { status: 201 });
   } catch (error) {
     if (error instanceof TradeError) {

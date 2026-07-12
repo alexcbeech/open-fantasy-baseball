@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { recordAuditEvent } from "@/lib/data/audit";
 import { getFeedbackById, linkFeedbackIssue } from "@/lib/data/feedback";
 import type { FeedbackRecord } from "@/lib/data/feedback-schema";
 import { isUuid } from "@/lib/db/client";
@@ -80,6 +81,15 @@ export async function POST(_request: Request, { params }: RouteContext) {
   if (!updated) {
     return NextResponse.json({ error: "Feedback was not found." }, { status: 404 });
   }
+
+  void recordAuditEvent({
+    action: "feedback.promote",
+    actor: admin.user ? { userId: admin.user.userId, email: admin.user.email } : null,
+    entityType: "feedback",
+    entityId: id,
+    detail: { issueNumber: issue.number, issueUrl: issue.url },
+    request: _request,
+  });
 
   return NextResponse.json({ feedback: updated });
 }

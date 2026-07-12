@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authorizeApiRequest } from "@/lib/auth/bearer-token";
 import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
 import { apiTokenCreateSchema, createApiToken, listApiTokens } from "@/lib/data/api-tokens";
+import { recordAuditEvent } from "@/lib/data/audit";
 
 export const runtime = "nodejs";
 
@@ -66,6 +67,15 @@ export async function POST(request: Request) {
   }
 
   const createdToken = await createApiToken(parsed.data, currentUser.email);
+
+  // Token creation is a security-sensitive event; the token itself never
+  // appears in the audit row.
+  void recordAuditEvent({
+    action: "token.create",
+    actor: { userId: currentUser.userId, email: currentUser.email },
+    detail: { name: parsed.data.name, scopes: parsed.data.scopes, expiresInDays: parsed.data.expiresInDays },
+    request,
+  });
 
   return NextResponse.json(createdToken, { status: 201 });
 }

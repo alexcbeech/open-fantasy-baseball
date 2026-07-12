@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamManager } from "@/lib/auth/team-access";
+import { recordAuditEvent } from "@/lib/data/audit";
 import {
   applyPlayerManagementAction,
   PlayerActionError,
@@ -47,6 +48,19 @@ export async function POST(request: Request, { params }: RouteContext) {
     const player = await applyPlayerManagementAction(teamId, playerId, action, {
       bid: typeof body.bid === "number" ? body.bid : undefined,
       dropPlayerId: typeof body.dropPlayerId === "string" ? body.dropPlayerId : undefined,
+    });
+    void recordAuditEvent({
+      action: `player.${action}`,
+      actor: auth.identity,
+      entityType: "player",
+      entityId: playerId,
+      teamId,
+      detail: {
+        playerName: player.name,
+        ...(typeof body.dropPlayerId === "string" ? { dropPlayerId: body.dropPlayerId } : {}),
+        ...(typeof body.bid === "number" ? { bid: body.bid } : {}),
+      },
+      request,
     });
     return NextResponse.json({
       accepted: true,
