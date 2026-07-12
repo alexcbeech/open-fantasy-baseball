@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSeasonSchedule,
+  currentSeasonYear,
   formatRecord,
   playoffRoundCount,
   rankStandings,
@@ -44,6 +45,26 @@ describe("roundRobinPairs", () => {
 
     // Every team sits exactly once across the cycle.
     expect(byes).toEqual(new Set(teams));
+  });
+});
+
+describe("currentSeasonYear", () => {
+  it("targets the current year mid-season", () => {
+    expect(currentSeasonYear(new Date("2026-07-12T15:00:00Z"))).toBe(2026);
+  });
+
+  it("targets the current year during spring training", () => {
+    expect(currentSeasonYear(new Date("2026-02-20T15:00:00Z"))).toBe(2026);
+  });
+
+  it("targets next year once the fantasy season has ended", () => {
+    expect(currentSeasonYear(new Date("2026-11-15T15:00:00Z"))).toBe(2027);
+  });
+
+  it("rolls over exactly at the season-end boundary", () => {
+    const boundary = seasonEndBoundary(2026);
+    expect(currentSeasonYear(new Date(boundary.getTime() - 1))).toBe(2026);
+    expect(currentSeasonYear(boundary)).toBe(2027);
   });
 });
 

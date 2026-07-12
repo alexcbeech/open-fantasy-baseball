@@ -5,7 +5,6 @@ import { draftTypes, lineupLockModes, playerPools, tradeReviewModes, waiverModes
 export const createLeagueInputSchema = z
   .object({
     name: z.string().trim().min(3).max(80),
-    seasonYear: z.coerce.number().int().min(2024).max(2100),
     scoringType: z.enum(["h2h-categories", "h2h-points", "roto"]),
     teamCount: z.coerce.number().int().min(4).max(20),
     waiverMode: z.enum([waiverModes[0], waiverModes[1]]),
@@ -61,7 +60,6 @@ export function buildLeagueSettingsFromInput(input: CreateLeagueInput) {
 
 export const defaultCreateLeagueInput: CreateLeagueInput = {
   name: "My OFB League",
-  seasonYear: new Date().getFullYear(),
   scoringType: defaultLeagueSettings.scoringType,
   teamCount: defaultLeagueSettings.teamCount,
   waiverMode: defaultLeagueSettings.waiverMode,
