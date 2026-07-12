@@ -10,6 +10,8 @@ export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na" | "claim
 export type PlayerActionOptions = {
   /** FAAB bid attached to a waiver claim. */
   bid?: number;
+  /** Player dropped in the same transaction when the roster is full. */
+  dropPlayerId?: string;
 };
 
 export type PlayerDetailStatusBanner = { kind: "good" | "bad"; message: string };
@@ -97,17 +99,30 @@ export function PlayerDetailView({
   // Add/drop/claim are real roster transactions; they confirm before executing.
   const [confirmingAction, setConfirmingAction] = useState<"add" | "drop" | "claim" | null>(null);
   const [claimBid, setClaimBid] = useState("0");
+  const [dropPlayerId, setDropPlayerId] = useState("");
   const tabbed = variant === "card";
   const health = healthBadges[player.status];
   const summary = seasonSummary(player);
   const isLive = Boolean(liveStatus?.live);
+  // A full roster makes adds and claims add-plus-drop transactions.
+  const dropRequired =
+    (confirmingAction === "add" || confirmingAction === "claim") && Boolean(player.management.needsDropToAdd);
 
   function confirmAction() {
-    if (!confirmingAction) {
+    if (!confirmingAction || (dropRequired && !dropPlayerId)) {
       return;
     }
-    onAction(confirmingAction, confirmingAction === "claim" ? { bid: Number.parseInt(claimBid, 10) || 0 } : undefined);
+
+    const options: PlayerActionOptions = {};
+    if (confirmingAction === "claim") {
+      options.bid = Number.parseInt(claimBid, 10) || 0;
+    }
+    if (dropRequired) {
+      options.dropPlayerId = dropPlayerId;
+    }
+    onAction(confirmingAction, Object.keys(options).length ? options : undefined);
     setConfirmingAction(null);
+    setDropPlayerId("");
   }
 
   const confirmTitles = { add: "Add Player", drop: "Drop Player", claim: "Place Waiver Claim" } as const;
@@ -193,11 +208,37 @@ export function PlayerDetailView({
               />
             </label>
           ) : null}
+          {dropRequired ? (
+            <label className="claim-bid-field">
+              Your roster is full — choose a player to drop with this {confirmingAction === "add" ? "add" : "claim"}
+              <select value={dropPlayerId} onChange={(event) => setDropPlayerId(event.target.value)}>
+                <option value="">Select a player to drop</option>
+                {(player.dropCandidates ?? []).map((candidate) => (
+                  <option value={candidate.id} key={candidate.id}>
+                    {candidate.name}
+                    {candidate.positions.length ? ` (${candidate.positions.join(", ")})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <div className="confirm-panel-actions">
-            <button className="primary-button" type="button" disabled={actionInFlight} onClick={confirmAction}>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={actionInFlight || (dropRequired && !dropPlayerId)}
+              onClick={confirmAction}
+            >
               {confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
             </button>
-            <button className="secondary-button" type="button" onClick={() => setConfirmingAction(null)}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setConfirmingAction(null);
+                setDropPlayerId("");
+              }}
+            >
               Cancel
             </button>
           </div>

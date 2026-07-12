@@ -1,7 +1,8 @@
 import { isUuid, query, withDemoFallback } from "@/lib/db/client";
+import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem } from "@/lib/fantasy/types";
+import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 
 function mockPlayerWatch(): PlayerWatchItem[] {
@@ -380,6 +381,48 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           };
         }
       }
+      // A full roster turns adds and claims into add-plus-drop transactions:
+      // flag it and surface the roster as drop choices for the picker.
+      let needsDropToAdd = false;
+      let dropCandidates: PlayerDetail["dropCandidates"];
+
+      if (teamId && isUuid(teamId) && availability !== "rostered") {
+        const [rosterResult, slotsResult] = await Promise.all([
+          query<{ player_id: string; name: string; positions: RosterSlot[] | null }>(
+            `select re.player_id, p.full_name as name,
+               coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+             from roster_entry re
+             join player p on p.id = re.player_id
+             left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+             where re.team_id = $1 and re.dropped_at is null
+             group by re.player_id, p.full_name
+             order by p.full_name`,
+            [teamId],
+          ),
+          query<{ settings: { rosterSlots?: Record<RosterSlot, number> } }>(
+            `select l.settings from league l join fantasy_team ft on ft.league_id = l.id where ft.id = $1`,
+            [teamId],
+          ),
+        ]);
+        const slots = slotsResult.rows[0]?.settings?.rosterSlots;
+
+        if (slots && rosterResult.rows.length) {
+          const postAdd = [
+            ...rosterResult.rows.map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
+            player.positions.length ? (player.positions as RosterSlot[]) : (["UTIL"] as RosterSlot[]),
+          ];
+          needsDropToAdd = !rosterFits(postAdd, slots);
+
+          if (needsDropToAdd) {
+            dropCandidates = rosterResult.rows.map((row) => ({
+              id: row.player_id,
+              name: row.name,
+              positions: row.positions ?? [],
+            }));
+          }
+        }
+      }
+
       const nextGameRow = nextGameResult.rows[0];
       const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
       const valueRow = valueResult.rows[0];
@@ -418,6 +461,7 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         gameLog: gameLogResult.rows.map(mapGameLog),
         availability: waiver?.until ? "waivers" : availability,
         waiver,
+        dropCandidates,
         management: {
           // Unrostered players are added directly unless they're clearing
           // waivers, in which case the path is a claim. Drop, IL, and NA act
@@ -428,6 +472,7 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           canDrop: onCurrentTeam,
           canMoveToIL: onCurrentTeam && (player.status === "injured" || player.status === "day-to-day"),
           canMoveToNA: onCurrentTeam && player.status === "minors",
+          needsDropToAdd,
         },
       };
     },
