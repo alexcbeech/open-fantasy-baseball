@@ -216,7 +216,11 @@ export type PlayerDetail = Player & {
     canDrop: boolean;
     canMoveToIL: boolean;
     canMoveToNA: boolean;
+    /** The viewing team's roster is full: an add or claim must name a drop. */
+    needsDropToAdd?: boolean;
   };
+  /** The viewing team's rostered players, offered as drops when the roster is full. */
+  dropCandidates?: Array<{ id: string; name: string; positions: string[] }>;
 };
 
 export type LineupPlayer = {

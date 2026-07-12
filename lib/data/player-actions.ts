@@ -49,7 +49,7 @@ export async function applyPlayerManagementAction(
 
     switch (action) {
       case "add":
-        await addPlayer(client, team, teamId, playerId, player);
+        await addPlayer(client, team, teamId, playerId, player, options);
         break;
       case "drop":
         await dropPlayer(client, team, teamId, playerId);
@@ -137,7 +137,14 @@ async function getPlayerContext(client: PoolClient, playerId: string): Promise<P
   return { status: player.status };
 }
 
-async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string, player: PlayerContext) {
+async function addPlayer(
+  client: PoolClient,
+  team: TeamContext,
+  teamId: string,
+  playerId: string,
+  player: PlayerContext,
+  options: PlayerActionOptions,
+) {
   const activeRoster = await client.query<{ team_id: string }>(
     `select re.team_id
      from roster_entry re
@@ -157,6 +164,21 @@ async function addPlayer(client: PoolClient, team: TeamContext, teamId: string, 
 
   if (onWaiversUntil) {
     throw new PlayerActionError("Player is on waivers. Place a waiver claim instead.", 409);
+  }
+
+  await assertPostActionRosterFits(
+    client,
+    team,
+    teamId,
+    playerId,
+    options.dropPlayerId,
+    "Your roster is full. Choose a player to drop with this add.",
+  );
+
+  // The named drop happens in the same transaction, so the add can never
+  // overfill the roster and the drop can never orphan without its add.
+  if (options.dropPlayerId) {
+    await dropPlayer(client, team, teamId, options.dropPlayerId);
   }
 
   try {
@@ -308,34 +330,14 @@ async function claimPlayer(client: PoolClient, team: TeamContext, teamId: string
 
   // The winning claim must produce a legal roster: adding without room
   // requires a drop named up front.
-  const roster = await client.query<{ player_id: string; positions: RosterSlot[] | null }>(
-    `select re.player_id,
-       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
-     from roster_entry re
-     left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
-     where re.team_id = $1 and re.dropped_at is null
-     group by re.player_id`,
-    [teamId],
+  await assertPostActionRosterFits(
+    client,
+    team,
+    teamId,
+    playerId,
+    options.dropPlayerId,
+    "Your roster has no room for this claim. Choose a player to drop with it.",
   );
-
-  if (options.dropPlayerId && !roster.rows.some((row) => row.player_id === options.dropPlayerId)) {
-    throw new PlayerActionError("The player to drop is not on your roster.", 409);
-  }
-
-  const claimPositions = await client.query<{ position: RosterSlot }>(
-    `select position from player_position_eligibility where player_id = $1 and valid_to is null`,
-    [playerId],
-  );
-  const postClaim = [
-    ...roster.rows
-      .filter((row) => row.player_id !== options.dropPlayerId)
-      .map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
-    claimPositions.rows.length ? claimPositions.rows.map((row) => row.position) : (["UTIL"] as RosterSlot[]),
-  ];
-
-  if (!rosterFits(postClaim, team.settings.rosterSlots)) {
-    throw new PlayerActionError("Your roster has no room for this claim. Choose a player to drop with it.", 409);
-  }
 
   try {
     await client.query(
@@ -349,6 +351,49 @@ async function claimPlayer(client: PoolClient, team: TeamContext, teamId: string
     }
 
     throw error;
+  }
+}
+
+/**
+ * Assert that the team's active roster — minus the optional named drop, plus
+ * the incoming player — can still be legally seated. Shared by direct adds
+ * and waiver claims; also validates the named drop is actually rostered.
+ */
+async function assertPostActionRosterFits(
+  client: PoolClient,
+  team: TeamContext,
+  teamId: string,
+  incomingPlayerId: string,
+  dropPlayerId: string | undefined,
+  noRoomMessage: string,
+) {
+  const roster = await client.query<{ player_id: string; positions: RosterSlot[] | null }>(
+    `select re.player_id,
+       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+     from roster_entry re
+     left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+     where re.team_id = $1 and re.dropped_at is null
+     group by re.player_id`,
+    [teamId],
+  );
+
+  if (dropPlayerId && !roster.rows.some((row) => row.player_id === dropPlayerId)) {
+    throw new PlayerActionError("The player to drop is not on your roster.", 409);
+  }
+
+  const incomingPositions = await client.query<{ position: RosterSlot }>(
+    `select position from player_position_eligibility where player_id = $1 and valid_to is null`,
+    [incomingPlayerId],
+  );
+  const postAction = [
+    ...roster.rows
+      .filter((row) => row.player_id !== dropPlayerId)
+      .map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
+    incomingPositions.rows.length ? incomingPositions.rows.map((row) => row.position) : (["UTIL"] as RosterSlot[]),
+  ];
+
+  if (!rosterFits(postAction, team.settings.rosterSlots)) {
+    throw new PlayerActionError(noRoomMessage, 409);
   }
 }
 
