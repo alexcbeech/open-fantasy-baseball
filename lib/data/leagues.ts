@@ -2,7 +2,7 @@ import { getPool, query, withDemoFallback } from "@/lib/db/client";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
-import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
+import { currentSeasonYear, formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
 import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
@@ -220,6 +220,10 @@ export type LeagueCommissioner = {
 const fallbackCommissioner: LeagueCommissioner = { email: "alex@example.local", displayName: "Alex" };
 
 export async function createLeague(input: CreateLeagueInput, commissioner: LeagueCommissioner = fallbackCommissioner) {
+  // The season is derived, not user-supplied: the current season, or next
+  // season once the current one has ended (issue #93).
+  const seasonYear = currentSeasonYear();
+
   return withDemoFallback(
     async () => {
       const settings = buildLeagueSettingsFromInput(input);
@@ -242,7 +246,7 @@ export async function createLeague(input: CreateLeagueInput, commissioner: Leagu
           `insert into league (name, scoring_type, season_year, commissioner_user_id, status, settings)
            values ($1, $2, $3, $4, 'pre_draft', $5)
            returning id`,
-          [input.name, input.scoringType, input.seasonYear, userId, JSON.stringify(settings)],
+          [input.name, input.scoringType, seasonYear, userId, JSON.stringify(settings)],
         );
         const leagueId = leagueResult.rows[0].id;
 
@@ -284,7 +288,7 @@ export async function createLeague(input: CreateLeagueInput, commissioner: Leagu
 
         return {
           id: leagueId,
-          seasonYear: input.seasonYear,
+          seasonYear,
           settings: { ...settings, id: leagueId },
         };
       } catch (error) {
@@ -296,7 +300,7 @@ export async function createLeague(input: CreateLeagueInput, commissioner: Leagu
     },
     async () => ({
       id: "pending-persistence",
-      seasonYear: input.seasonYear,
+      seasonYear,
       settings: buildLeagueSettingsFromInput(input),
     }),
   );

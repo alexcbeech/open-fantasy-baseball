@@ -164,10 +164,9 @@ export const openApiDocument = {
       },
       LeagueCreateInput: {
         type: "object",
-        required: ["name", "seasonYear", "scoringType", "teamCount"],
+        required: ["name", "scoringType", "teamCount"],
         properties: {
           name: { type: "string" },
-          seasonYear: { type: "integer" },
           scoringType: { type: "string", enum: ["h2h-categories", "h2h-points", "roto"] },
           teamCount: { type: "integer" },
         },

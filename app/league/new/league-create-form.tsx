@@ -65,7 +65,6 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
     const formData = new FormData(event.currentTarget);
     const payload = {
       name: formData.get("name"),
-      seasonYear: formData.get("seasonYear"),
       scoringType: formData.get("scoringType"),
       teamCount: formData.get("teamCount"),
       waiverMode: formData.get("waiverMode"),
@@ -133,16 +132,10 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
         <input name="name" defaultValue={defaults.name} />
       </label>
 
-      <div className="field-grid">
-        <label className="field">
-          <span>Season</span>
-          <input name="seasonYear" inputMode="numeric" defaultValue={defaults.seasonYear} />
-        </label>
-        <label className="field">
-          <span>Teams</span>
-          <input name="teamCount" inputMode="numeric" defaultValue={defaults.teamCount} />
-        </label>
-      </div>
+      <label className="field">
+        <span>Teams</span>
+        <input name="teamCount" inputMode="numeric" defaultValue={defaults.teamCount} />
+      </label>
 
       <label className="field">
         <span>Scoring</span>

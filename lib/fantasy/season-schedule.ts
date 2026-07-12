@@ -48,6 +48,16 @@ export function seasonEndBoundary(seasonYear: number): Date {
   return boundary;
 }
 
+/**
+ * The season a newly created league should target: the current calendar year
+ * until its fantasy season has ended, then next year. Pre-season moments
+ * (spring training) already fall in the upcoming season's calendar year.
+ */
+export function currentSeasonYear(now: Date = new Date()): number {
+  const year = now.getUTCFullYear();
+  return now >= seasonEndBoundary(year) ? year + 1 : year;
+}
+
 /** Single-elimination rounds needed for a playoff field (0 = no playoffs). */
 export function playoffRoundCount(playoffTeamCount: number): number {
   if (playoffTeamCount < 2) {
