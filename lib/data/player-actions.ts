@@ -1,4 +1,5 @@
 import { getPool, isUniqueViolation } from "@/lib/db/client";
+import { hasActiveScoringPeriod, hasStartedGameToday, lineupHasStartedGameToday } from "@/lib/data/game-locks";
 import { getPlayerDetail } from "@/lib/data/players";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
@@ -137,6 +138,41 @@ async function getPlayerContext(client: PoolClient, playerId: string): Promise<P
   return { status: player.status };
 }
 
+/**
+ * Enforce the same game-start locks the lineup editor applies (see
+ * findLineupLockIssues in lib/fantasy/roster-validation.ts): once a player's
+ * game today starts — or, in first-game leagues, once the day's first game
+ * starts — their lineup row is immutable until the daily rollover. Without
+ * this, a direct API call could drop or bench a player mid-game and erase
+ * their stats from today's matchup. Skipped when the league has no active
+ * scoring period: there is no live lineup to protect.
+ */
+async function assertLineupChangeUnlocked(
+  client: PoolClient,
+  team: TeamContext,
+  teamId: string,
+  playerId: string,
+  changeLabel: string,
+) {
+  if (!(await hasActiveScoringPeriod(client, team.leagueId))) {
+    return;
+  }
+
+  if (team.settings.lineupLockMode === "first-game" && (await lineupHasStartedGameToday(client, teamId))) {
+    throw new PlayerActionError(
+      `The day's first game has started, locking the lineup. ${changeLabel} reopen at the next daily rollover.`,
+      409,
+    );
+  }
+
+  if (await hasStartedGameToday(client, playerId)) {
+    throw new PlayerActionError(
+      `This player's game has already started. ${changeLabel} reopen at the next daily rollover.`,
+      409,
+    );
+  }
+}
+
 async function addPlayer(
   client: PoolClient,
   team: TeamContext,
@@ -258,11 +294,35 @@ export async function assignLineupSlotForAdd(
   const limits = new Map(limitsResult.rows.map((row) => [row.slot, Number(row.count)]));
   const used = new Map(usageResult.rows.map((row) => [row.slot, Number(row.used)]));
 
-  const slot =
-    addSlotOrder.find(
-      (candidate) =>
-        isSlotEligibleForPlayer(eligibility, candidate) && (used.get(candidate) ?? 0) < (limits.get(candidate) ?? 0),
-    ) ?? "BN";
+  // A player whose game already started (or any add once a first-game league's
+  // lineup has locked) can't enter today's active lineup — same rule the
+  // lineup editor enforces. They join on the bench and unlock at rollover.
+  let benchOnly = await hasStartedGameToday(client, playerId);
+
+  if (!benchOnly) {
+    const lockMode = await client.query<{ mode: string | null }>(
+      `select settings->>'lineupLockMode' as mode from league where id = $1`,
+      [team.leagueId],
+    );
+
+    if (lockMode.rows[0]?.mode === "first-game") {
+      benchOnly = await lineupHasStartedGameToday(client, teamId);
+    }
+  }
+
+  if (benchOnly && (used.get("BN") ?? 0) >= (limits.get("BN") ?? 0)) {
+    throw new PlayerActionError(
+      "This player's game has already started and your bench is full, so they can't join today's lineup. Try again after the daily rollover.",
+      409,
+    );
+  }
+
+  const slot = benchOnly
+    ? ("BN" as RosterSlot)
+    : (addSlotOrder.find(
+        (candidate) =>
+          isSlotEligibleForPlayer(eligibility, candidate) && (used.get(candidate) ?? 0) < (limits.get(candidate) ?? 0),
+      ) ?? "BN");
 
   await client.query(
     `insert into lineup_entry (team_id, player_id, scoring_period_id, lineup_date, slot)
@@ -276,6 +336,10 @@ export async function assignLineupSlotForAdd(
 }
 
 async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string, playerId: string) {
+  // A drop deletes the player's lineup row for today, so a started player
+  // must stay put or their in-progress stats would vanish from the matchup.
+  await assertLineupChangeUnlocked(client, team, teamId, playerId, "Drops");
+
   // Dropped players sit on waivers until the league's next processing time,
   // so a hot drop can't be instantly re-added by whoever refreshes first.
   const clearsAt = nextWaiverProcessingTime(team.settings.waiverProcessingDays ?? [], new Date());
@@ -417,6 +481,10 @@ async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: s
   if (!rostered.rows.length) {
     throw new PlayerActionError("Player must be rostered before changing lineup slot.", 409);
   }
+
+  // Moving to IL/NA rewrites today's lineup row — locked players stay put,
+  // same as any other slot change.
+  await assertLineupChangeUnlocked(client, team, teamId, playerId, "Lineup moves");
 
   const slotCount = await client.query<{ count: number | string }>(
     "select count from league_roster_slot where league_id = $1 and slot = $2",

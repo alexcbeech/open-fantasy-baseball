@@ -1,4 +1,5 @@
 import { isUuid, query, withDemoFallback } from "@/lib/db/client";
+import { startedGameTodaySql } from "@/lib/data/game-locks";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
@@ -386,11 +387,35 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
       let needsDropToAdd = false;
       let dropCandidates: PlayerDetail["dropCandidates"];
 
+      // Whether game-start locks apply right now (active scoring period) and
+      // whether this player's own game today has begun. Drives the drop/IL/NA
+      // flags and which roster players are legal drops for an add-with-drop.
+      let locksApply = false;
+      let playerGameStarted = false;
+
+      if (teamId && isUuid(teamId)) {
+        const lockRow = await query<{ has_active_period: boolean; player_started: boolean }>(
+          `select
+             exists (
+               select 1 from scoring_period sp
+               join fantasy_team ft on ft.league_id = sp.league_id
+               where ft.id = $1 and sp.status = 'active'
+             ) as has_active_period,
+             ${startedGameTodaySql("$2::uuid")} as player_started`,
+          [teamId, playerId],
+        );
+        locksApply = lockRow.rows[0]?.has_active_period ?? false;
+        playerGameStarted = lockRow.rows[0]?.player_started ?? false;
+      }
+
+      const playerLocked = locksApply && playerGameStarted;
+
       if (teamId && isUuid(teamId) && availability !== "rostered") {
         const [rosterResult, slotsResult] = await Promise.all([
-          query<{ player_id: string; name: string; positions: RosterSlot[] | null }>(
+          query<{ player_id: string; name: string; positions: RosterSlot[] | null; game_started: boolean }>(
             `select re.player_id, p.full_name as name,
-               coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+               coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
+               ${startedGameTodaySql("re.player_id")} as game_started
              from roster_entry re
              join player p on p.id = re.player_id
              left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
@@ -414,11 +439,15 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           needsDropToAdd = !rosterFits(postAdd, slots);
 
           if (needsDropToAdd) {
-            dropCandidates = rosterResult.rows.map((row) => ({
-              id: row.player_id,
-              name: row.name,
-              positions: row.positions ?? [],
-            }));
+            // A started player's lineup row is immutable today, so they are
+            // not a legal drop — the actions API rejects them (409).
+            dropCandidates = rosterResult.rows
+              .filter((row) => !(locksApply && row.game_started))
+              .map((row) => ({
+                id: row.player_id,
+                name: row.name,
+                positions: row.positions ?? [],
+              }));
           }
         }
       }
@@ -465,13 +494,15 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         management: {
           // Unrostered players are added directly unless they're clearing
           // waivers, in which case the path is a claim. Drop, IL, and NA act
-          // on the current team's roster, so they require membership.
+          // on the current team's roster, so they require membership — and a
+          // started player's lineup row is locked until the daily rollover,
+          // which the actions API enforces with a 409.
           canAdd: availability !== "rostered" && !waiver?.until,
           canClaim: Boolean(waiver?.until) && !waiver?.myClaimPending,
           canCancelClaim: Boolean(waiver?.myClaimPending),
-          canDrop: onCurrentTeam,
-          canMoveToIL: onCurrentTeam && (player.status === "injured" || player.status === "day-to-day"),
-          canMoveToNA: onCurrentTeam && player.status === "minors",
+          canDrop: onCurrentTeam && !playerLocked,
+          canMoveToIL: onCurrentTeam && !playerLocked && (player.status === "injured" || player.status === "day-to-day"),
+          canMoveToNA: onCurrentTeam && !playerLocked && player.status === "minors",
           needsDropToAdd,
         },
       };
