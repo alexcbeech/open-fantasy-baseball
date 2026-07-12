@@ -55,6 +55,8 @@ export type DraftState = {
   myAutoPick: boolean;
   /** Team ids currently auto-drafting (opted in or bots), for board hints. */
   autoPickTeamIds: string[];
+  /** ISO scheduled auto-start time; null when the draft starts manually. */
+  scheduledStartAt: string | null;
 };
 
 export type DraftPlayer = Player & {

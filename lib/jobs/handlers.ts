@@ -1,6 +1,7 @@
 import { finalizeEndedMatchups, recomputeMatchups } from "@/lib/data/matchup-scoring";
 import { drainNotifications } from "@/lib/data/notifications";
 import { setBotLineups } from "./bot-lineups";
+import { runDraftReminder } from "./draft-reminder";
 import { runNightlyProcessing } from "./nightly-processing";
 
 /**
@@ -27,6 +28,9 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Deliver queued push notifications (waiver results, etc.). Sent rows are no
   // longer pending, so a retry only picks up anything left unsent.
   send_notifications: async () => drainNotifications(),
+  // Pre-draft "starts soon" push for a scheduled draft. No-ops when the draft
+  // started or was rescheduled; outbox rows are dedup-guarded, so retries are safe.
+  draft_reminder: async (payload) => runDraftReminder(payload),
 };
 
 export function getJobHandler(jobType: string): JobHandler | null {

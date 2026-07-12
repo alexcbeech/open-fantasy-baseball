@@ -6,7 +6,7 @@ import { sendPushToUser } from "./push-subscriptions";
 // transaction) or the pool itself.
 type Queryable = Pick<Pool | PoolClient, "query">;
 
-export type NotificationType = "waiver_result" | "draft_on_clock" | "trade_review" | "injury";
+export type NotificationType = "waiver_result" | "draft_on_clock" | "draft_scheduled" | "trade_review" | "injury";
 
 export type NotificationContent = {
   type: NotificationType;
