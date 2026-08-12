@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { poolFilterSql } from "./draft";
+import { isPlayerInPool, poolFilterConditionSql, poolFilterSql } from "./player-pool";
 
 // The division pools filter on both league and division. Division names differ
 // by source (mlb-sync stores "National League Central", the seed stores
@@ -21,5 +21,19 @@ describe("poolFilterSql", () => {
 
   it("respects a custom table alias", () => {
     expect(poolFilterSql("nl-east", "team")).toBe("and team.league ilike 'National%' and team.division ilike '%East%'");
+  });
+
+  it("supports dynamic WHERE clauses without a leading conjunction", () => {
+    expect(poolFilterConditionSql("nl-central")).toBe(
+      "mt.league ilike 'National%' and mt.division ilike '%Central%'",
+    );
+  });
+
+  it("uses the same pool rules for acquisition guards", () => {
+    expect(isPlayerInPool("nl-central", { league: "National League", division: "National League Central" })).toBe(true);
+    expect(isPlayerInPool("nl-central", { league: "National League", division: "National League East" })).toBe(false);
+    expect(isPlayerInPool("nl-central", { league: "American League", division: "American League Central" })).toBe(false);
+    expect(isPlayerInPool("all", { league: null, division: null })).toBe(true);
+    expect(isPlayerInPool("nl", { league: null, division: null })).toBe(false);
   });
 });

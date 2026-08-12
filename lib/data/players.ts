@@ -3,8 +3,9 @@ import { startedGameTodaySql } from "@/lib/data/game-locks";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
+import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerPool, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
+import { poolFilterConditionSql } from "./player-pool";
 
 function mockPlayerWatch(): PlayerWatchItem[] {
   return mockPlayers
@@ -68,6 +69,18 @@ export async function listPlayers(
       if (options.leagueId && isUuid(options.leagueId)) {
         values.push(options.leagueId);
         rosterScope = `and league_id = $${values.length}`;
+
+        const leagueResult = await query<{ player_pool: PlayerPool | null }>(
+          `select settings->>'playerPool' as player_pool from league where id = $1`,
+          [options.leagueId],
+        );
+        const poolCondition = leagueResult.rows[0]?.player_pool
+          ? poolFilterConditionSql(leagueResult.rows[0].player_pool)
+          : "";
+
+        if (poolCondition) {
+          filters.push(poolCondition);
+        }
       }
 
       const result = await query<DbPlayerRow>(

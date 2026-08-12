@@ -1,6 +1,7 @@
 import { getPool, isUniqueViolation } from "@/lib/db/client";
 import { hasActiveScoringPeriod, hasStartedGameToday, lineupHasStartedGameToday } from "@/lib/data/game-locks";
 import { getPlayerDetail } from "@/lib/data/players";
+import { isPlayerInPool } from "@/lib/data/player-pool";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import { nextWaiverProcessingTime } from "@/lib/fantasy/waivers";
@@ -34,6 +35,11 @@ type PlayerContext = {
   status: PlayerDetail["status"];
 };
 
+type AcquisitionPlayerContext = PlayerContext & {
+  league: string | null;
+  division: string | null;
+};
+
 export async function applyPlayerManagementAction(
   teamId: string,
   playerId: string,
@@ -47,6 +53,10 @@ export async function applyPlayerManagementAction(
 
     const team = await getTeamContext(client, teamId);
     const player = await getPlayerContext(client, playerId);
+
+    if ((action === "add" || action === "claim") && !isPlayerInPool(team.settings.playerPool ?? "all", player)) {
+      throw new PlayerActionError("Player is not eligible for this league's player pool.", 422);
+    }
 
     switch (action) {
       case "add":
@@ -127,15 +137,21 @@ async function waiverUntil(client: PoolClient, leagueId: string, playerId: strin
   return result.rows[0]?.waiver_until ?? null;
 }
 
-async function getPlayerContext(client: PoolClient, playerId: string): Promise<PlayerContext> {
-  const result = await client.query<{ status: PlayerDetail["status"] }>("select status from player where id = $1", [playerId]);
+async function getPlayerContext(client: PoolClient, playerId: string): Promise<AcquisitionPlayerContext> {
+  const result = await client.query<AcquisitionPlayerContext>(
+    `select p.status, mt.league, mt.division
+     from player p
+     left join mlb_team mt on mt.id = p.current_mlb_team_id
+     where p.id = $1`,
+    [playerId],
+  );
   const player = result.rows[0];
 
   if (!player) {
     throw new PlayerActionError("Player not found.", 404);
   }
 
-  return { status: player.status };
+  return player;
 }
 
 /**
