@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { hashToken } from "@/lib/auth/bearer-token";
 import { getPool, isUniqueViolation, isUuid, query } from "@/lib/db/client";
+import { appendTeamToSetupDraft } from "@/lib/data/draft-order";
 import type { PoolClient } from "pg";
 
 export class LeagueInviteError extends Error {
@@ -313,7 +314,9 @@ export async function acceptLeagueInvite(
       [invite.league_id, userId],
     );
 
-    if (!existingTeam.rows[0]) {
+    let teamId = existingTeam.rows[0]?.id;
+
+    if (!teamId) {
       const baseName = `${user.displayName}'s Team`.slice(0, 80);
 
       for (let suffix = 0; ; suffix++) {
@@ -321,11 +324,11 @@ export async function acceptLeagueInvite(
 
         try {
           await client.query(`savepoint team_name`);
-          await client.query(`insert into fantasy_team (league_id, manager_user_id, name) values ($1, $2, $3)`, [
-            invite.league_id,
-            userId,
-            name,
-          ]);
+          const insertedTeam = await client.query<{ id: string }>(
+            `insert into fantasy_team (league_id, manager_user_id, name) values ($1, $2, $3) returning id`,
+            [invite.league_id, userId, name],
+          );
+          teamId = insertedTeam.rows[0].id;
           break;
         } catch (error) {
           if (isUniqueViolation(error) && suffix < 20) {
@@ -337,6 +340,12 @@ export async function acceptLeagueInvite(
         }
       }
     }
+
+    if (!teamId) {
+      throw new LeagueInviteError("Your fantasy team could not be created.", 500);
+    }
+
+    await appendTeamToSetupDraft(client, invite.league_id, teamId);
 
     await client.query(`update league_invite set accepted_at = now(), accepted_by_user_id = $2 where id = $1`, [
       invite.id,

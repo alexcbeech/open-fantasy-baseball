@@ -562,14 +562,15 @@ select {
 }
 
 .pre-draft-pill {
-  background: #fff1c2;
-  color: #7a4b00;
+  background: var(--progress-bg);
+  border: 1px solid var(--line);
+  color: var(--brand-strong);
 }
 
 .pre-draft-summary {
   align-items: center;
-  background: #fffbeb;
-  border: 1px solid #f0cf72;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
   gap: 10px;
@@ -583,22 +584,22 @@ select {
   gap: 3px;
 }
 
-.pre-draft-summary-copy span,
-.pre-draft-card-note span {
+.pre-draft-summary-copy > span,
+.pre-draft-card-note > span {
   color: var(--muted);
   font-size: 13px;
 }
 
 .pre-draft-card-note {
-  background: #fffbeb;
-  border: 1px solid #f0cf72;
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 11px 12px;
 }
 
 .draft-countdown {
   align-items: baseline;
-  background: var(--brand-strong);
+  background: var(--brand);
   border-radius: 7px;
   color: #fff;
   display: flex;
@@ -606,16 +607,20 @@ select {
   gap: 5px 10px;
   justify-content: space-between;
   margin-top: 7px;
+  max-width: 420px;
   padding: 9px 11px;
+  width: 100%;
 }
 
 .draft-countdown span {
+  color: rgb(255 255 255 / 76%);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .draft-countdown time {
+  color: #fff;
   font-variant-numeric: tabular-nums;
   font-size: 18px;
   font-weight: 900;
@@ -629,6 +634,10 @@ select {
 .draft-countdown-loading {
   color: rgba(255, 255, 255, 0.85);
   font-size: 13px;
+}
+
+.pre-draft-summary > .secondary-button {
+  white-space: nowrap;
 }
 
 .draft-scheduled-summary {
@@ -649,6 +658,10 @@ select {
 
   .pre-draft-summary .pill {
     justify-self: start;
+  }
+
+  .draft-countdown {
+    max-width: none;
   }
 }
 

@@ -19,6 +19,7 @@ import type { DraftType, LeagueSettings, RosterSlot } from "@/lib/fantasy/types"
 import { getPool, isDatabaseConfigured, query, tryDatabase, withDemoFallback } from "@/lib/db/client";
 import { enqueue } from "@/lib/jobs/queue";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
+import { reconcileSetupDraftOrder } from "./draft-order";
 import { drainNotifications } from "./notifications";
 import { poolFilterSql } from "./player-pool";
 import { sendPushToUser } from "./push-subscriptions";
@@ -962,6 +963,11 @@ async function fillOpenSeatsWithBots(client: PoolClient, leagueId: string, teamC
  */
 async function startDraftInternal(client: PoolClient, context: DraftContext, now: Date = new Date()): Promise<void> {
   const teamCount = context.league.settings.teamCount;
+
+  // Managers can join after the commissioner saves setup. Ensure every real
+  // league team is ordered before calculating genuinely open seats for bots.
+  await reconcileSetupDraftOrder(client, context.draft.id, context.league.id);
+  context.teams = await getOrderedTeams(client, context.draft.id);
 
   if (context.teams.length < teamCount) {
     const newTeamIds = await fillOpenSeatsWithBots(client, context.league.id, teamCount);

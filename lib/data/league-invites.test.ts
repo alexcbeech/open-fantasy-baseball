@@ -138,6 +138,15 @@ function makeAcceptClient(invite: Partial<AcceptRow> | null, { hasTeam = false }
     if (sql.includes("select id from fantasy_team")) {
       return { rows: hasTeam ? [{ id: "team-1" }] : [] };
     }
+    if (sql.includes("insert into fantasy_team")) {
+      return { rows: [{ id: "team-new" }] };
+    }
+    if (sql.includes("select id from draft")) {
+      return { rows: [{ id: "draft-1" }] };
+    }
+    if (sql.includes("next_position")) {
+      return { rows: [{ next_position: 2 }] };
+    }
     return { rows: [] };
   });
 
@@ -180,6 +189,7 @@ describe("acceptLeagueInvite", () => {
     const calls = sqlCalls();
     expect(calls.some((sql) => sql.includes("insert into league_member"))).toBe(true);
     expect(calls.some((sql) => sql.includes("insert into fantasy_team"))).toBe(true);
+    expect(calls.some((sql) => sql.includes("insert into draft_order"))).toBe(true);
     expect(calls.some((sql) => sql.includes("set accepted_at = now()"))).toBe(true);
     expect(calls).toContain("commit");
   });
