@@ -126,7 +126,7 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
       </label>
 
       <div className="confirm-panel-actions">
-        <button className="primary-button" type="button" disabled={busy} onClick={save}>
+        <button className="primary-button" type="button" disabled={busy} aria-busy={busy} onClick={save}>
           {busy ? "Saving..." : "Save Settings"}
         </button>
         <button className="secondary-button" type="button" onClick={() => setOpen(false)}>

@@ -228,7 +228,7 @@ export function TradeProposalSheet({
             ) : null}
             {blockingIssues.length ? <p className="move-sheet-subtitle trade-issue">{blockingIssues[0]}</p> : null}
 
-            <button className="primary-button" type="button" disabled={!canSubmit} onClick={submit}>
+            <button className="primary-button" type="button" disabled={!canSubmit} aria-busy={submitting} onClick={submit}>
               {submitting ? "Sending offer..." : "Send Trade Offer"}
             </button>
           </>

@@ -39,7 +39,8 @@ export function PushNotificationsControl() {
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [subscribed, setSubscribed] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"enable" | "disable" | "test" | null>(null);
+  const busy = busyAction !== null;
   const [banner, setBanner] = useState<Banner>({ kind: "idle", message: "" });
 
   const refresh = useCallback(async () => {
@@ -81,7 +82,7 @@ export function PushNotificationsControl() {
       return;
     }
 
-    setBusy(true);
+    setBusyAction("enable");
     setBanner({ kind: "idle", message: "Enabling push notifications..." });
 
     try {
@@ -117,12 +118,12 @@ export function PushNotificationsControl() {
     } catch {
       setBanner({ kind: "error", message: "Push notifications could not be enabled." });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function disable() {
-    setBusy(true);
+    setBusyAction("disable");
     setBanner({ kind: "idle", message: "Disabling push notifications..." });
 
     try {
@@ -144,12 +145,12 @@ export function PushNotificationsControl() {
     } catch {
       setBanner({ kind: "error", message: "Push notifications could not be disabled." });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function sendTest() {
-    setBusy(true);
+    setBusyAction("test");
     setBanner({ kind: "idle", message: "Sending a test notification..." });
 
     try {
@@ -165,7 +166,7 @@ export function PushNotificationsControl() {
     } catch {
       setBanner({ kind: "error", message: "Test notification could not be sent." });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -198,19 +199,19 @@ export function PushNotificationsControl() {
               </span>
             </span>
             {subscribed ? (
-              <button className="danger-button" type="button" onClick={disable} disabled={busy}>
-                {busy ? "Working..." : "Disable"}
+              <button className="danger-button" type="button" onClick={disable} disabled={busy} aria-busy={busyAction === "disable"}>
+                {busyAction === "disable" ? "Working..." : "Disable"}
               </button>
             ) : (
-              <button className="primary-button" type="button" onClick={enable} disabled={busy || permission === "denied"}>
-                {busy ? "Working..." : "Enable"}
+              <button className="primary-button" type="button" onClick={enable} disabled={busy || permission === "denied"} aria-busy={busyAction === "enable"}>
+                {busyAction === "enable" ? "Working..." : "Enable"}
               </button>
             )}
           </div>
 
           {subscribed ? (
-            <button className="secondary-button" type="button" onClick={sendTest} disabled={busy}>
-              Send Test Notification
+            <button className="secondary-button" type="button" onClick={sendTest} disabled={busy} aria-busy={busyAction === "test"}>
+              {busyAction === "test" ? "Sending..." : "Send Test Notification"}
             </button>
           ) : null}
         </div>

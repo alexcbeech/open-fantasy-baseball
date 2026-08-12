@@ -561,6 +561,146 @@ select {
   margin: 0 0 4px;
 }
 
+/* The team route performs several permission and data lookups before it can
+   render. Keep navigation responsive with a layout-shaped loading state. */
+.team-loading-back {
+  cursor: default;
+}
+
+.team-loading-brand {
+  flex: 1;
+  max-width: 230px;
+}
+
+.team-loading-account {
+  background: rgb(255 255 255 / 14%);
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 8px;
+  height: 42px;
+  width: 96px;
+}
+
+.team-loading-hero {
+  min-height: 150px;
+}
+
+.team-loading-status {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.team-loading-status h1,
+.team-loading-status p {
+  margin: 0;
+}
+
+.team-route-spinner {
+  animation: button-loading-spin 0.7s linear infinite;
+  border: 3px solid var(--progress-bg);
+  border-radius: 50%;
+  border-right-color: var(--brand);
+  flex: 0 0 auto;
+  height: 24px;
+  width: 24px;
+}
+
+.team-loading-summary {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+}
+
+.team-loading-line,
+.team-loading-row,
+.team-loading-tab {
+  animation: team-loading-pulse 1.3s ease-in-out infinite alternate;
+  background: var(--progress-bg);
+  border-radius: 999px;
+  display: block;
+}
+
+.team-loading-line {
+  height: 12px;
+}
+
+.team-loading-line--kicker {
+  background: rgb(255 255 255 / 22%);
+  height: 10px;
+  width: 92px;
+}
+
+.team-loading-line--title {
+  background: rgb(255 255 255 / 28%);
+  height: 18px;
+  width: 150px;
+}
+
+.team-loading-line--wide {
+  width: min(72%, 520px);
+}
+
+.team-loading-line--medium {
+  width: min(48%, 340px);
+}
+
+.team-loading-tabs {
+  position: static;
+}
+
+.team-loading-tab {
+  border-radius: 6px;
+  height: 38px;
+}
+
+.team-loading-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.team-loading-line--heading {
+  height: 18px;
+  margin-bottom: 3px;
+  width: 140px;
+}
+
+.team-loading-row {
+  border-radius: 7px;
+  height: 52px;
+}
+
+@keyframes team-loading-pulse {
+  from {
+    opacity: 0.5;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-route-spinner,
+  .team-loading-line,
+  .team-loading-row,
+  .team-loading-tab {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .team-loading-account {
+    width: 42px;
+  }
+
+  .team-loading-brand {
+    max-width: none;
+  }
+}
+
 .pre-draft-pill {
   background: var(--progress-bg);
   border: 1px solid var(--line);
@@ -1745,6 +1885,39 @@ button.row {
   color: var(--muted);
   cursor: default;
   opacity: 0.66;
+}
+
+/* Async action feedback: aria-busy distinguishes an in-flight request from a
+   button that is merely disabled by validation or permissions. */
+:where(.primary-button, .secondary-button, .danger-button)[aria-busy="true"] {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+:where(.primary-button, .secondary-button, .danger-button)[aria-busy="true"]::before {
+  animation: button-loading-spin 0.7s linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  border-right-color: transparent;
+  content: "";
+  flex: 0 0 auto;
+  height: 14px;
+  opacity: 0.82;
+  width: 14px;
+}
+
+@keyframes button-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(.primary-button, .secondary-button, .danger-button)[aria-busy="true"]::before {
+    animation: none;
+  }
 }
 
 .player-detail-panel {

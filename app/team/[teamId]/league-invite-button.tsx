@@ -156,7 +156,7 @@ export function LeagueInviteButton({ leagueId }: LeagueInviteButtonProps) {
                     placeholder="manager@example.com"
                   />
                 </label>
-                <button className="primary-button" disabled={pending || !email.trim()} type="submit">
+                <button className="primary-button" disabled={pending || !email.trim()} aria-busy={pending} type="submit">
                   {pending ? "Sending..." : "Send invite"}
                 </button>
               </form>

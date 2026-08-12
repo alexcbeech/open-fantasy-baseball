@@ -253,7 +253,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
         <span>Enable IL+ eligibility</span>
       </label>
 
-      <button className="primary-button" type="submit" disabled={isSubmitting}>
+      <button className="primary-button" type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
         {isSubmitting ? "Creating..." : "Create League"}
       </button>
     </form>

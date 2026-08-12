@@ -80,6 +80,7 @@ function seasonSummary(player: PlayerDetail): string | null {
 export function PlayerDetailView({
   player,
   actionInFlight,
+  activeAction,
   statusBanner,
   onAction,
   liveStatus,
@@ -88,6 +89,7 @@ export function PlayerDetailView({
 }: {
   player: PlayerDetail;
   actionInFlight: boolean;
+  activeAction?: PlayerAction;
   statusBanner?: PlayerDetailStatusBanner | null;
   onAction: (action: PlayerAction, options?: PlayerActionOptions) => void;
   liveStatus?: LivePlayerStatus | null;
@@ -227,6 +229,7 @@ export function PlayerDetailView({
               className="primary-button"
               type="button"
               disabled={actionInFlight || (dropRequired && !dropPlayerId)}
+              aria-busy={actionInFlight && activeAction === confirmingAction}
               onClick={confirmAction}
             >
               {confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
@@ -257,8 +260,8 @@ export function PlayerDetailView({
           </button>
         ) : null}
         {player.management.canCancelClaim ? (
-          <button className="secondary-button" type="button" disabled={actionInFlight} onClick={() => onAction("cancel-claim")}>
-            Cancel Claim
+          <button className="secondary-button" type="button" disabled={actionInFlight} aria-busy={activeAction === "cancel-claim"} onClick={() => onAction("cancel-claim")}>
+            {activeAction === "cancel-claim" ? "Canceling..." : "Cancel Claim"}
           </button>
         ) : null}
         <button
@@ -281,17 +284,19 @@ export function PlayerDetailView({
           className="secondary-button"
           type="button"
           disabled={actionInFlight || !player.management.canMoveToIL}
+          aria-busy={activeAction === "move-to-il"}
           onClick={() => onAction("move-to-il")}
         >
-          IL
+          {activeAction === "move-to-il" ? "Moving..." : "IL"}
         </button>
         <button
           className="secondary-button"
           type="button"
           disabled={actionInFlight || !player.management.canMoveToNA}
+          aria-busy={activeAction === "move-to-na"}
           onClick={() => onAction("move-to-na")}
         >
-          NA
+          {activeAction === "move-to-na" ? "Moving..." : "NA"}
         </button>
       </div>
 

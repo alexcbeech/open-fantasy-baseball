@@ -19,7 +19,7 @@ export function GoogleSignInButton({ label, next }: { label: string; next?: stri
       </div>
       {state?.error ? <div className="status-banner bad">{state.error}</div> : null}
       {next ? <input name="next" type="hidden" value={next} /> : null}
-      <button className="secondary-button google-button" disabled={pending} type="submit">
+      <button className="secondary-button google-button" disabled={pending} aria-busy={pending} type="submit">
         <GoogleMark />
         {pending ? "Redirecting..." : label}
       </button>

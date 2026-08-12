@@ -88,7 +88,7 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
         </div>
         {statLine ? <p className="player-meta pick-sheet-statline">{statLine}</p> : null}
 
-        <button className="primary-button" type="button" disabled={!canPick || busy} onClick={onConfirm}>
+        <button className="primary-button" type="button" disabled={!canPick || busy} aria-busy={busy} onClick={onConfirm}>
           {busy ? "Drafting..." : pickLabel ? `Draft with pick ${pickLabel}` : "Draft"}
         </button>
         {isQueued !== null ? (

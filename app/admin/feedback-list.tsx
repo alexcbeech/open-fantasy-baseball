@@ -157,7 +157,7 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
     return (
       <>
         <div className="feedback-admin-toolbar">
-          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing}>
+          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing} aria-busy={isRefreshing}>
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
@@ -191,11 +191,12 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
               type="button"
               onClick={promoteAll}
               disabled={isPromotingAll}
+              aria-busy={isPromotingAll}
             >
               {isPromotingAll ? "Promoting..." : `Promote all to issues (${promotable.length})`}
             </button>
           ) : null}
-          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing || isPromotingAll}>
+          <button className="secondary-button" type="button" onClick={refresh} disabled={isRefreshing || isPromotingAll} aria-busy={isRefreshing}>
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>

@@ -182,6 +182,7 @@ export function FeedbackWidget() {
                   className="primary-button feedback-submit"
                   onClick={submitFeedback}
                   disabled={status === "submitting" || message.trim().length === 0}
+                  aria-busy={status === "submitting"}
                 >
                   {status === "submitting" ? "Sending..." : "Send feedback"}
                 </button>

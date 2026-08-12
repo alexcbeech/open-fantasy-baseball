@@ -12,7 +12,7 @@ export function AcceptInviteForm({ token, leagueName }: { token: string; leagueN
     <form action={formAction} className="auth-form">
       {state?.error ? <div className="status-banner bad">{state.error}</div> : null}
       <input name="token" type="hidden" value={token} />
-      <button className="primary-button" disabled={pending} type="submit">
+      <button className="primary-button" disabled={pending} aria-busy={pending} type="submit">
         {pending ? "Joining..." : `Join ${leagueName}`}
       </button>
     </form>

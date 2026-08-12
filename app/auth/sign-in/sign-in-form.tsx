@@ -21,7 +21,7 @@ export function SignInForm({ signupsEnabled, next }: { signupsEnabled: boolean; 
         Password
         <input autoComplete="current-password" name="password" required type="password" />
       </label>
-      <button className="primary-button" disabled={pending} type="submit">
+      <button className="primary-button" disabled={pending} aria-busy={pending} type="submit">
         {pending ? "Signing in..." : "Sign in"}
       </button>
       {signupsEnabled ? (

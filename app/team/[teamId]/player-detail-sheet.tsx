@@ -6,7 +6,7 @@ import type { LivePlayerStatus, PlayerDetail } from "@/lib/fantasy/types";
 import { PlayerDetailView, type PlayerAction, type PlayerActionOptions, type PlayerDetailStatusBanner } from "./player-detail-view";
 
 type SheetState =
-  | { kind: "loading"; player: PlayerDetail | null; message: string }
+  | { kind: "loading"; player: PlayerDetail | null; message: string; action?: PlayerAction }
   | { kind: "success"; player: PlayerDetail; message: string }
   | { kind: "error"; player: PlayerDetail | null; message: string };
 
@@ -119,7 +119,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
       return;
     }
 
-    setState({ kind: "loading", player: current, message: "Applying player action..." });
+    setState({ kind: "loading", player: current, message: "Applying player action...", action });
 
     try {
       const response = await fetch(`/api/v1/teams/${teamId}/players/${current.id}/actions`, {
@@ -167,6 +167,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
           <PlayerDetailView
             player={player}
             actionInFlight={state.kind === "loading"}
+            activeAction={state.kind === "loading" ? state.action : undefined}
             statusBanner={statusBanner}
             onAction={applyAction}
             liveStatus={live}

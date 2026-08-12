@@ -120,7 +120,7 @@ export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventReco
           onChange={(event) => setActorFilter(event.target.value)}
           aria-label="Filter by actor email"
         />
-        <button className="secondary-button" type="submit" disabled={isLoading}>
+        <button className="secondary-button" type="submit" disabled={isLoading} aria-busy={isLoading}>
           {isLoading ? "Loading..." : "Search"}
         </button>
       </form>
@@ -155,7 +155,7 @@ export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventReco
       )}
 
       {events.length && maybeMore ? (
-        <button className="secondary-button audit-load-more" type="button" disabled={isLoadingMore} onClick={loadMore}>
+        <button className="secondary-button audit-load-more" type="button" disabled={isLoadingMore} aria-busy={isLoadingMore} onClick={loadMore}>
           {isLoadingMore ? "Loading..." : "Load older events"}
         </button>
       ) : null}

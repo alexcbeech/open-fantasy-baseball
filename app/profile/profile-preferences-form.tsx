@@ -257,7 +257,7 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
               </label>
             ))}
           </div>
-          <button className="primary-button" type="button" onClick={createToken} disabled={isCreatingToken}>
+          <button className="primary-button" type="button" onClick={createToken} disabled={isCreatingToken} aria-busy={isCreatingToken}>
             {isCreatingToken ? "Creating..." : "Create Token"}
           </button>
 
@@ -276,6 +276,7 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
                     type="button"
                     onClick={() => revokeToken(token.id)}
                     disabled={revokingTokenId === token.id}
+                    aria-busy={revokingTokenId === token.id}
                   >
                     {revokingTokenId === token.id ? "Revoking" : "Revoke"}
                   </button>
@@ -315,7 +316,7 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
       <PushNotificationsControl />
 
       <div className="form-actions">
-        <button className="primary-button" type="submit" disabled={isSaving}>
+        <button className="primary-button" type="submit" disabled={isSaving} aria-busy={isSaving}>
           {isSaving ? "Saving..." : "Save Preferences"}
         </button>
       </div>

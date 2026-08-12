@@ -32,7 +32,8 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
   );
   const [order, setOrder] = useState<string[] | null>(null);
   const [message, setMessage] = useState<{ kind: "error" | "good"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"setup" | "randomize" | "order" | "start" | null>(null);
+  const busy = busyAction !== null;
 
   const teams = draft?.teams ?? [];
   const orderedTeams = order
@@ -41,7 +42,7 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
   const openSeats = Math.max(0, lobby.teamCount - teams.length);
 
   async function postSetup(explicitOrder?: string[], randomize = false) {
-    setBusy(true);
+    setBusyAction(randomize ? "randomize" : explicitOrder ? "order" : "setup");
     setMessage(null);
 
     try {
@@ -72,12 +73,12 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
     } catch {
       setMessage({ kind: "error", text: "Draft setup could not be saved." });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function startDraft() {
-    setBusy(true);
+    setBusyAction("start");
     setMessage(null);
 
     try {
@@ -93,7 +94,7 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
     } catch {
       setMessage({ kind: "error", text: "The draft could not be started." });
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -154,12 +155,12 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
       )}
 
       <div className="draft-setup-actions">
-        <button className="primary-button" type="button" disabled={busy || teamName.trim().length < 3} onClick={() => postSetup()}>
-          {draft ? "Update Setup" : "Create Seats"}
+        <button className="primary-button" type="button" disabled={busy || teamName.trim().length < 3} aria-busy={busyAction === "setup"} onClick={() => postSetup()}>
+          {busyAction === "setup" ? "Saving..." : draft ? "Update Setup" : "Create Seats"}
         </button>
         {draft ? (
-          <button className="secondary-button" type="button" disabled={busy} onClick={() => postSetup(undefined, true)}>
-            Randomize Order
+          <button className="secondary-button" type="button" disabled={busy} aria-busy={busyAction === "randomize"} onClick={() => postSetup(undefined, true)}>
+            {busyAction === "randomize" ? "Randomizing..." : "Randomize Order"}
           </button>
         ) : null}
       </div>
@@ -192,13 +193,15 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
             ))}
           </div>
           {order ? (
-            <button className="secondary-button" type="button" disabled={busy} onClick={() => postSetup(order)}>
-              Save Order
+            <button className="secondary-button" type="button" disabled={busy} aria-busy={busyAction === "order"} onClick={() => postSetup(order)}>
+              {busyAction === "order" ? "Saving..." : "Save Order"}
             </button>
           ) : null}
 
-          <button className="primary-button draft-start-button" type="button" disabled={busy} onClick={startDraft}>
-            {openSeats === 0
+          <button className="primary-button draft-start-button" type="button" disabled={busy} aria-busy={busyAction === "start"} onClick={startDraft}>
+            {busyAction === "start"
+              ? "Starting draft..."
+              : openSeats === 0
               ? "Start Draft"
               : `Start Draft Now (fills ${openSeats} open seat${openSeats === 1 ? "" : "s"} with bots)`}
           </button>

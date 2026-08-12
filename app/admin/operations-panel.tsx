@@ -150,7 +150,7 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
                 </div>
               ) : null}
 
-              <button className="primary-button" type="button" disabled={isRunning} onClick={() => runOperation(operation)}>
+              <button className="primary-button" type="button" disabled={isRunning} aria-busy={isRunning} onClick={() => runOperation(operation)}>
                 {isRunning ? "Running..." : operation.action}
               </button>
             </div>
@@ -198,7 +198,7 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
 
         <div className="section-title admin-history-title">
           <h2 id="history-heading">Recent Runs</h2>
-          <button className="secondary-button" type="button" onClick={refreshHistory} disabled={isRefreshingHistory}>
+          <button className="secondary-button" type="button" onClick={refreshHistory} disabled={isRefreshingHistory} aria-busy={isRefreshingHistory}>
             {isRefreshingHistory ? "Refreshing..." : "Refresh"}
           </button>
         </div>

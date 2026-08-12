@@ -25,7 +25,7 @@ export function SignUpForm({ inviteToken, prefillEmail }: { inviteToken?: string
         Password
         <input autoComplete="new-password" minLength={8} name="password" required type="password" />
       </label>
-      <button className="primary-button" disabled={pending} type="submit">
+      <button className="primary-button" disabled={pending} aria-busy={pending} type="submit">
         {pending ? "Creating..." : "Create account"}
       </button>
       <p className="auth-alt">
