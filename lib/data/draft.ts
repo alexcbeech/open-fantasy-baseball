@@ -16,7 +16,7 @@ import {
 import { draftReminderTime, formatDraftTime } from "@/lib/draft/schedule";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import type { DraftType, LeagueSettings, RosterSlot } from "@/lib/fantasy/types";
-import { getPool, isDatabaseConfigured, tryDatabase, withDemoFallback } from "@/lib/db/client";
+import { getPool, isDatabaseConfigured, query, tryDatabase, withDemoFallback } from "@/lib/db/client";
 import { enqueue } from "@/lib/jobs/queue";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 import { drainNotifications } from "./notifications";
@@ -1401,24 +1401,65 @@ export type DraftableLeague = {
   leagueId: string;
   leagueName: string;
   status: "pre_draft" | "drafting";
+  scheduledStartAt: string | null;
 };
+
+export type LeagueDraftStatus = {
+  leagueStatus: string;
+  scheduledStartAt: string | null;
+};
+
+/** League-level draft state for team-page status messaging. */
+export async function getLeagueDraftStatus(leagueId: string): Promise<LeagueDraftStatus | null> {
+  return withDemoFallback(
+    async () => {
+      const result = await query<{ league_status: string; scheduled_start_at: Date | string | null }>(
+        `select l.status as league_status, d.scheduled_start_at
+         from league l
+         left join draft d on d.league_id = l.id
+         where l.id = $1`,
+        [leagueId],
+      );
+      const row = result.rows[0];
+
+      return row
+        ? {
+            leagueStatus: row.league_status,
+            scheduledStartAt: row.scheduled_start_at ? new Date(row.scheduled_start_at).toISOString() : null,
+          }
+        : null;
+    },
+    () => ({ leagueStatus: "active", scheduledStartAt: null }),
+  );
+}
 
 /** Leagues the user belongs to that are waiting on (or running) a draft. */
 export async function listDraftableLeagues(viewerUserId: string): Promise<DraftableLeague[]> {
   return tryDatabase(
     async () => {
-      const result = await getPool().query<{ id: string; name: string; status: "pre_draft" | "drafting" }>(
-        `select distinct l.id, l.name, l.status
+      const result = await getPool().query<{
+        id: string;
+        name: string;
+        status: "pre_draft" | "drafting";
+        scheduled_start_at: Date | string | null;
+      }>(
+        `select distinct l.id, l.name, l.status, d.scheduled_start_at
          from league l
          left join league_member lm on lm.league_id = l.id
          left join fantasy_team ft on ft.league_id = l.id and ft.is_bot = false
+         left join draft d on d.league_id = l.id
          where l.status in ('pre_draft', 'drafting')
            and (lm.user_id = $1 or ft.manager_user_id = $1)
          order by l.status desc, l.name`,
         [viewerUserId],
       );
 
-      return result.rows.map((row) => ({ leagueId: row.id, leagueName: row.name, status: row.status }));
+      return result.rows.map((row) => ({
+        leagueId: row.id,
+        leagueName: row.name,
+        status: row.status,
+        scheduledStartAt: row.scheduled_start_at ? new Date(row.scheduled_start_at).toISOString() : null,
+      }));
     },
     () => [],
   );

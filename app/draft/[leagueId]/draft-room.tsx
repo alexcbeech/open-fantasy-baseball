@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
+import { DraftCountdown } from "@/app/draft-countdown";
 import { computeRosterNeeds } from "@/lib/draft/auto-pick";
 import type { DraftPlayer, DraftState } from "@/lib/draft/types";
 import type { DraftLobby } from "@/lib/data/draft";
@@ -306,6 +307,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
         <div className="empty-state">
           {lobby.leagueName} hasn&apos;t started drafting yet. The commissioner is setting things up — check back soon.
         </div>
+        {draft?.scheduledStartAt ? <DraftCountdown scheduledStartAt={draft.scheduledStartAt} /> : null}
       </section>
     );
   }

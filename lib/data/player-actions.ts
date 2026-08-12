@@ -28,6 +28,7 @@ export class PlayerActionError extends Error {
 
 type TeamContext = {
   leagueId: string;
+  leagueStatus: string;
   settings: LeagueSettings;
 };
 
@@ -53,6 +54,10 @@ export async function applyPlayerManagementAction(
 
     const team = await getTeamContext(client, teamId);
     const player = await getPlayerContext(client, playerId);
+
+    if ((action === "add" || action === "claim") && ["pre_draft", "drafting"].includes(team.leagueStatus)) {
+      throw new PlayerActionError("The league draft is not complete. Players must be acquired through the draft.", 409);
+    }
 
     if ((action === "add" || action === "claim") && !isPlayerInPool(team.settings.playerPool ?? "all", player)) {
       throw new PlayerActionError("Player is not eligible for this league's player pool.", 422);
@@ -110,8 +115,8 @@ export async function applyPlayerManagementAction(
 }
 
 async function getTeamContext(client: PoolClient, teamId: string): Promise<TeamContext> {
-  const result = await client.query<{ league_id: string; settings: LeagueSettings }>(
-    `select ft.league_id, l.settings
+  const result = await client.query<{ league_id: string; league_status: string; settings: LeagueSettings }>(
+    `select ft.league_id, l.status as league_status, l.settings
      from fantasy_team ft
      join league l on l.id = ft.league_id
      where ft.id = $1`,
@@ -123,7 +128,7 @@ async function getTeamContext(client: PoolClient, teamId: string): Promise<TeamC
     throw new PlayerActionError("Team not found.", 404);
   }
 
-  return { leagueId: team.league_id, settings: team.settings };
+  return { leagueId: team.league_id, leagueStatus: team.league_status, settings: team.settings };
 }
 
 /** When the player's current waiver window in this league ends, if any. */

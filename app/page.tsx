@@ -2,11 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
 import { BrandLockup } from "./brand-lockup";
+import { DraftCountdown } from "./draft-countdown";
 import { LiveScoreRow } from "./live-score-row";
 import { TopbarMenu, type TopbarMenuItem } from "./topbar-menu";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listDraftableLeagues } from "@/lib/data/draft";
 import { listTeamsForCurrentUser } from "@/lib/data/teams";
+import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 
 export const dynamic = "force-dynamic";
@@ -51,13 +53,20 @@ export default async function HomePage() {
                     <div>
                       <div className="team-name">{league.leagueName}</div>
                       <div className="league-name">
-                        {league.status === "drafting" ? "Draft in progress — join the room" : "Set up your draft"}
+                        {league.status === "drafting"
+                          ? "Draft in progress — join the room"
+                          : league.scheduledStartAt
+                            ? `Draft: ${formatDraftTime(new Date(league.scheduledStartAt))}`
+                            : "Draft date and time not scheduled"}
                       </div>
                     </div>
                     <span className={league.status === "drafting" ? "pill draft-live-pill" : "pill"}>
                       {league.status === "drafting" ? "● LIVE" : "Pre-draft"}
                     </span>
                   </div>
+                  {league.status === "pre_draft" && league.scheduledStartAt ? (
+                    <DraftCountdown scheduledStartAt={league.scheduledStartAt} />
+                  ) : null}
                 </Link>
               ))}
             </div>
@@ -72,6 +81,7 @@ export default async function HomePage() {
         <div className="team-list">
           {teams.map((team) => {
             const isWinning = team.matchup.userScore >= team.matchup.opponentScore;
+            const draftLeague = draftableLeagues.find((league) => league.leagueId === team.leagueId);
 
             return (
               <Link className="team-card" href={`/team/${team.id}`} key={team.id}>
@@ -82,18 +92,40 @@ export default async function HomePage() {
                       {team.leagueName} · {formatScoringType(team.scoringType)}
                     </div>
                   </div>
-                  <span className={isWinning ? "pill" : "pill loss"}>Rank #{team.rank}</span>
+                  <span className={draftLeague ? "pill pre-draft-pill" : isWinning ? "pill" : "pill loss"}>
+                    {draftLeague?.status === "drafting" ? "Drafting" : draftLeague ? "Pre-draft" : `Rank #${team.rank}`}
+                  </span>
                 </div>
 
-                <LiveScoreRow
-                  teamId={team.id}
-                  teamName={team.teamName}
-                  opponentName={team.matchup.opponentName}
-                  periodLabel={team.matchup.periodLabel}
-                  initialUserScore={team.matchup.userScore}
-                  initialOpponentScore={team.matchup.opponentScore}
-                  showShareBar
-                />
+                {draftLeague ? (
+                  <div className="pre-draft-card-note">
+                    <strong>
+                      {draftLeague.status === "drafting"
+                        ? "Draft in progress"
+                        : draftLeague.scheduledStartAt
+                        ? `Draft: ${formatDraftTime(new Date(draftLeague.scheduledStartAt))}`
+                        : "Draft date and time not scheduled"}
+                    </strong>
+                    <span>
+                      {draftLeague.status === "drafting"
+                        ? "Join the draft room to make your picks."
+                        : "Free-agent adds are disabled until the draft is complete."}
+                    </span>
+                    {draftLeague.status === "pre_draft" && draftLeague.scheduledStartAt ? (
+                      <DraftCountdown scheduledStartAt={draftLeague.scheduledStartAt} />
+                    ) : null}
+                  </div>
+                ) : (
+                  <LiveScoreRow
+                    teamId={team.id}
+                    teamName={team.teamName}
+                    opponentName={team.matchup.opponentName}
+                    periodLabel={team.matchup.periodLabel}
+                    initialUserScore={team.matchup.userScore}
+                    initialOpponentScore={team.matchup.opponentScore}
+                    showShareBar
+                  />
+                )}
               </Link>
             );
           })}

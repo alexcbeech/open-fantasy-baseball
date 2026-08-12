@@ -561,6 +561,97 @@ select {
   margin: 0 0 4px;
 }
 
+.pre-draft-pill {
+  background: #fff1c2;
+  color: #7a4b00;
+}
+
+.pre-draft-summary {
+  align-items: center;
+  background: #fffbeb;
+  border: 1px solid #f0cf72;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.pre-draft-summary-copy,
+.pre-draft-card-note {
+  display: grid;
+  gap: 3px;
+}
+
+.pre-draft-summary-copy span,
+.pre-draft-card-note span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pre-draft-card-note {
+  background: #fffbeb;
+  border: 1px solid #f0cf72;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+.draft-countdown {
+  align-items: baseline;
+  background: var(--brand-strong);
+  border-radius: 7px;
+  color: #fff;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  justify-content: space-between;
+  margin-top: 7px;
+  padding: 9px 11px;
+}
+
+.draft-countdown span {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.draft-countdown time {
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.draft-countdown.is-complete {
+  background: var(--brand);
+}
+
+.draft-countdown-loading {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+}
+
+.draft-scheduled-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.draft-scheduled-summary .subtle {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .pre-draft-summary {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .pre-draft-summary .pill {
+    justify-self: start;
+  }
+}
+
 .tabbar {
   background: var(--surface);
   border: 1px solid var(--line);

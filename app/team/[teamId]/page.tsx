@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
 import { BrandLockup } from "@/app/brand-lockup";
+import { DraftCountdown } from "@/app/draft-countdown";
 import { LiveScoreRow } from "@/app/live-score-row";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
@@ -12,12 +13,14 @@ import { LeagueInviteButton } from "./league-invite-button";
 import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
+import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { LiveMatchup } from "./live-matchup";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
+import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
 
@@ -66,6 +69,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
   const team = await getTeamSummary(teamId);
   const leagueSettings = team ? await getLeagueSettings(team.leagueId) : defaultLeagueSettings;
+  const leagueDraftStatus = team ? await getLeagueDraftStatus(team.leagueId) : null;
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const teamLineup = await getLineupForTeam(teamId);
   const playerPool = selectedTab === "Players" && team ? await listPlayers({ leagueId: team.leagueId }) : [];
@@ -99,14 +103,42 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
               {formatScoringType(team.scoringType)} - {team.record} - Rank #{team.rank}
             </div>
           </div>
-          <LiveScoreRow
-            teamId={team.id}
-            teamName={team.teamName}
-            opponentName={team.matchup.opponentName}
-            periodLabel={team.matchup.periodLabel}
-            initialUserScore={team.matchup.userScore}
-            initialOpponentScore={team.matchup.opponentScore}
-          />
+          {leagueDraftStatus && ["pre_draft", "drafting"].includes(leagueDraftStatus.leagueStatus) ? (
+            <div className="pre-draft-summary" role="status">
+              <span className="pill pre-draft-pill">
+                {leagueDraftStatus.leagueStatus === "drafting" ? "Drafting" : "Pre-draft"}
+              </span>
+              <div className="pre-draft-summary-copy">
+                <strong>
+                  {leagueDraftStatus.leagueStatus === "drafting"
+                    ? "Draft in progress"
+                    : leagueDraftStatus.scheduledStartAt
+                    ? `Draft: ${formatDraftTime(new Date(leagueDraftStatus.scheduledStartAt))}`
+                    : "Draft date and time not scheduled"}
+                </strong>
+                <span>
+                  {leagueDraftStatus.leagueStatus === "drafting"
+                    ? "Join the draft room to make your picks."
+                    : "Free-agent adds and waiver claims are disabled until the draft is complete."}
+                </span>
+                {leagueDraftStatus.leagueStatus === "pre_draft" && leagueDraftStatus.scheduledStartAt ? (
+                  <DraftCountdown scheduledStartAt={leagueDraftStatus.scheduledStartAt} />
+                ) : null}
+              </div>
+              <Link className="secondary-button" href={`/draft/${team.leagueId}`}>
+                Open draft
+              </Link>
+            </div>
+          ) : (
+            <LiveScoreRow
+              teamId={team.id}
+              teamName={team.teamName}
+              opponentName={team.matchup.opponentName}
+              periodLabel={team.matchup.periodLabel}
+              initialUserScore={team.matchup.userScore}
+              initialOpponentScore={team.matchup.opponentScore}
+            />
+          )}
         </div>
 
         <nav className="tabbar" aria-label="Team sections">

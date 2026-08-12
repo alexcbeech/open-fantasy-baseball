@@ -341,19 +341,22 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
       const onCurrentTeam = rosterMembershipResult.rows[0]?.on_team ?? false;
       const player = mapPlayer(playerRow);
       let availability = player.availability;
+      let acquisitionsAllowed = true;
 
       // Rosters are per-league: when viewing from a team, "rostered" must mean
       // rostered in THAT league, not anywhere in the app.
       if (teamId && isUuid(teamId)) {
-        const scoped = await query<{ rostered: boolean }>(
+        const scoped = await query<{ rostered: boolean; league_status: string | null }>(
           `select exists (
              select 1 from roster_entry re
              where re.player_id = $2 and re.dropped_at is null
                and re.league_id = (select league_id from fantasy_team where id = $1)
-           ) as rostered`,
+           ) as rostered,
+           (select l.status from league l join fantasy_team ft on ft.league_id = l.id where ft.id = $1) as league_status`,
           [teamId, playerId],
         );
         availability = scoped.rows[0]?.rostered ? "rostered" : "free-agent";
+        acquisitionsAllowed = !["pre_draft", "drafting"].includes(scoped.rows[0]?.league_status ?? "");
       }
 
       // Waiver context for the current team's league: whether the player is
@@ -510,8 +513,8 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           // on the current team's roster, so they require membership — and a
           // started player's lineup row is locked until the daily rollover,
           // which the actions API enforces with a 409.
-          canAdd: availability !== "rostered" && !waiver?.until,
-          canClaim: Boolean(waiver?.until) && !waiver?.myClaimPending,
+          canAdd: acquisitionsAllowed && availability !== "rostered" && !waiver?.until,
+          canClaim: acquisitionsAllowed && Boolean(waiver?.until) && !waiver?.myClaimPending,
           canCancelClaim: Boolean(waiver?.myClaimPending),
           canDrop: onCurrentTeam && !playerLocked,
           canMoveToIL: onCurrentTeam && !playerLocked && (player.status === "injured" || player.status === "day-to-day"),

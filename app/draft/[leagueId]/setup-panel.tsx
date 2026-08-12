@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DraftCountdown } from "@/app/draft-countdown";
 import { draftPickSecondsOptions } from "@/lib/fantasy/settings-matrix";
 import type { DraftLobby } from "@/lib/data/draft";
 import type { DraftState } from "@/lib/draft/types";
@@ -202,10 +203,13 @@ export function SetupPanel({ lobby, draft, onDraftChange }: SetupPanelProps) {
               : `Start Draft Now (fills ${openSeats} open seat${openSeats === 1 ? "" : "s"} with bots)`}
           </button>
           {draft?.scheduledStartAt ? (
-            <p className="subtle">
-              Scheduled to start {new Date(draft.scheduledStartAt).toLocaleString()}
-              {openSeats > 0 ? `; ${openSeats} open seat${openSeats === 1 ? "" : "s"} will be filled with bots.` : "."}
-            </p>
+            <div className="draft-scheduled-summary">
+              <DraftCountdown scheduledStartAt={draft.scheduledStartAt} />
+              <p className="subtle">
+                Scheduled to start {new Date(draft.scheduledStartAt).toLocaleString()}
+                {openSeats > 0 ? `; ${openSeats} open seat${openSeats === 1 ? "" : "s"} will be filled with bots.` : "."}
+              </p>
+            </div>
           ) : null}
         </>
       ) : (
