@@ -90,6 +90,25 @@ export async function isLeagueCommissioner(leagueId: string, identity: ApiIdenti
   return Boolean(result.rows[0]?.is_commissioner);
 }
 
+/** Whether the identity is the league's original creator/primary commissioner. */
+export async function isLeagueCreator(leagueId: string, identity: ApiIdentity): Promise<boolean> {
+  if (!isDatabaseConfigured() || !isUuid(leagueId)) {
+    return false;
+  }
+
+  const result = await query<{ is_creator: boolean }>(
+    `select exists (
+       select 1
+       from league l
+       join app_user u on u.id = l.commissioner_user_id
+       where l.id = $1 and (u.id::text = $2 or lower(u.email) = lower($3))
+     ) as is_creator`,
+    [leagueId, identity.userId, identity.email],
+  );
+
+  return Boolean(result.rows[0]?.is_creator);
+}
+
 export async function getLeagueAccess(leagueId: string, identity: ApiIdentity): Promise<"member" | "none" | "not-found"> {
   if (!isUuid(leagueId)) {
     return "not-found";

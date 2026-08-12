@@ -7,12 +7,13 @@ import { LiveScoreRow } from "@/app/live-score-row";
 import { LineupEditor } from "./lineup-editor";
 import { PlayersBrowser } from "./players-browser";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
-import { getTeamAccess, isLeagueCommissioner } from "@/lib/auth/team-access";
+import { getTeamAccess, isLeagueCommissioner, isLeagueCreator } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
 import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
+import { DeleteLeagueButton } from "./delete-league-button";
 import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
@@ -78,6 +79,8 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;
   const viewerIsCommissioner =
     selectedTab === "League" && team && currentUser ? await isLeagueCommissioner(team.leagueId, currentUser) : false;
+  const viewerIsCreator =
+    selectedTab === "League" && team && currentUser ? await isLeagueCreator(team.leagueId, currentUser) : false;
 
   if (!team) {
     notFound();
@@ -160,7 +163,13 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
         {selectedTab === "League" && leagueOverview ? (
-          <LeagueTab overview={leagueOverview} canInvite={viewerIsCommissioner} viewerTeamId={team.id} canTrade={viewerManagesTeam} />
+          <LeagueTab
+            overview={leagueOverview}
+            canManage={viewerIsCommissioner}
+            canDelete={viewerIsCreator}
+            viewerTeamId={team.id}
+            canTrade={viewerManagesTeam}
+          />
         ) : null}
       </section>
     </main>
@@ -211,12 +220,14 @@ function PlayersTab({ teamId, players }: { teamId: string; players: Player[] }) 
 
 function LeagueTab({
   overview,
-  canInvite,
+  canManage,
+  canDelete,
   viewerTeamId,
   canTrade,
 }: {
   overview: LeagueOverview;
-  canInvite: boolean;
+  canManage: boolean;
+  canDelete: boolean;
   viewerTeamId: string;
   canTrade: boolean;
 }) {
@@ -236,7 +247,7 @@ function LeagueTab({
 
       <aside className="panel" aria-labelledby="settings-heading">
         <h3 id="settings-heading">Commissioner</h3>
-        {canInvite ? (
+        {canManage ? (
           <div className="commissioner-actions">
             <LeagueInviteButton leagueId={overview.leagueId} />
             <LeagueSettingsEditor leagueId={overview.leagueId} settings={overview.settings} />
@@ -272,6 +283,12 @@ function LeagueTab({
             </div>
           ))}
         </div>
+        {canDelete ? (
+          <div className="league-danger-zone">
+            <h3>Danger Zone</h3>
+            <DeleteLeagueButton leagueId={overview.leagueId} leagueName={overview.name} />
+          </div>
+        ) : null}
       </aside>
     </div>
   );

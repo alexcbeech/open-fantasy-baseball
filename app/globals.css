@@ -2689,6 +2689,30 @@ p.player-meta,
   margin-bottom: 14px;
 }
 
+.league-danger-zone {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.league-danger-zone h3 {
+  color: var(--loss);
+}
+
+.league-delete-trigger {
+  min-height: 42px;
+  width: 100%;
+}
+
+.league-delete-confirm {
+  border-color: var(--loss);
+  margin-bottom: 0;
+}
+
+.league-delete-confirm .status-banner {
+  margin-bottom: 0;
+}
+
 .status-banner {
   border-radius: 8px;
   font-size: 13px;

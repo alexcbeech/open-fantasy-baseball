@@ -646,6 +646,22 @@ export const openApiDocument = {
         },
       },
     },
+    "/leagues/{leagueId}": {
+      delete: {
+        tags: ["Leagues"],
+        summary: "Delete a league (creator only)",
+        description: "Permanently deletes the league and all league-owned teams, rosters, matchups, transactions, invites, and draft records.",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "commissioner:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        responses: {
+          "200": { description: "League deleted." },
+          "403": { description: "Only the original league creator may delete it.", content: errorContent() },
+          "404": { description: "League not found.", content: errorContent() },
+          "503": { description: "League deletion requires a configured database.", content: errorContent() },
+        },
+      },
+    },
     "/leagues/{leagueId}/settings": {
       get: {
         tags: ["Leagues"],

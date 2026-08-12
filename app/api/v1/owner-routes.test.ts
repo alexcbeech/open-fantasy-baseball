@@ -19,6 +19,7 @@ vi.mock("@/lib/auth/neon-auth", () => ({
 import { GET as playersGet } from "./players/route";
 import { GET as lineupGet, PATCH as lineupPatch } from "./teams/[teamId]/lineup/route";
 import { POST as actionsPost } from "./teams/[teamId]/players/[playerId]/actions/route";
+import { DELETE as leagueDelete } from "./leagues/[leagueId]/route";
 
 // These lock the owner-API contract in demo mode (no database): shapes, status
 // codes, and the guards that protect writes. Pin DATABASE_URL off so the run is
@@ -38,6 +39,10 @@ function teamContext(teamId: string) {
 
 function playerContext(teamId: string, playerId: string) {
   return { params: Promise.resolve({ teamId, playerId }) };
+}
+
+function leagueContext(leagueId: string) {
+  return { params: Promise.resolve({ leagueId }) };
 }
 
 describe("GET /players (read:league, public read)", () => {
@@ -130,6 +135,18 @@ describe("POST /teams/{teamId}/players/{playerId}/actions (write:transactions)",
       }),
       playerContext("team-1", "player-1"),
     );
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toMatch(/configured database/i);
+  });
+});
+
+describe("DELETE /leagues/{leagueId} (commissioner:league)", () => {
+  it("does not pretend to delete demo data without a configured database", async () => {
+    const response = await leagueDelete(
+      new Request(`${base}/leagues/00000000-0000-4000-8000-000000000001`, { method: "DELETE" }),
+      leagueContext("00000000-0000-4000-8000-000000000001"),
+    );
+
     expect(response.status).toBe(503);
     expect((await response.json()).error).toMatch(/configured database/i);
   });

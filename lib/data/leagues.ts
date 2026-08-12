@@ -4,6 +4,7 @@ import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
 import { currentSeasonYear, formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
+import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
 
@@ -201,6 +202,55 @@ export async function updateLeagueSettings(leagueId: string, changes: UpdatableL
     await client.query("commit");
 
     return { ...merged, id: leagueId, name: current.rows[0].name };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export class LeagueDeletionError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Permanently delete a league and all league-owned records. The primary
+ * commissioner check and delete share one transaction and lock the league row,
+ * so a concurrent ownership change cannot create an authorization race.
+ */
+export async function deleteLeague(leagueId: string, identity: ApiIdentity): Promise<{ id: string; name: string }> {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+    const result = await client.query<{ id: string; name: string; is_creator: boolean }>(
+      `select l.id, l.name,
+         (u.id::text = $2 or lower(u.email) = lower($3)) as is_creator
+       from league l
+       join app_user u on u.id = l.commissioner_user_id
+       where l.id = $1
+       for update of l`,
+      [leagueId, identity.userId, identity.email],
+    );
+    const league = result.rows[0];
+
+    if (!league) {
+      throw new LeagueDeletionError("League not found.", 404);
+    }
+
+    if (!league.is_creator) {
+      throw new LeagueDeletionError("Only the league creator can delete this league.", 403);
+    }
+
+    await client.query("delete from league where id = $1", [leagueId]);
+    await client.query("commit");
+    return { id: league.id, name: league.name };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
