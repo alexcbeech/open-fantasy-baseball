@@ -10,7 +10,7 @@ export type SocialAuthFormState = {
 
 /**
  * Starts the Google OAuth flow. The Neon Auth server answers with Google's
- * consent URL (and sets the challenge cookie the middleware later needs to
+ * consent URL (and sets the challenge cookie the request proxy later needs to
  * complete the exchange); we send the browser there. Google hands the user
  * back to /auth/callback, which applies the signup gate before letting a
  * brand-new account through.

@@ -5,7 +5,7 @@ import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
 
 /**
- * Where the browser lands after an OAuth round trip (the middleware has
+ * Where the browser lands after an OAuth round trip (the request proxy has
  * already exchanged the session verifier for cookies by the time we run).
  * Email sign-up enforces the ALLOW_SIGNUPS gate in its server action, but a
  * brand-new Google user gets their session minted upstream during the OAuth

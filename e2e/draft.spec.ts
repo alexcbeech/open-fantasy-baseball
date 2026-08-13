@@ -5,6 +5,18 @@ import { expect, test } from "@playwright/test";
 
 test.describe("draft room (mock draft)", () => {
   test("renders the clock banner, ADP-ranked players, and pick ticker", async ({ page }) => {
+    const hydrationErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().includes("Hydration failed")) {
+        hydrationErrors.push(message.text());
+      }
+    });
+    page.on("pageerror", (error) => {
+      if (error.message.includes("Hydration failed")) {
+        hydrationErrors.push(error.message);
+      }
+    });
+
     await page.goto("/draft/league-1");
 
     // On-the-clock banner: the mock viewer's own team is up.
@@ -17,6 +29,7 @@ test.describe("draft room (mock draft)", () => {
     // Players tab lists undrafted players ranked with ADP context.
     await expect(page.getByPlaceholder("Search available players")).toBeVisible();
     await expect(page.locator(".draft-adp-rank").first()).toBeVisible();
+    expect(hydrationErrors).toEqual([]);
   });
 
   test("shows the round-by-round board grid", async ({ page }) => {

@@ -51,11 +51,16 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
   const [busy, setBusy] = useState(false);
   // Server-time offset so the countdown never trusts the client clock.
   const clockOffsetRef = useRef(0);
-  const [nowTick, setNowTick] = useState(() => Date.now());
+  // Initialize from the server snapshot rather than Date.now(). The prop is
+  // identical during SSR and hydration, so the first rendered clock value is
+  // stable even when hydration happens a few seconds after the HTML render.
+  const [nowTick, setNowTick] = useState(() => (initialDraft ? Date.parse(initialDraft.serverNow) : 0));
   const wasMyTurnRef = useRef(false);
 
   const applyDraft = useCallback((next: DraftState) => {
-    clockOffsetRef.current = Date.parse(next.serverNow) - Date.now();
+    const serverNow = Date.parse(next.serverNow);
+    clockOffsetRef.current = serverNow - Date.now();
+    setNowTick(serverNow);
     setDraft(next);
   }, []);
 
@@ -122,7 +127,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
       return;
     }
 
-    const timer = setInterval(() => setNowTick(Date.now()), 1000);
+    const timer = setInterval(() => setNowTick(Date.now() + clockOffsetRef.current), 1000);
     return () => clearInterval(timer);
   }, [draft?.deadline, draft?.status]);
 
@@ -141,7 +146,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
       return null;
     }
 
-    const remaining = Date.parse(draft.deadline) - (nowTick + clockOffsetRef.current);
+    const remaining = Date.parse(draft.deadline) - nowTick;
     return Math.max(0, Math.ceil(remaining / 1000));
   }, [draft?.deadline, draft?.status, nowTick]);
 
