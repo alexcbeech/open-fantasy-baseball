@@ -4,7 +4,7 @@
   "private": true,
   "description": "Open Fantasy Baseball, a mobile-first fantasy baseball app inspired by familiar fantasy sports workflows.",
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "@types/node": "^22.15.32",
+    "@types/node": "^24.0.0",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
