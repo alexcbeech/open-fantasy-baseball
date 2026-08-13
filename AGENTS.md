@@ -12,7 +12,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 For every task that changes repository files:
 
-- Create and work on a dedicated branch before making changes. Use the `codex/` prefix unless the user specifies another branch name.
+- Create and work on a dedicated branch before making changes. Use the `feature/` prefix unless the user specifies another branch name.
 - Never commit or push changes directly to `main`.
 - Commit the completed work to the dedicated branch and push that branch to the remote.
 - Create a pull request targeting `main`. Work is not considered complete until the pull request has been created and its URL has been reported to the user.
