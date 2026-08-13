@@ -51,6 +51,21 @@ test.describe("draft room (mock draft)", () => {
     await expect(page.locator(".draft-need-chip").first()).toBeVisible();
   });
 
+  test("opens queued players for drafting and exposes reorder controls", async ({ page }) => {
+    await page.goto("/draft/league-1");
+
+    await page.getByRole("button", { name: "My Team", exact: true }).click();
+    const queuedPlayer = page.getByRole("button", { name: /View Elly De La Cruz and draft/ });
+    await expect(queuedPlayer).toBeVisible();
+    await expect(page.getByRole("button", { name: /Move Elly De La Cruz down in queue/ })).toBeEnabled();
+    await queuedPlayer.click();
+
+    const sheet = page.getByRole("dialog", { name: "Draft Player" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("button", { name: /Draft with pick/ })).toBeEnabled();
+    await expect(sheet.getByText(/Season: .*HR/)).toBeVisible();
+  });
+
   test("blocks drafting in demo mode with a clear error", async ({ page }) => {
     await page.goto("/draft/league-1");
 

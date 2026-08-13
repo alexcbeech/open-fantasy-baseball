@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { dequeueDraftPlayer, enqueueDraftPlayer } from "@/lib/data/draft";
+import { dequeueDraftPlayer, enqueueDraftPlayer, reorderDraftQueue } from "@/lib/data/draft";
 import { draftErrorResponse, guardMutableDraftRoute, resolveDraftViewer, type DraftRouteContext } from "../route-helpers";
 
 const queueSchema = z.object({
   playerId: z.string().uuid(),
+});
+
+const reorderSchema = z.object({
+  playerIds: z.array(z.string().uuid()).max(500),
 });
 
 /** Add a player to the viewer's draft queue. Returns the refreshed DraftState. */
@@ -15,6 +19,35 @@ export async function POST(request: Request, { params }: DraftRouteContext) {
 /** Remove a player from the viewer's draft queue. */
 export async function DELETE(request: Request, { params }: DraftRouteContext) {
   return mutateQueue(request, params, dequeueDraftPlayer);
+}
+
+/** Persist the viewer's complete queue order. */
+export async function PATCH(request: Request, { params }: DraftRouteContext) {
+  const viewer = await resolveDraftViewer(request, "write:draft");
+
+  if (viewer.response) {
+    return viewer.response;
+  }
+
+  const { leagueId } = await params;
+  const guard = guardMutableDraftRoute(leagueId);
+
+  if (guard) {
+    return guard;
+  }
+
+  const parsed = reorderSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "A valid queue order is required." }, { status: 400 });
+  }
+
+  try {
+    const state = await reorderDraftQueue(leagueId, parsed.data.playerIds, viewer.userId);
+    return NextResponse.json({ draft: state });
+  } catch (error) {
+    return draftErrorResponse(error);
+  }
 }
 
 async function mutateQueue(

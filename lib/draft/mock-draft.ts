@@ -68,7 +68,11 @@ export function mockDraftState(now = new Date()): DraftState {
     serverNow: now.toISOString(),
     myTeamId: teams[MOCK_PICK_COUNT].teamId,
     viewerIsCommissioner: true,
-    myQueue: [],
+    myQueue: mockPlayers.slice(MOCK_PICK_COUNT, MOCK_PICK_COUNT + 2).map((player) => ({
+      playerId: player.id,
+      playerName: player.name,
+      positions: player.positions,
+    })),
     myAutoPick: false,
     autoPickTeamIds: teams.filter((team) => team.isBot).map((team) => team.teamId),
     scheduledStartAt: null,

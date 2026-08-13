@@ -10,7 +10,7 @@ import { computeRosterNeeds } from "@/lib/draft/auto-pick";
 import type { DraftPlayer, DraftState } from "@/lib/draft/types";
 import type { DraftLobby } from "@/lib/data/draft";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { rowPoints } from "@/lib/fantasy/player-view";
+import { rowPoints, seasonStatLine, statusLabels } from "@/lib/fantasy/player-view";
 import { positionGroupClass, positionGroupLegend } from "@/lib/fantasy/position-color";
 import type { RosterSlot } from "@/lib/fantasy/types";
 import { PickSheet } from "./pick-sheet";
@@ -265,6 +265,44 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
     }
   }
 
+  async function reorderQueue(playerId: string, direction: -1 | 1) {
+    if (!draft) {
+      return;
+    }
+
+    const currentIndex = draft.myQueue.findIndex((entry) => entry.playerId === playerId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= draft.myQueue.length) {
+      return;
+    }
+
+    const reordered = draft.myQueue.map((entry) => entry.playerId);
+    [reordered[currentIndex], reordered[nextIndex]] = [reordered[nextIndex]!, reordered[currentIndex]!];
+    setBusy(true);
+    setBanner(null);
+
+    try {
+      const response = await fetch(`/api/v1/leagues/${lobby.leagueId}/draft/queue`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ playerIds: reordered }),
+      });
+      const result = (await response.json()) as { error?: string; draft?: DraftState };
+
+      if (!response.ok || !result.draft) {
+        setBanner(result.error ?? "Could not reorder your queue.");
+        return;
+      }
+
+      applyDraft(result.draft);
+    } catch {
+      setBanner("Could not reorder your queue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setAutoDraft(enabled: boolean) {
     setBusy(true);
     setBanner(null);
@@ -490,7 +528,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
             {filteredPlayers.length ? (
               filteredPlayers.map((player) => {
                 const { seasonPts, projPts } = rowPoints(player);
-
+                const statLine = seasonStatLine(player);
                 const queued = queuedIds.has(player.id);
 
                 return (
@@ -504,10 +542,22 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
                       <span className="draft-adp-rank">{player.adpRank ?? "—"}</span>
                       <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
                       <span className="player-main">
-                        <span className="player-name">{player.name}</span>
+                        <span className="player-name-row">
+                          <span className="player-name">{player.name}</span>
+                          {player.status !== "active" ? (
+                            <span
+                              className={`draft-player-health ${player.status === "injured" ? "health-injured" : player.status === "day-to-day" ? "health-dtd" : "health-minors"}`}
+                            >
+                              {statusLabels[player.status]}
+                            </span>
+                          ) : null}
+                        </span>
                         <span className="player-meta">
                           {player.mlbTeam} &ndash; {player.positions.join(", ")}
                           {player.adp !== null ? ` · ADP ${player.adp.toFixed(1)}` : ""}
+                        </span>
+                        <span className="player-meta draft-player-statline">
+                          {statLine ? `Season: ${statLine}` : "Season stats unavailable"}
                         </span>
                       </span>
                       <span className="player-points" aria-hidden="true">
@@ -574,20 +624,48 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
               {draft.myQueue.length ? (
                 <div className="player-list">
                   {draft.myQueue.map((entry, index) => (
-                    <div className="row" key={entry.playerId}>
-                      <span className="draft-queue-rank">{index + 1}</span>
-                      <span className="player-main">
-                        <span className="player-name">{entry.playerName}</span>
-                        <span className="player-meta">{entry.positions.join(", ")}</span>
-                      </span>
+                    <div className="row draft-queue-row" key={entry.playerId}>
                       <button
-                        className="draft-queue-btn queued"
+                        className="draft-queue-main"
                         type="button"
-                        aria-label={`Remove ${entry.playerName} from queue`}
-                        onClick={() => changeQueue(entry.playerId, true)}
+                        aria-label={`View ${entry.playerName} and draft`}
+                        onClick={() => setSheetPlayerId(entry.playerId)}
                       >
-                        &times;
+                        <span className="draft-queue-rank">{index + 1}</span>
+                        <span className="player-main">
+                          <span className="player-name">{entry.playerName}</span>
+                          <span className="player-meta">{entry.positions.join(", ")} · Select to view or draft</span>
+                        </span>
                       </button>
+                      <span className="draft-queue-actions">
+                        <button
+                          className="draft-queue-move"
+                          type="button"
+                          disabled={busy || index === 0}
+                          aria-label={`Move ${entry.playerName} up in queue`}
+                          onClick={() => reorderQueue(entry.playerId, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="draft-queue-move"
+                          type="button"
+                          disabled={busy || index === draft.myQueue.length - 1}
+                          aria-label={`Move ${entry.playerName} down in queue`}
+                          onClick={() => reorderQueue(entry.playerId, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          className="draft-queue-btn queued"
+                          type="button"
+                          disabled={busy}
+                          aria-label={`Remove ${entry.playerName} from queue`}
+                          onClick={() => changeQueue(entry.playerId, true)}
+                        >
+                          &times;
+                        </button>
+                      </span>
                     </div>
                   ))}
                 </div>
