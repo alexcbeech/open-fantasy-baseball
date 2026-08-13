@@ -20,6 +20,26 @@ export function rowPoints(player: Player) {
   return { seasonPts, projPts };
 }
 
+const hitterStatOrder = ["AVG", "HR", "R", "RBI", "SB", "H", "AB"];
+const pitcherStatOrder = ["ERA", "WHIP", "W", "SV", "K", "IP"];
+
+/** A deterministic compact season line for player lists and draft details. */
+export function seasonStatLine(player: Player, limit = 5): string | null {
+  const stats = player.seasonStats ?? {};
+  const isPitcher = player.positions.some((position) => position === "SP" || position === "RP" || position === "P");
+  const preferred = isPitcher ? pitcherStatOrder : hitterStatOrder;
+  const orderedKeys = [
+    ...preferred.filter((key) => stats[key] !== undefined),
+    ...Object.keys(stats).filter((key) => !preferred.includes(key)),
+  ].slice(0, limit);
+
+  if (!orderedKeys.length) {
+    return null;
+  }
+
+  return orderedKeys.map((key) => `${stats[key]} ${key}`).join(" · ");
+}
+
 /**
  * A compact live stat line, e.g. "1-3, 1 R, 1 HR, 2 RBI" for hitters or
  * "5.0 IP, 6 K, 1 ER" for pitchers, from whatever the boxscore has so far.

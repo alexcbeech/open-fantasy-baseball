@@ -880,6 +880,46 @@ export async function dequeueDraftPlayer(leagueId: string, playerId: string, vie
   });
 }
 
+/** Replace the viewer's queue priorities without adding or removing players. */
+export async function reorderDraftQueue(
+  leagueId: string,
+  playerIds: string[],
+  viewerUserId: string,
+): Promise<DraftState> {
+  return withDraftMutation(leagueId, viewerUserId, async (client, context, team) => {
+    if (context.draft.status === "complete") {
+      throw new DraftError("The draft is over.", 409);
+    }
+
+    const current = await client.query<{ player_id: string }>(
+      `select player_id
+       from draft_queue
+       where draft_id = $1 and team_id = $2
+       order by priority`,
+      [context.draft.id, team.team_id],
+    );
+    const currentIds = current.rows.map((row) => row.player_id);
+    const submittedIds = new Set(playerIds);
+
+    if (
+      playerIds.length !== currentIds.length ||
+      submittedIds.size !== playerIds.length ||
+      currentIds.some((playerId) => !submittedIds.has(playerId))
+    ) {
+      throw new DraftError("Your queue changed. Refresh it and try reordering again.", 409);
+    }
+
+    for (const [index, playerId] of playerIds.entries()) {
+      await client.query(
+        `update draft_queue
+         set priority = $4
+         where draft_id = $1 and team_id = $2 and player_id = $3`,
+        [context.draft.id, team.team_id, playerId, index + 1],
+      );
+    }
+  });
+}
+
 /**
  * Turn auto-draft on or off for the viewer's team. Enabling it takes the pick
  * immediately if it's already the team's turn (and keeps taking auto teams'
@@ -1304,10 +1344,10 @@ export async function listDraftPlayers(
            left join player_adp adp on adp.player_id = p.id
            left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
            left join lateral (
-             select stats from player_stat_line psl where psl.player_id = p.id and split = 'season' order by stat_date desc limit 1
+             select stats from player_stat_line psl where psl.player_id = p.id and split = 'season' order by stat_date desc, collected_at desc limit 1
            ) season_stats on true
            left join lateral (
-             select stats from player_stat_line psl where psl.player_id = p.id and split = 'projection_ros' order by stat_date desc limit 1
+             select stats from player_stat_line psl where psl.player_id = p.id and split = 'projection_ros' order by stat_date desc, collected_at desc limit 1
            ) projection_stats on true
            where ($1::uuid is null or p.id not in (select player_id from draft_pick where draft_id = $1))
              ${poolFilterSql(league.settings.playerPool)}

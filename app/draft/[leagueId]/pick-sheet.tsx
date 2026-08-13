@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
-import { rowPoints } from "@/lib/fantasy/player-view";
 import type { DraftPlayer } from "@/lib/draft/types";
+import { rowPoints, seasonStatLine, statusLabels } from "@/lib/fantasy/player-view";
 
 type PickSheetProps = {
   player: DraftPlayer;
@@ -20,7 +20,7 @@ type PickSheetProps = {
   onClose: () => void;
 };
 
-/** Bottom-sheet pick confirmation: player summary, key stats, draft + queue. */
+/** Bottom-sheet pick confirmation: player summary, health, key stats, draft + queue. */
 export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, isQueued, onConfirm, onToggleQueue, onClose }: PickSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   useBodyScrollLock();
@@ -37,10 +37,15 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
   }, [onClose]);
 
   const { seasonPts, projPts } = rowPoints(player);
-  const statLine = Object.entries(player.seasonStats)
-    .slice(0, 5)
-    .map(([category, value]) => `${value} ${category}`)
-    .join(" · ");
+  const statLine = seasonStatLine(player);
+  const healthClass =
+    player.status === "day-to-day"
+      ? "health-dtd"
+      : player.status === "injured"
+        ? "health-injured"
+        : player.status === "minors"
+          ? "health-minors"
+          : "health-active";
 
   return (
     <div className="sheet-overlay" role="presentation" onClick={onClose}>
@@ -69,7 +74,10 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
               {player.mlbTeam} &ndash; {player.positions.join(", ")}
             </span>
           </span>
-          <PositionBadge slot={player.positions[0]} />
+          <span className="pick-sheet-badges">
+            <span className={`health-badge ${healthClass}`}>{statusLabels[player.status]}</span>
+            <PositionBadge slot={player.positions[0]} />
+          </span>
         </div>
 
         <div className="pick-sheet-stats">
@@ -86,7 +94,9 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
             <strong className="metric-value">{projPts}</strong>
           </div>
         </div>
-        {statLine ? <p className="player-meta pick-sheet-statline">{statLine}</p> : null}
+        <p className="player-meta pick-sheet-statline">
+          {statLine ? `Season: ${statLine}` : "Season stats are not available yet."}
+        </p>
 
         <button className="primary-button" type="button" disabled={!canPick || busy} aria-busy={busy} onClick={onConfirm}>
           {busy ? "Drafting..." : pickLabel ? `Draft with pick ${pickLabel}` : "Draft"}
