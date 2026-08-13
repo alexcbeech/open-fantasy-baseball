@@ -1,0 +1,31 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    # Hold routine version updates long enough for newly published releases
+    # to receive broader ecosystem scrutiny. Dependabot security updates are
+    # not subject to cooldowns and can still open immediately.
+    cooldown:
+      default-days: 7
+      include:
+        - "*"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Los_Angeles
+    cooldown:
+      default-days: 7
+      include:
+        - "*"
+    open-pull-requests-limit: 3
