@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // With a database configured, empty query results must stay empty -- they must
 // NOT be replaced by mock/demo data. Mock the db client so the op runs against
 // controlled rows.
-const { query } = vi.hoisted(() => ({ query: vi.fn() }));
+const { poolQuery, query } = vi.hoisted(() => ({ poolQuery: vi.fn(), query: vi.fn() }));
 vi.mock("@/lib/db/client", () => ({
+  getPool: () => ({ query: poolQuery }),
   isDatabaseConfigured: () => true,
   tryDatabase: async (op: () => unknown) => op(),
   withDemoFallback: async (op: () => unknown) => op(),
@@ -13,7 +14,10 @@ vi.mock("@/lib/db/client", () => ({
 
 import { getLineupForTeam, getTeamSummary, listTeamsForCurrentUser } from "./teams";
 
-beforeEach(() => query.mockReset());
+beforeEach(() => {
+  poolQuery.mockReset();
+  query.mockReset();
+});
 
 describe("teams data layer with a configured database", () => {
   it("returns an empty lineup for a real team that has no lineup rows", async () => {
@@ -44,5 +48,40 @@ describe("teams data layer with a configured database", () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/u\.id::text = \$1 or u\.email = \$2/);
     expect(params).toEqual(["demo-user", "alex@example.local"]);
+  });
+
+  it("computes standings once when multiple managed teams share a league", async () => {
+    const shared = {
+      league_id: "00000000-0000-4000-8000-000000000010",
+      league_name: "Shared League",
+      manager_name: "Alex",
+      scoring_type: "h2h-points",
+      matchup_label: null,
+      period_starts: null,
+      period_ends: null,
+      opponent_name: null,
+      user_score: 0,
+      opponent_score: 0,
+    } as const;
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          { ...shared, id: "00000000-0000-4000-8000-000000000101", team_name: "Aces" },
+          { ...shared, id: "00000000-0000-4000-8000-000000000102", team_name: "Bats" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: "00000000-0000-4000-8000-000000000101", name: "Aces" },
+          { id: "00000000-0000-4000-8000-000000000102", name: "Bats" },
+        ],
+      });
+    poolQuery.mockResolvedValueOnce({ rows: [] });
+
+    const teams = await listTeamsForCurrentUser({ userId: "demo-user", email: "alex@example.local" });
+
+    expect(teams.map((team) => team.rank)).toEqual([1, 2]);
+    expect(poolQuery).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });

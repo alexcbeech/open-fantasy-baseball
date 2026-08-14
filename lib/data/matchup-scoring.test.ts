@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { compareCategory, computeCategoryValue, fantasyPointsByPlayer } from "./matchup-scoring";
+import { describe, expect, it, vi } from "vitest";
+import { compareCategory, computeCategoryValue, fantasyPointsByPlayer, replaceMatchupPlayerScores } from "./matchup-scoring";
 
 describe("computeCategoryValue", () => {
   it("sums counting categories across the lineup", () => {
@@ -72,5 +72,23 @@ describe("fantasyPointsByPlayer", () => {
         { playerId: "pitcher", stats: { IP: 2, K: 3 } },
       ]),
     ).toEqual({ hitter: 7, pitcher: 9 });
+  });
+
+  it("replaces the persisted matchup player-score snapshot in one batch", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const written = await replaceMatchupPlayerScores({ query }, "matchup", [
+      { teamId: "home", scores: { hitter: 7, pitcher: 9 } },
+      { teamId: "away", scores: { opponent: 4.5 } },
+    ]);
+
+    expect(written).toBe(3);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query.mock.calls[0][0]).toMatch(/delete from matchup_player_score/);
+    expect(query.mock.calls[1][1]).toEqual([
+      "matchup",
+      ["home", "home", "away"],
+      ["hitter", "pitcher", "opponent"],
+      [7, 9, 4.5],
+    ]);
   });
 });

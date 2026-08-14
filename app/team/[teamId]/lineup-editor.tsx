@@ -17,6 +17,7 @@ import type { LineupLockMode, LineupPlayer, RosterSlot } from "@/lib/fantasy/typ
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
 import { PlayerAvatar } from "./player-avatar";
+import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 import { PositionBadge } from "./position-badge";
 
@@ -404,6 +405,9 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                         <button
                           className="player-main player-info-button"
                           type="button"
+                          onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
+                          onFocus={() => prefetchPlayerDetail(player.id, teamId)}
+                          onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >
@@ -421,6 +425,9 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                         <button
                           className="player-points"
                           type="button"
+                          onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
+                          onFocus={() => prefetchPlayerDetail(player.id, teamId)}
+                          onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={
                             liveEntry

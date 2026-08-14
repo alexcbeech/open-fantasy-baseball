@@ -4,7 +4,9 @@ import { recomputeMatchups } from "../lib/data/matchup-scoring";
 
 async function main() {
   const result = await recomputeMatchups();
-  console.log(`recomputed ${result.matchups} active matchups (${result.categoriesWritten} category scores)`);
+  console.log(
+    `recomputed ${result.matchups} active matchups (${result.categoriesWritten} category scores, ${result.playerScoresWritten} player scores)`,
+  );
 }
 
 main()

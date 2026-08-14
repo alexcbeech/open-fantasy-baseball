@@ -20,9 +20,9 @@ import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { LiveMatchup } from "./live-matchup";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
-import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
+import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
 
 type TeamPageProps = {
@@ -39,6 +39,7 @@ const tabs = ["Team", "Matchup", "Players", "League"] as const;
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
   const { tab } = await searchParams;
+  const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const authEnabled = isNeonAuthConfigured();
   const currentUser = await getCurrentOfbUser();
 
@@ -68,23 +69,46 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     viewerManagesTeam = access === "manager";
   }
 
-  const team = await getTeamSummary(teamId);
-  const leagueSettings = team ? await getLeagueSettings(team.leagueId) : defaultLeagueSettings;
-  const leagueDraftStatus = team ? await getLeagueDraftStatus(team.leagueId) : null;
-  const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
-  const teamLineup = await getLineupForTeam(teamId);
-  const playerPool = selectedTab === "Players" && team ? await listPlayers({ leagueId: team.leagueId }) : [];
-  const watchItems = selectedTab === "Team" ? await getPlayerWatchForTeam(teamId) : [];
-  const matchupDetails = selectedTab === "Matchup" ? await getMatchupDetailsForTeam(teamId) : null;
-  const leagueOverview = selectedTab === "League" && team ? await getLeagueOverview(team.leagueId) : null;
-  const viewerIsCommissioner =
-    selectedTab === "League" && team && currentUser ? await isLeagueCommissioner(team.leagueId, currentUser) : false;
-  const viewerIsCreator =
-    selectedTab === "League" && team && currentUser ? await isLeagueCreator(team.leagueId, currentUser) : false;
+  const team = await measureServerOperation("team.summary", () => getTeamSummary(teamId));
 
   if (!team) {
     notFound();
   }
+
+  // Once the team establishes league context, the remaining reads are
+  // independent. Run only the selected tab's work and do it concurrently with
+  // the shared settings reads so client navigation is not a serial DB waterfall.
+  const [
+    leagueSettings,
+    leagueDraftStatus,
+    teamLineup,
+    playerPool,
+    watchItems,
+    matchupDetails,
+    leagueOverview,
+    viewerIsCommissioner,
+    viewerIsCreator,
+  ] = await Promise.all([
+    measureServerOperation("team.league-settings", () => getLeagueSettings(team.leagueId)),
+    measureServerOperation("team.draft-status", () => getLeagueDraftStatus(team.leagueId)),
+    selectedTab === "Team"
+      ? measureServerOperation("team.lineup", () => getLineupForTeam(teamId))
+      : Promise.resolve([]),
+    selectedTab === "Players"
+      ? measureServerOperation("team.player-pool", () => listPlayers({ leagueId: team.leagueId }))
+      : Promise.resolve([]),
+    selectedTab === "Team"
+      ? measureServerOperation("team.player-watch", () => getPlayerWatchForTeam(teamId))
+      : Promise.resolve([]),
+    selectedTab === "Matchup"
+      ? measureServerOperation("team.matchup", () => getMatchupDetailsForTeam(teamId))
+      : Promise.resolve(null),
+    selectedTab === "League"
+      ? measureServerOperation("team.league-overview", () => getLeagueOverview(team.leagueId))
+      : Promise.resolve(null),
+    selectedTab === "League" && currentUser ? isLeagueCommissioner(team.leagueId, currentUser) : Promise.resolve(false),
+    selectedTab === "League" && currentUser ? isLeagueCreator(team.leagueId, currentUser) : Promise.resolve(false),
+  ]);
 
   return (
     <main className="app-shell">

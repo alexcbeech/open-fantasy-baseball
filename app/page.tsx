@@ -10,6 +10,7 @@ import { listDraftableLeagues } from "@/lib/data/draft";
 import { listTeamsForCurrentUser } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
+import { measureServerOperation } from "@/lib/observability/server-performance";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,12 @@ export default async function HomePage() {
     redirect("/auth/sign-in");
   }
 
-  const teams = await listTeamsForCurrentUser(currentUser);
-  const draftableLeagues = currentUser ? await listDraftableLeagues(currentUser.userId) : [];
+  const [teams, draftableLeagues] = await Promise.all([
+    measureServerOperation("home.teams", () => listTeamsForCurrentUser(currentUser)),
+    currentUser
+      ? measureServerOperation("home.draftable-leagues", () => listDraftableLeagues(currentUser.userId))
+      : Promise.resolve([]),
+  ]);
   // Secondary destinations live behind one menu button so the topbar stays a
   // single row on phones (loose icons used to wrap into a second line).
   const menuItems: TopbarMenuItem[] = [

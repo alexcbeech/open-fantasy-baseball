@@ -17,26 +17,27 @@ beforeEach(() => {
 });
 
 describe("listPlayers league pool", () => {
-  it("applies the league's configured division to the Players-tab query", async () => {
-    dbQuery
-      .mockResolvedValueOnce({ rows: [{ player_pool: "nl-central" }] })
-      .mockResolvedValueOnce({ rows: [] });
+  it("applies the league's configured player pool in the Players-tab query", async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] });
 
     await listPlayers({ leagueId: LEAGUE_ID });
 
-    expect(dbQuery).toHaveBeenCalledTimes(2);
-    const playerSql = dbQuery.mock.calls[1][0] as string;
+    expect(dbQuery).toHaveBeenCalledTimes(1);
+    const playerSql = dbQuery.mock.calls[0][0] as string;
+    expect(playerSql).toContain("join league pool_league");
+    expect(playerSql).toContain("pool_league.settings->>'playerPool'");
     expect(playerSql).toContain("mt.league ilike 'National%'");
     expect(playerSql).toContain("mt.division ilike '%Central%'");
+    expect(dbQuery.mock.calls[0][1]).toContain(LEAGUE_ID);
   });
 
-  it("does not add a team restriction for all-MLB leagues", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ player_pool: "all" }] }).mockResolvedValueOnce({ rows: [] });
+  it("defaults missing league player-pool settings to all MLB", async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] });
 
     await listPlayers({ leagueId: LEAGUE_ID });
 
-    const playerSql = dbQuery.mock.calls[1][0] as string;
-    expect(playerSql).not.toContain("mt.league ilike");
-    expect(playerSql).not.toContain("mt.division ilike");
+    const playerSql = dbQuery.mock.calls[0][0] as string;
+    expect(playerSql).toContain("coalesce(pool_league.settings->>'playerPool', 'all') = 'all'");
+    expect(playerSql).toContain("left join (\n            select distinct player_id, position");
   });
 });

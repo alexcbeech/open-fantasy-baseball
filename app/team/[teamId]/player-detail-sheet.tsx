@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import type { LivePlayerStatus, PlayerDetail } from "@/lib/fantasy/types";
+import { cachePlayerDetail, getCachedPlayerDetail, loadPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailView, type PlayerAction, type PlayerActionOptions, type PlayerDetailStatusBanner } from "./player-detail-view";
 
 type SheetState =
@@ -36,7 +37,12 @@ type PlayerDetailSheetProps = {
 };
 
 export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }: PlayerDetailSheetProps) {
-  const [state, setState] = useState<SheetState>({ kind: "loading", player: null, message: "Loading player..." });
+  const [state, setState] = useState<SheetState>(() => {
+    const cached = getCachedPlayerDetail(playerId, teamId);
+    return cached
+      ? { kind: "success", player: cached, message: "" }
+      : { kind: "loading", player: null, message: "Loading player..." };
+  });
   const [live, setLive] = useState<LivePlayerStatus | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   useBodyScrollLock();
@@ -73,26 +79,28 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
 
   useEffect(() => {
     let active = true;
-    setState({ kind: "loading", player: null, message: "Loading player..." });
+    const cached = getCachedPlayerDetail(playerId, teamId);
+    if (!cached) {
+      setState({ kind: "loading", player: null, message: "Loading player..." });
+    }
 
     (async () => {
       try {
-        const response = await fetch(`/api/v1/players/${playerId}?teamId=${encodeURIComponent(teamId)}`);
-        const result = (await response.json()) as { player?: PlayerDetail; error?: string };
+        const player = await loadPlayerDetail(playerId, teamId);
 
         if (!active) {
           return;
         }
 
-        if (!response.ok || !result.player) {
-          setState({ kind: "error", player: null, message: result.error ?? "Player detail could not be loaded." });
-          return;
-        }
-
-        setState({ kind: "success", player: result.player, message: "" });
-      } catch {
+        cachePlayerDetail(player, teamId);
+        setState({ kind: "success", player, message: "" });
+      } catch (error) {
         if (active) {
-          setState({ kind: "error", player: null, message: "Player detail could not be loaded." });
+          setState({
+            kind: "error",
+            player: null,
+            message: error instanceof Error ? error.message : "Player detail could not be loaded.",
+          });
         }
       }
     })();
@@ -134,6 +142,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
         return;
       }
 
+      cachePlayerDetail(result.player, teamId);
       setState({ kind: "success", player: result.player, message: actionSuccessMessage(action, result.player) });
       onRosterChange?.(result.player);
     } catch {

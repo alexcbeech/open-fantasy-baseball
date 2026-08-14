@@ -1,11 +1,12 @@
+import { unstable_cache } from "next/cache";
 import { isUuid, query, withDemoFallback } from "@/lib/db/client";
 import { startedGameTodaySql } from "@/lib/data/game-locks";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
-import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerPool, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
+import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
-import { poolFilterConditionSql } from "./player-pool";
+import { dynamicPoolFilterConditionSql } from "./player-pool";
 
 function mockPlayerWatch(): PlayerWatchItem[] {
   return mockPlayers
@@ -65,22 +66,13 @@ export async function listPlayers(
       // Rosters are per-league: scope "rostered" to the viewer's league when
       // known, so a player owned in another league still reads free-agent here.
       let rosterScope = "";
+      let leaguePoolJoin = "";
 
       if (options.leagueId && isUuid(options.leagueId)) {
         values.push(options.leagueId);
         rosterScope = `and league_id = $${values.length}`;
-
-        const leagueResult = await query<{ player_pool: PlayerPool | null }>(
-          `select settings->>'playerPool' as player_pool from league where id = $1`,
-          [options.leagueId],
-        );
-        const poolCondition = leagueResult.rows[0]?.player_pool
-          ? poolFilterConditionSql(leagueResult.rows[0].player_pool)
-          : "";
-
-        if (poolCondition) {
-          filters.push(poolCondition);
-        }
+        leaguePoolJoin = `join league pool_league on pool_league.id = $${values.length}`;
+        filters.push(dynamicPoolFilterConditionSql("pool_league.settings->>'playerPool'"));
       }
 
       const result = await query<DbPlayerRow>(
@@ -111,9 +103,14 @@ export async function listPlayers(
               )
             ) as rostered_percent
           from player p
+          ${leaguePoolJoin}
           left join player_adp adp on adp.player_id = p.id
           left join mlb_team mt on mt.id = p.current_mlb_team_id
-          left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
+          left join (
+            select distinct player_id, position
+            from player_position_eligibility
+            where valid_to is null
+          ) ppe on ppe.player_id = p.id
           left join (
             select distinct player_id
             from roster_entry
@@ -209,6 +206,107 @@ type PlayerGameLogRow = {
   stats: Record<string, number | string>;
 };
 
+type PlayerTeamContextRow = {
+  rostered: boolean;
+  on_team: boolean;
+  league_status: string | null;
+  waiver_until: Date | null;
+  has_claim: boolean;
+  waiver_mode: string | null;
+  faab_remaining: string | number | null;
+  has_active_period: boolean;
+  player_started: boolean;
+  settings: { rosterSlots?: Record<RosterSlot, number> };
+};
+
+type PlayerRosterCandidateRow = {
+  player_id: string;
+  name: string;
+  positions: RosterSlot[] | null;
+  game_started: boolean;
+};
+
+const getCachedPlayerStaticDetail = unstable_cache(
+  async (playerId: string, currentMlbTeamId: number | null) => {
+    const [news, statWindows, gameLog, nextGame, value] = await Promise.all([
+      query<PlayerNewsRow>(
+        `select id, source, source_url, headline, summary, published_at
+         from player_news
+         where player_id = $1
+         order by published_at desc
+         limit 5`,
+        [playerId],
+      ),
+      query<PlayerStatLineRow>(
+        `select split, stats, collected_at
+         from (
+           select distinct on (split) split, stats, collected_at, stat_date
+           from player_stat_line
+           where player_id = $1 and split in ('season', 'last_7', 'last_14', 'last_30', 'projection_ros')
+           order by split, stat_date desc, collected_at desc
+         ) latest
+         order by
+           case split
+             when 'season' then 0
+             when 'last_7' then 1
+             when 'last_14' then 2
+             when 'last_30' then 3
+             when 'projection_ros' then 4
+             else 5
+           end`,
+        [playerId],
+      ),
+      query<PlayerGameLogRow>(
+        `select id, game_pk, stat_date::text as stat_date, stats
+         from player_stat_line
+         where player_id = $1 and split = 'game'
+         order by stat_date desc
+         limit 10`,
+        [playerId],
+      ),
+      query<PlayerNextGameRow>(
+        `select g.game_date, g.venue_name,
+           case when g.home_mlb_team_id = $1 then 'home' else 'away' end as home_away,
+           case when g.home_mlb_team_id = $1 then away.abbreviation else home.abbreviation end as opponent,
+           opp_pitcher.full_name as opposing_pitcher_name,
+           opp_pitcher.throws as opposing_pitcher_throws
+         from mlb_game g
+         left join mlb_team home on home.id = g.home_mlb_team_id
+         left join mlb_team away on away.id = g.away_mlb_team_id
+         left join player opp_pitcher on opp_pitcher.id = case
+           when g.home_mlb_team_id = $1 then g.away_probable_pitcher_player_id
+           else g.home_probable_pitcher_player_id
+         end
+         where (g.home_mlb_team_id = $1 or g.away_mlb_team_id = $1) and g.game_date >= now()
+         order by g.game_date asc
+         limit 1`,
+        [currentMlbTeamId],
+      ),
+      query<PlayerValueRow>(
+        `select
+           (select count(*) from player x where x.season_fan_points > p.season_fan_points) as rank_ahead,
+           (select count(*) from player x where x.season_fan_points is not null) as total_ranked,
+           (select count(distinct re.team_id) from roster_entry re where re.player_id = p.id and re.dropped_at is null) as rostered_teams,
+           (select count(*) from fantasy_team) as total_teams,
+           (select rostered_percent from player_adp where player_id = p.id) as external_rostered_percent
+         from player p
+         where p.id = $1`,
+        [playerId],
+      ),
+    ]);
+
+    return {
+      news: news.rows,
+      statWindows: statWindows.rows,
+      gameLog: gameLog.rows,
+      nextGame: nextGame.rows[0] ?? null,
+      value: value.rows[0] ?? null,
+    };
+  },
+  ["player-static-detail-v1"],
+  { revalidate: 300, tags: ["player-static-detail"] },
+);
+
 export async function getPlayerDetail(playerId: string, teamId?: string): Promise<PlayerDetail | null> {
   return withDemoFallback(
     async () => {
@@ -259,144 +357,79 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         return null;
       }
 
-      const [newsResult, statsResult, gameLogResult, nextGameResult, valueResult, rosterMembershipResult] =
-        await Promise.all([
-        query<PlayerNewsRow>(
-          `select id, source, source_url, headline, summary, published_at
-           from player_news
-           where player_id = $1
-           order by published_at desc
-           limit 5`,
-          [playerId],
-        ),
-        query<PlayerStatLineRow>(
-          `select split, stats, collected_at
-           from (
-             select distinct on (split) split, stats, collected_at, stat_date
-             from player_stat_line
-             where player_id = $1 and split in ('season', 'last_7', 'last_14', 'last_30', 'projection_ros')
-             order by split, stat_date desc, collected_at desc
-           ) latest
-           order by
-             case split
-               when 'season' then 0
-               when 'last_7' then 1
-               when 'last_14' then 2
-               when 'last_30' then 3
-               when 'projection_ros' then 4
-               else 5
-             end`,
-          [playerId],
-        ),
-        query<PlayerGameLogRow>(
-          // stat_date is a calendar date; cast to text so node-pg doesn't turn
-          // it into a Date at server-local midnight, which shifts a day when
-          // serialized across timezones.
-          `select id, game_pk, stat_date::text as stat_date, stats
-           from player_stat_line
-           where player_id = $1 and split = 'game'
-           order by stat_date desc
-           limit 10`,
-          [playerId],
-        ),
-        query<PlayerNextGameRow>(
-          `select g.game_date, g.venue_name,
-             case when g.home_mlb_team_id = $1 then 'home' else 'away' end as home_away,
-             case when g.home_mlb_team_id = $1 then away.abbreviation else home.abbreviation end as opponent,
-             opp_pitcher.full_name as opposing_pitcher_name,
-             opp_pitcher.throws as opposing_pitcher_throws
-           from mlb_game g
-           left join mlb_team home on home.id = g.home_mlb_team_id
-           left join mlb_team away on away.id = g.away_mlb_team_id
-           left join player opp_pitcher on opp_pitcher.id = case
-             when g.home_mlb_team_id = $1 then g.away_probable_pitcher_player_id
-             else g.home_probable_pitcher_player_id
-           end
-           where (g.home_mlb_team_id = $1 or g.away_mlb_team_id = $1) and g.game_date >= now()
-           order by g.game_date asc
-           limit 1`,
-          [playerRow.current_mlb_team_id],
-        ),
-        query<PlayerValueRow>(
-          `select
-             (select count(*) from player x where x.season_fan_points > p.season_fan_points) as rank_ahead,
-             (select count(*) from player x where x.season_fan_points is not null) as total_ranked,
-             (select count(distinct re.team_id) from roster_entry re where re.player_id = p.id and re.dropped_at is null) as rostered_teams,
-             (select count(*) from fantasy_team) as total_teams,
-             (select rostered_percent from player_adp where player_id = p.id) as external_rostered_percent
-           from player p
-           where p.id = $1`,
-          [playerId],
-        ),
-        // Whether the player is on the *current* team's active roster. Drives
-        // the drop/IL/NA controls, which only apply to your own roster.
-        teamId && isUuid(teamId)
-          ? query<{ on_team: boolean }>(
-              `select exists (
-                 select 1 from roster_entry where team_id = $1 and player_id = $2 and dropped_at is null
-               ) as on_team`,
+      const hasTeamContext = Boolean(teamId && isUuid(teamId));
+      const [staticDetail, teamContextResult, rosterResult] = await Promise.all([
+        getCachedPlayerStaticDetail(playerId, playerRow.current_mlb_team_id),
+        hasTeamContext
+          ? query<PlayerTeamContextRow>(
+              `select
+                 exists (
+                   select 1 from roster_entry re
+                   where re.player_id = $2 and re.dropped_at is null and re.league_id = ft.league_id
+                 ) as rostered,
+                 exists (
+                   select 1 from roster_entry re
+                   where re.team_id = ft.id and re.player_id = $2 and re.dropped_at is null
+                 ) as on_team,
+                 l.status as league_status,
+                 (select max(re.waiver_until)
+                  from roster_entry re
+                  where re.league_id = ft.league_id and re.player_id = $2
+                    and re.dropped_at is not null and re.waiver_until > now()) as waiver_until,
+                 exists (
+                   select 1 from waiver_claim wc
+                   where wc.team_id = ft.id and wc.add_player_id = $2 and wc.status = 'pending'
+                 ) as has_claim,
+                 l.settings->>'waiverMode' as waiver_mode,
+                 ft.faab_remaining,
+                 exists (
+                   select 1 from scoring_period sp
+                   where sp.league_id = ft.league_id and sp.status = 'active'
+                 ) as has_active_period,
+                 ${startedGameTodaySql("$2::uuid")} as player_started,
+                 l.settings
+               from fantasy_team ft
+               join league l on l.id = ft.league_id
+               where ft.id = $1`,
               [teamId, playerId],
             )
-          : Promise.resolve({ rows: [{ on_team: false }] as { on_team: boolean }[] }),
+          : Promise.resolve({ rows: [] as PlayerTeamContextRow[] }),
+        hasTeamContext
+          ? query<PlayerRosterCandidateRow>(
+              `select re.player_id, p.full_name as name,
+                 coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
+                 ${startedGameTodaySql("re.player_id")} as game_started
+               from roster_entry re
+               join player p on p.id = re.player_id
+               left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+               where re.team_id = $1 and re.dropped_at is null
+               group by re.player_id, p.full_name
+               order by p.full_name`,
+              [teamId],
+            )
+          : Promise.resolve({ rows: [] as PlayerRosterCandidateRow[] }),
       ]);
 
-      const onCurrentTeam = rosterMembershipResult.rows[0]?.on_team ?? false;
+      const teamContext = teamContextResult.rows[0];
+      const onCurrentTeam = teamContext?.on_team ?? false;
       const player = mapPlayer(playerRow);
-      let availability = player.availability;
-      let acquisitionsAllowed = true;
-
-      // Rosters are per-league: when viewing from a team, "rostered" must mean
-      // rostered in THAT league, not anywhere in the app.
-      if (teamId && isUuid(teamId)) {
-        const scoped = await query<{ rostered: boolean; league_status: string | null }>(
-          `select exists (
-             select 1 from roster_entry re
-             where re.player_id = $2 and re.dropped_at is null
-               and re.league_id = (select league_id from fantasy_team where id = $1)
-           ) as rostered,
-           (select l.status from league l join fantasy_team ft on ft.league_id = l.id where ft.id = $1) as league_status`,
-          [teamId, playerId],
-        );
-        availability = scoped.rows[0]?.rostered ? "rostered" : "free-agent";
-        acquisitionsAllowed = !["pre_draft", "drafting"].includes(scoped.rows[0]?.league_status ?? "");
-      }
+      // Rosters are per-league: in team context, availability and actions must
+      // be scoped to that league rather than to ownership anywhere in the app.
+      const availability = teamContext ? (teamContext.rostered ? "rostered" : "free-agent") : player.availability;
+      const acquisitionsAllowed = !["pre_draft", "drafting"].includes(teamContext?.league_status ?? "");
 
       // Waiver context for the current team's league: whether the player is
       // clearing waivers, this team's pending claim, and the league's waiver
       // economy (mode + remaining FAAB) for the claim UI.
       let waiver: PlayerDetail["waiver"] = null;
 
-      if (teamId && isUuid(teamId) && availability !== "rostered") {
-        const waiverRow = await query<{
-          waiver_until: Date | null;
-          has_claim: boolean;
-          waiver_mode: string | null;
-          faab_remaining: string | number | null;
-        }>(
-          `select
-             (select max(re.waiver_until)
-              from roster_entry re
-              where re.league_id = ft.league_id and re.player_id = $2
-                and re.dropped_at is not null and re.waiver_until > now()) as waiver_until,
-             exists (
-               select 1 from waiver_claim wc
-               where wc.team_id = ft.id and wc.add_player_id = $2 and wc.status = 'pending'
-             ) as has_claim,
-             l.settings->>'waiverMode' as waiver_mode,
-             ft.faab_remaining
-           from fantasy_team ft
-           join league l on l.id = ft.league_id
-           where ft.id = $1`,
-          [teamId, playerId],
-        );
-        const row = waiverRow.rows[0];
-
-        if (row && (row.waiver_until || row.has_claim)) {
+      if (teamContext && availability !== "rostered") {
+        if (teamContext.waiver_until || teamContext.has_claim) {
           waiver = {
-            until: row.waiver_until ? new Date(row.waiver_until).toISOString() : null,
-            myClaimPending: row.has_claim,
-            mode: row.waiver_mode === "faab" ? "faab" : "rolling",
-            faabRemaining: row.faab_remaining != null ? Number(row.faab_remaining) : null,
+            until: teamContext.waiver_until ? new Date(teamContext.waiver_until).toISOString() : null,
+            myClaimPending: teamContext.has_claim,
+            mode: teamContext.waiver_mode === "faab" ? "faab" : "rolling",
+            faabRemaining: teamContext.faab_remaining != null ? Number(teamContext.faab_remaining) : null,
           };
         }
       }
@@ -408,46 +441,13 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
       // Whether game-start locks apply right now (active scoring period) and
       // whether this player's own game today has begun. Drives the drop/IL/NA
       // flags and which roster players are legal drops for an add-with-drop.
-      let locksApply = false;
-      let playerGameStarted = false;
-
-      if (teamId && isUuid(teamId)) {
-        const lockRow = await query<{ has_active_period: boolean; player_started: boolean }>(
-          `select
-             exists (
-               select 1 from scoring_period sp
-               join fantasy_team ft on ft.league_id = sp.league_id
-               where ft.id = $1 and sp.status = 'active'
-             ) as has_active_period,
-             ${startedGameTodaySql("$2::uuid")} as player_started`,
-          [teamId, playerId],
-        );
-        locksApply = lockRow.rows[0]?.has_active_period ?? false;
-        playerGameStarted = lockRow.rows[0]?.player_started ?? false;
-      }
+      const locksApply = teamContext?.has_active_period ?? false;
+      const playerGameStarted = teamContext?.player_started ?? false;
 
       const playerLocked = locksApply && playerGameStarted;
 
-      if (teamId && isUuid(teamId) && availability !== "rostered") {
-        const [rosterResult, slotsResult] = await Promise.all([
-          query<{ player_id: string; name: string; positions: RosterSlot[] | null; game_started: boolean }>(
-            `select re.player_id, p.full_name as name,
-               coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
-               ${startedGameTodaySql("re.player_id")} as game_started
-             from roster_entry re
-             join player p on p.id = re.player_id
-             left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
-             where re.team_id = $1 and re.dropped_at is null
-             group by re.player_id, p.full_name
-             order by p.full_name`,
-            [teamId],
-          ),
-          query<{ settings: { rosterSlots?: Record<RosterSlot, number> } }>(
-            `select l.settings from league l join fantasy_team ft on ft.league_id = l.id where ft.id = $1`,
-            [teamId],
-          ),
-        ]);
-        const slots = slotsResult.rows[0]?.settings?.rosterSlots;
+      if (teamContext && availability !== "rostered") {
+        const slots = teamContext.settings?.rosterSlots;
 
         if (slots && rosterResult.rows.length) {
           const postAdd = [
@@ -470,9 +470,9 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         }
       }
 
-      const nextGameRow = nextGameResult.rows[0];
+      const nextGameRow = staticDetail.nextGame;
       const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
-      const valueRow = valueResult.rows[0];
+      const valueRow = staticDetail.value;
       const totalTeams = valueRow ? Number(valueRow.total_teams) : 0;
       // Prefer real-world ownership from the ADP feed; fall back to this app's
       // own team ownership only when a player isn't in the external set.
@@ -503,9 +503,9 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
                 : null,
             }
           : null,
-        news: newsResult.rows.map(mapNewsItem),
-        statWindows: statsResult.rows.map(mapStatWindow),
-        gameLog: gameLogResult.rows.map(mapGameLog),
+        news: staticDetail.news.map(mapNewsItem),
+        statWindows: staticDetail.statWindows.map(mapStatWindow),
+        gameLog: staticDetail.gameLog.map(mapGameLog),
         availability: waiver?.until ? "waivers" : availability,
         waiver,
         dropCandidates,

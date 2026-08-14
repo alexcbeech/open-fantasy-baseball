@@ -225,7 +225,8 @@ async function flushEligibility(client: PoolClient, rows: EligibilityRow[]) {
       `insert into player_position_eligibility (player_id, position, source, valid_from)
        select t.player_id, t.position, $3, current_date
        from unnest($1::uuid[], $2::text[]) as t(player_id, position)
-       on conflict (player_id, position, valid_from) do nothing`,
+       on conflict (player_id, position) where valid_to is null
+       do update set source = excluded.source`,
       [batch.map((row) => row.playerId), batch.map((row) => row.position), source],
     );
   }

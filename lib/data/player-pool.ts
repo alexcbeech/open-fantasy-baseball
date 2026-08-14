@@ -25,6 +25,20 @@ export function poolFilterConditionSql(pool: PlayerPool, alias = "mt"): string {
     : "";
 }
 
+/** Build the equivalent condition when the pool is supplied by a SQL value. */
+export function dynamicPoolFilterConditionSql(poolExpression: string, alias = "mt"): string {
+  const pool = `coalesce(${poolExpression}, 'all')`;
+  const cases = Object.entries(divisionPoolFilters).map(
+    ([key, division]) =>
+      `(${pool} = '${key}' and ${alias}.league ilike '${division.league}%' and ${alias}.division ilike '%${division.division}%')`,
+  );
+
+  return `(${pool} = 'all'
+    or (${pool} = 'al' and ${alias}.league ilike 'American%')
+    or (${pool} = 'nl' and ${alias}.league ilike 'National%')
+    or ${cases.join("\n    or ")})`;
+}
+
 export function poolFilterSql(pool: PlayerPool, alias = "mt"): string {
   const condition = poolFilterConditionSql(pool, alias);
   return condition ? `and ${condition}` : "";

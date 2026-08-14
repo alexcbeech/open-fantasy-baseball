@@ -1,7 +1,6 @@
 import { query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import type { LeagueScoringType, MatchupCategoryResult, MatchupCategoryScore, MatchupDetails } from "@/lib/fantasy/types";
-import { fantasyPointsByPlayer, periodLineupPlayerStats } from "./matchup-scoring";
 import { getLineupForTeam } from "./teams";
 
 type ActiveMatchupRow = {
@@ -23,6 +22,12 @@ type CategoryScoreRow = {
   home_value: string | number | null;
   away_value: string | number | null;
   home_result: MatchupCategoryResult | null;
+};
+
+type PlayerScoreRow = {
+  team_id: string;
+  player_id: string;
+  fantasy_points: string | number;
 };
 
 const mockCategoryScores: MatchupCategoryScore[] = [
@@ -73,7 +78,7 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
 
       const isHome = matchup.home_team_id === teamId;
       const opponentTeamId = isHome ? matchup.away_team_id : matchup.home_team_id;
-      const [categoryResult, userLineup, opponentLineup, userStatRows, opponentStatRows] = await Promise.all([
+      const [categoryResult, userLineup, opponentLineup, playerScoreResult] = await Promise.all([
         matchup.scoring_type === "h2h-points"
           ? Promise.resolve({ rows: [] as CategoryScoreRow[] })
           : query<CategoryScoreRow>(
@@ -85,11 +90,19 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
             ),
         getLineupForTeam(teamId),
         getLineupForTeam(opponentTeamId),
-        periodLineupPlayerStats({ query }, teamId, matchup.starts_at, matchup.ends_at),
-        periodLineupPlayerStats({ query }, opponentTeamId, matchup.starts_at, matchup.ends_at),
+        query<PlayerScoreRow>(
+          `select team_id, player_id, fantasy_points
+           from matchup_player_score
+           where matchup_id = $1`,
+          [matchup.matchup_id],
+        ),
       ]);
-      const userPlayerPoints = fantasyPointsByPlayer(userStatRows);
-      const opponentPlayerPoints = fantasyPointsByPlayer(opponentStatRows);
+      const userPlayerPoints: Record<string, number> = {};
+      const opponentPlayerPoints: Record<string, number> = {};
+      for (const row of playerScoreResult.rows) {
+        const target = row.team_id === teamId ? userPlayerPoints : opponentPlayerPoints;
+        target[row.player_id] = Number(row.fantasy_points);
+      }
 
       return {
         matchupId: matchup.matchup_id,
