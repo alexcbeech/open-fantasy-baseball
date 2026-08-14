@@ -79,6 +79,7 @@ export function formatGameLine(
   nextGame: PlayerNextGame | null | undefined,
   status: Player["status"],
   statusDetail?: string | null,
+  timeZone?: string,
 ) {
   if (status !== "active") {
     return statusDetail || statusLabels[status];
@@ -88,6 +89,7 @@ export function formatGameLine(
       weekday: "short",
       hour: "numeric",
       minute: "2-digit",
+      ...(timeZone ? { timeZone } : {}),
     });
     const versus = nextGame.homeAway === "home" ? "vs" : "@";
     return `${when} ${versus} ${nextGame.opponent ?? "TBD"}`;

@@ -42,4 +42,10 @@ describe("player status labels", () => {
     expect(playerStatusLabel(injured)).toBe("60-Day IL");
     expect(formatGameLine(nextGame, injured.status, injured.statusDetail)).toBe("60-Day IL");
   });
+
+  it("formats an explicit server hydration time zone deterministically", () => {
+    const nextGame = { date: "2026-08-15T02:10:00.000Z", opponent: "LAD", homeAway: "away" as const, venue: null };
+
+    expect(formatGameLine(nextGame, "active", null, "UTC")).toBe("Sat 2:10 AM @ LAD");
+  });
 });

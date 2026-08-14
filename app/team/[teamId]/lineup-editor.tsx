@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
-import { formatGameLine, liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
+import { liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
 import {
   findLineupLockIssues,
   isLineupFirstGameLocked,
@@ -15,6 +15,7 @@ import {
 import { planActiveLineup } from "@/lib/fantasy/start-active-players";
 import type { LineupLockMode, LineupPlayer, RosterSlot } from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
+import { LocalGameLine } from "./local-game-line";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
 import { PlayerAvatar } from "./player-avatar";
 import { prefetchPlayerDetail } from "./player-detail-cache";
@@ -376,7 +377,6 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                     const locked = isEntryLocked(entry);
                     const boldPts = liveEntry ? liveEntry.points : seasonPts;
                     const injured = player.status === "injured" || player.status === "day-to-day";
-                    const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status, player.statusDetail);
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
                     const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
 
@@ -419,7 +419,13 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                           <span className="player-meta">
                             {player.mlbTeam} &ndash; {player.positions.join(", ")}
                           </span>
-                          <span className={gameClass}>{gameLine}</span>
+                          <LocalGameLine
+                            className={gameClass}
+                            nextGame={player.nextGame}
+                            status={player.status}
+                            statusDetail={player.statusDetail}
+                            liveText={liveEntry?.state}
+                          />
                           {liveStatLine ? <span className="player-live-line">{liveStatLine}</span> : null}
                         </button>
                         <button

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
+import { rowPoints } from "@/lib/fantasy/player-view";
 import type { Player, RosterSlot } from "@/lib/fantasy/types";
 import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
+import { LocalGameLine } from "./local-game-line";
 
 type PlayersBrowserProps = {
   teamId: string;
@@ -241,7 +242,6 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
                 filteredPlayers.map((player) => {
                   const liveEntry = live[player.id];
                   const injured = player.status === "injured" || player.status === "day-to-day";
-                  const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status, player.statusDetail);
                   const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
 
                   return (
@@ -257,7 +257,13 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
                           aria-label={`View ${player.name} details`}
                         >
                           <span className="player-name">{player.name}</span>
-                          <span className={gameClass}>{gameLine}</span>
+                          <LocalGameLine
+                            className={gameClass}
+                            nextGame={player.nextGame}
+                            status={player.status}
+                            statusDetail={player.statusDetail}
+                            liveText={liveEntry?.state}
+                          />
                         </button>
                       </td>
                       <td>{player.mlbTeam}</td>
