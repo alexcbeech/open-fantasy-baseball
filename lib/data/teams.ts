@@ -111,15 +111,16 @@ const teamSummarySql = `
   left join fantasy_team opponent on opponent.id = case when m.home_team_id = ft.id then m.away_team_id else m.home_team_id end
 `;
 
+type StandingsContext = { record: string; rank: number };
+
 /**
- * Standings context for a team: its record string ("3-1", or roto points for
- * rotisserie leagues) and rank within the league (new leagues rank by name).
+ * Standings context for every team in a league. Building the whole map once is
+ * important for My Teams, where several managed teams can share a league.
  */
-async function standingsContext(leagueId: string, teamId: string, scoringType: string | null): Promise<{ record: string; rank: number }> {
+async function standingsContextsForLeague(leagueId: string, scoringType: string | null): Promise<Map<string, StandingsContext>> {
   if (scoringType === "roto") {
     const roto = await rotoStandingsForLeague(leagueId);
-    const mine = roto.find((entry) => entry.teamId === teamId);
-    return { record: mine ? `${mine.points} pts` : "0 pts", rank: mine?.rank ?? 1 };
+    return new Map(roto.map((entry) => [entry.teamId, { record: `${entry.points} pts`, rank: entry.rank }]));
   }
 
   const [records, teams] = await Promise.all([
@@ -133,13 +134,16 @@ async function standingsContext(leagueId: string, teamId: string, scoringType: s
       ...(records.get(team.id) ?? { wins: 0, losses: 0, ties: 0, points: 0 }),
     })),
   );
-  const index = ranked.findIndex((entry) => entry.teamId === teamId);
-  const mine = ranked[index];
+  return new Map(ranked.map((entry, index) => [entry.teamId, { record: formatRecord(entry), rank: index + 1 }]));
+}
 
-  return {
-    record: mine ? formatRecord(mine) : "0-0",
-    rank: index >= 0 ? index + 1 : 1,
-  };
+/**
+ * Standings context for a team: its record string ("3-1", or roto points for
+ * rotisserie leagues) and rank within the league (new leagues rank by name).
+ */
+async function standingsContext(leagueId: string, teamId: string, scoringType: string | null): Promise<StandingsContext> {
+  const contexts = await standingsContextsForLeague(leagueId, scoringType);
+  return contexts.get(teamId) ?? { record: scoringType === "roto" ? "0 pts" : "0-0", rank: 1 };
 }
 
 export async function listTeamsForCurrentUser(user?: { userId: string; email: string } | null): Promise<TeamSummary[]> {
@@ -159,8 +163,20 @@ export async function listTeamsForCurrentUser(user?: { userId: string; email: st
       );
       // Empty is a valid result (a real user with no teams); the demo fallback
       // below serves mock data only when no database is configured.
+      const standingsByLeague = new Map<string, Promise<Map<string, StandingsContext>>>();
+      for (const row of result.rows) {
+        const key = `${row.league_id}:${row.scoring_type ?? ""}`;
+        if (!standingsByLeague.has(key)) {
+          standingsByLeague.set(key, standingsContextsForLeague(row.league_id, row.scoring_type));
+        }
+      }
+
       return Promise.all(
-        result.rows.map(async (row) => mapTeamSummary(row, await standingsContext(row.league_id, row.id, row.scoring_type))),
+        result.rows.map(async (row) => {
+          const contexts = await standingsByLeague.get(`${row.league_id}:${row.scoring_type ?? ""}`)!;
+          const context = contexts.get(row.id) ?? { record: row.scoring_type === "roto" ? "0 pts" : "0-0", rank: 1 };
+          return mapTeamSummary(row, context);
+        }),
       );
     },
     () => mockTeams,

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
 import type { Player, RosterSlot } from "@/lib/fantasy/types";
+import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 
 type PlayersBrowserProps = {
@@ -249,6 +250,9 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
                         <button
                           className="players-name-button"
                           type="button"
+                          onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
+                          onFocus={() => prefetchPlayerDetail(player.id, teamId)}
+                          onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >

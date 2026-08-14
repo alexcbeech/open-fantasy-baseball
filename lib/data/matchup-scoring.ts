@@ -139,6 +139,7 @@ export async function periodLineupStats(
 export type RecomputeMatchupsResult = {
   matchups: number;
   categoriesWritten: number;
+  playerScoresWritten: number;
 };
 
 /** Team fantasy-point total across its active lineup, to one decimal. */
@@ -157,6 +158,37 @@ export function fantasyPointsByPlayer(rows: Array<{ playerId: string; stats: Sta
     totals[playerId] = Math.round(totals[playerId] * 10) / 10;
   }
   return totals;
+}
+
+export async function replaceMatchupPlayerScores(
+  client: { query: (sql: string, values: unknown[]) => Promise<unknown> },
+  matchupId: string,
+  scoresByTeam: Array<{ teamId: string; scores: Record<string, number> }>,
+): Promise<number> {
+  const rows = scoresByTeam.flatMap(({ teamId, scores }) =>
+    Object.entries(scores).map(([playerId, fantasyPoints]) => ({ teamId, playerId, fantasyPoints })),
+  );
+
+  // Recompute is authoritative for the whole matchup. Delete first so players
+  // who no longer have an active scoring line cannot leave stale totals behind.
+  await client.query(`delete from matchup_player_score where matchup_id = $1`, [matchupId]);
+  if (!rows.length) {
+    return 0;
+  }
+
+  await client.query(
+    `insert into matchup_player_score (matchup_id, team_id, player_id, fantasy_points)
+     select $1, score.team_id, score.player_id, score.fantasy_points
+     from unnest($2::uuid[], $3::uuid[], $4::numeric[]) as score(team_id, player_id, fantasy_points)`,
+    [
+      matchupId,
+      rows.map((row) => row.teamId),
+      rows.map((row) => row.playerId),
+      rows.map((row) => row.fantasyPoints),
+    ],
+  );
+
+  return rows.length;
 }
 
 /**
@@ -187,6 +219,7 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
     );
 
     let categoriesWritten = 0;
+    let playerScoresWritten = 0;
 
     for (const matchup of matchups.rows) {
       const categoryRows = await client.query<{ category: string }>(
@@ -194,8 +227,19 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
         [matchup.league_id],
       );
       const categories = categoryRows.rows.map((row) => row.category);
-      const homeStats = await periodLineupStats(client, matchup.home_team_id, matchup.starts_at, matchup.ends_at);
-      const awayStats = await periodLineupStats(client, matchup.away_team_id, matchup.starts_at, matchup.ends_at);
+      const [homePlayerStats, awayPlayerStats] = await Promise.all([
+        periodLineupPlayerStats(client, matchup.home_team_id, matchup.starts_at, matchup.ends_at),
+        periodLineupPlayerStats(client, matchup.away_team_id, matchup.starts_at, matchup.ends_at),
+      ]);
+      const homeStats = homePlayerStats.map((row) => row.stats);
+      const awayStats = awayPlayerStats.map((row) => row.stats);
+      const homePlayerPoints = fantasyPointsByPlayer(homePlayerStats);
+      const awayPlayerPoints = fantasyPointsByPlayer(awayPlayerStats);
+
+      playerScoresWritten += await replaceMatchupPlayerScores(client, matchup.id, [
+        { teamId: matchup.home_team_id, scores: homePlayerPoints },
+        { teamId: matchup.away_team_id, scores: awayPlayerPoints },
+      ]);
 
       let homeWins = 0;
       let awayWins = 0;
@@ -240,7 +284,7 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
       await client.query(`update matchup set home_score = $1, away_score = $2 where id = $3`, [homeScore, awayScore, matchup.id]);
     }
 
-    return { matchups: matchups.rows.length, categoriesWritten };
+    return { matchups: matchups.rows.length, categoriesWritten, playerScoresWritten };
   } finally {
     client.release();
   }
