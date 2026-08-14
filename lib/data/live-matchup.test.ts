@@ -1,31 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveMatchupUpdate } from "./live-matchup";
-import type { LiveLineupEntry, LivePlayerRef } from "./mlb-live";
-
-const ref = (id: string): LivePlayerRef => ({
-  id,
-  mlb_player_id: 1,
-  current_mlb_team_id: 1,
-});
-
-const liveEntry = (points: number, stats: Record<string, number | string>, state = "Top 5th"): LiveLineupEntry => ({
-  state,
-  stats,
-  points,
-});
+import { buildLiveMatchupUpdate, liveOverlayDates } from "./live-matchup";
 
 const categories = ["HR", "AVG"];
 
 type Input = Parameters<typeof buildLiveMatchupUpdate>[0];
 
 const baseInput = (overrides: Partial<Input>): Input => ({
+  scoringType: "h2h-categories",
   isHome: true,
   categories,
   homePeriodStats: [],
   awayPeriodStats: [],
-  homeActive: [ref("h1")],
-  awayActive: [ref("a1")],
-  todayLines: {},
+  homeOverlayStats: [],
+  awayOverlayStats: [],
+  overlayPoints: {},
+  hasOverlayStats: false,
   liveGameInProgress: false,
   ...overrides,
 });
@@ -52,7 +41,9 @@ describe("buildLiveMatchupUpdate", () => {
         homePeriodStats: [{ HR: 10, H: 40, AB: 100 }],
         awayPeriodStats: [{ HR: 8, H: 30, AB: 100 }],
         // Live: the away hitter homers twice and goes 3-3, flipping HR.
-        todayLines: { a1: liveEntry(9, { HR: 3, H: 3, AB: 3 }) },
+        awayOverlayStats: [{ HR: 3, H: 3, AB: 3 }],
+        overlayPoints: { a1: 9 },
+        hasOverlayStats: true,
         liveGameInProgress: true,
       }),
     );
@@ -81,7 +72,10 @@ describe("buildLiveMatchupUpdate", () => {
         homePeriodStats: [{ HR: 10 }],
         awayPeriodStats: [{ HR: 8 }],
         // Both games ended earlier today; the lines still count.
-        todayLines: { h1: liveEntry(4, { HR: 1 }, "Final"), a1: liveEntry(0, { HR: 0 }, "Final") },
+        homeOverlayStats: [{ HR: 1 }],
+        awayOverlayStats: [{ HR: 0 }],
+        overlayPoints: { h1: 4, a1: 0 },
+        hasOverlayStats: true,
         liveGameInProgress: false,
       }),
     );
@@ -99,7 +93,7 @@ describe("buildLiveMatchupUpdate", () => {
         categories: ["HR"],
         homePeriodStats: [{ HR: 10 }],
         awayPeriodStats: [{ HR: 8 }],
-        todayLines: { benched: liveEntry(4, { HR: 5 }) },
+        hasOverlayStats: true,
         liveGameInProgress: true,
       }),
     );
@@ -116,7 +110,9 @@ describe("buildLiveMatchupUpdate", () => {
         categories: ["HR"],
         homePeriodStats: [{ HR: 10 }],
         awayPeriodStats: [{ HR: 8 }],
-        todayLines: { a1: liveEntry(4, { HR: 1 }) },
+        awayOverlayStats: [{ HR: 1 }],
+        overlayPoints: { a1: 4 },
+        hasOverlayStats: true,
         liveGameInProgress: true,
       }),
     );
@@ -128,5 +124,43 @@ describe("buildLiveMatchupUpdate", () => {
     expect(hr.result).toBe("loss");
     expect(update.userScore).toBe(0);
     expect(update.opponentScore).toBe(1);
+  });
+
+  it("uses total fantasy points and omits categories for points leagues", () => {
+    const update = buildLiveMatchupUpdate(
+      baseInput({
+        scoringType: "h2h-points",
+        homePeriodStats: [{ HR: 2, R: 3 }],
+        awayPeriodStats: [{ K: 5 }],
+        homeOverlayStats: [{ HR: 1 }],
+        awayOverlayStats: [{ R: 2 }],
+        overlayPoints: { h1: 4, a1: 2 },
+        hasOverlayStats: true,
+      }),
+    );
+
+    expect(update.userScore).toBe(15);
+    expect(update.opponentScore).toBe(7);
+    expect(update.categoryScores).toEqual([]);
+  });
+});
+
+describe("liveOverlayDates", () => {
+  const period = {
+    periodStartsAt: "2026-08-13T19:53:20.694Z",
+    periodEndsAt: "2026-08-17T04:00:00.000Z",
+    currentEtDate: "2026-08-14",
+  };
+
+  it("carries yesterday across the ET rollover when its logs are not stored", () => {
+    expect(liveOverlayDates({ ...period, latestStoredEtDate: null })).toEqual(["2026-08-13", "2026-08-14"]);
+  });
+
+  it("stops overlaying yesterday after the nightly import stores it", () => {
+    expect(liveOverlayDates({ ...period, latestStoredEtDate: "2026-08-13" })).toEqual(["2026-08-14"]);
+  });
+
+  it("still overlays today when a manual sync has already written partial logs", () => {
+    expect(liveOverlayDates({ ...period, latestStoredEtDate: "2026-08-14" })).toEqual(["2026-08-14"]);
   });
 });

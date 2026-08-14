@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateFantasyPoints } from "@/lib/fantasy/scoring";
-import { extractLine } from "./mlb-live";
+import { __clearLiveCache, extractLine, getGameLinesForPlayersOnDate } from "./mlb-live";
+
+beforeEach(() => {
+  __clearLiveCache();
+  vi.restoreAllMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 // A trimmed boxscore shaped like the MLB Stats API /game/{pk}/boxscore payload.
 const boxscore = {
@@ -50,5 +59,49 @@ describe("extractLine", () => {
   it("returns an empty line for a player not in the boxscore or a null payload", () => {
     expect(extractLine(boxscore, 999)).toEqual({});
     expect(extractLine(null, 100)).toEqual({});
+  });
+});
+
+describe("getGameLinesForPlayersOnDate", () => {
+  it("fetches a completed game's boxscore from the requested official date", async () => {
+    const requestedUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        requestedUrls.push(url);
+        if (url.includes("/schedule?")) {
+          return new Response(
+            JSON.stringify({
+              dates: [
+                {
+                  games: [
+                    {
+                      gamePk: 123,
+                      status: { abstractGameState: "Final" },
+                      teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                    },
+                  ],
+                },
+              ],
+            }),
+          );
+        }
+        if (url.endsWith("/game/123/boxscore")) {
+          return new Response(JSON.stringify(boxscore));
+        }
+        return new Response("Not found", { status: 404 });
+      }),
+    );
+
+    const result = await getGameLinesForPlayersOnDate(
+      [{ id: "player-100", mlb_player_id: 100, current_mlb_team_id: 10 }],
+      "2026-08-13",
+      "https://stats.test/api/v1",
+    );
+
+    expect(requestedUrls[0]).toContain("date=2026-08-13");
+    expect(result.liveGameInProgress).toBe(false);
+    expect(result.lines["player-100"]).toMatchObject({ state: "Final", points: 7 });
   });
 });

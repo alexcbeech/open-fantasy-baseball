@@ -1,7 +1,7 @@
 import { query, tryDatabase } from "@/lib/db/client";
-import type { LiveMatchupUpdate, MatchupCategoryResult } from "@/lib/fantasy/types";
-import { compareCategory, computeCategoryValue, periodLineupStats } from "./matchup-scoring";
-import { getTodayLinesForPlayers, todayEtDate, type LiveLineupEntry, type LivePlayerRef } from "./mlb-live";
+import type { LeagueScoringType, LiveMatchupUpdate, MatchupCategoryResult } from "@/lib/fantasy/types";
+import { compareCategory, computeCategoryValue, periodLineupStats, totalFantasyPoints } from "./matchup-scoring";
+import { getGameLinesForPlayersOnDate, todayEtDate, type LivePlayerRef } from "./mlb-live";
 
 type StatMap = Record<string, number | string>;
 type ActiveRow = LivePlayerRef;
@@ -32,15 +32,17 @@ function flipResult(result: MatchupCategoryResult): MatchupCategoryResult {
 }
 
 // Active starters for a team with their MLB identifiers, for live-line lookup.
-async function activeLineupRows(teamId: string): Promise<ActiveRow[]> {
+async function activeLineupRows(teamId: string, officialDate: string): Promise<ActiveRow[]> {
   const result = await query<{ id: string; mlb_player_id: number | null; current_mlb_team_id: number | null }>(
     `select p.id, p.mlb_player_id, p.current_mlb_team_id
      from lineup_entry le
      join player p on p.id = le.player_id
      where le.team_id = $1
-       and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
+       and le.lineup_date = (
+         select max(lineup_date) from lineup_entry where team_id = $1 and lineup_date <= $2
+       )
        and le.slot not in ('BN', 'IL', 'NA')`,
-    [teamId],
+    [teamId, officialDate],
   );
   return result.rows.map((row) => ({
     id: row.id,
@@ -49,10 +51,48 @@ async function activeLineupRows(teamId: string): Promise<ActiveRow[]> {
   }));
 }
 
+function shiftIsoDate(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 /**
- * Assemble the live category battle from both sides' completed game lines for
+ * Dates that must come from MLB boxscores rather than stored game logs. This
+ * always includes the current ET date and reaches backward over any dates the
+ * nightly stat import has not persisted yet.
+ */
+export function liveOverlayDates(input: {
+  periodStartsAt: Date | string;
+  periodEndsAt: Date | string;
+  currentEtDate: string;
+  latestStoredEtDate: string | null;
+}): string[] {
+  const periodStart = todayEtDate(new Date(input.periodStartsAt));
+  const periodEndExclusive = todayEtDate(new Date(input.periodEndsAt));
+  const lastPeriodDate = shiftIsoDate(periodEndExclusive, -1);
+  const upper = input.currentEtDate < lastPeriodDate ? input.currentEtDate : lastPeriodDate;
+
+  if (upper < periodStart) {
+    return [];
+  }
+
+  const firstUnstored = input.latestStoredEtDate ? shiftIsoDate(input.latestStoredEtDate, 1) : periodStart;
+  const candidateStart = firstUnstored > periodStart ? firstUnstored : periodStart;
+  // Even if a manual sync wrote today's partial log, today's boxscore remains
+  // authoritative and its stored line is excluded to prevent double-counting.
+  const lower = candidateStart > upper ? upper : candidateStart;
+  const dates: string[] = [];
+  for (let date = lower; date <= upper; date = shiftIsoDate(date, 1)) {
+    dates.push(date);
+  }
+  return dates;
+}
+
+/**
+ * Assemble the live matchup from both sides' completed game lines for
  * the scoring period (the same lines the stored recompute aggregates) plus
- * today's boxscore lines — in-progress and finished games alike, so a day's
+ * unsynced boxscore lines — in-progress and finished games alike, so a day's
  * production never vanishes when the final out is recorded. Each line is an
  * extra stat entry per player so counting categories sum and rate categories
  * (AVG/ERA/WHIP) stay correct — computeCategoryValue rebuilds rates from
@@ -60,29 +100,38 @@ async function activeLineupRows(teamId: string): Promise<ActiveRow[]> {
  * without the DB or MLB API.
  */
 export function buildLiveMatchupUpdate(input: {
+  scoringType: LeagueScoringType;
   isHome: boolean;
   categories: string[];
   homePeriodStats: StatMap[];
   awayPeriodStats: StatMap[];
-  homeActive: ActiveRow[];
-  awayActive: ActiveRow[];
-  /** Today's boxscore lines by player id (in-progress and final games). */
-  todayLines: Record<string, LiveLineupEntry>;
+  homeOverlayStats: StatMap[];
+  awayOverlayStats: StatMap[];
+  overlayPoints: Record<string, number>;
+  hasOverlayStats: boolean;
   /** True while any of those games is still in progress. */
   liveGameInProgress: boolean;
 }): LiveMatchupUpdate {
-  const { isHome, categories, homePeriodStats, awayPeriodStats, homeActive, awayActive, todayLines, liveGameInProgress } = input;
+  const {
+    isHome,
+    categories,
+    homePeriodStats,
+    awayPeriodStats,
+    homeOverlayStats,
+    awayOverlayStats,
+    overlayPoints,
+    hasOverlayStats,
+    liveGameInProgress,
+  } = input;
 
-  if (!Object.keys(todayLines).length) {
+  if (!hasOverlayStats) {
     return notLive;
   }
 
-  // The period's completed game lines, plus today's line for any current
-  // starter whose team played (or is playing) — summed together per category.
-  const withToday = (periodStats: StatMap[], rows: ActiveRow[]) =>
-    periodStats.concat(rows.filter((row) => todayLines[row.id]).map((row) => todayLines[row.id].stats));
-  const homeStats = withToday(homePeriodStats, homeActive);
-  const awayStats = withToday(awayPeriodStats, awayActive);
+  // Combine persisted lines with date-specific boxscores that have not safely
+  // completed the nightly handoff yet.
+  const homeStats = homePeriodStats.concat(homeOverlayStats);
+  const awayStats = awayPeriodStats.concat(awayOverlayStats);
 
   let homeWins = 0;
   let awayWins = 0;
@@ -101,40 +150,40 @@ export function buildLiveMatchupUpdate(input: {
     };
   });
 
-  const livePoints: Record<string, number> = {};
-  for (const [playerId, entry] of Object.entries(todayLines)) {
-    livePoints[playerId] = entry.points;
-  }
+  const homeScore = input.scoringType === "h2h-points" ? totalFantasyPoints(homeStats) : homeWins;
+  const awayScore = input.scoringType === "h2h-points" ? totalFantasyPoints(awayStats) : awayWins;
 
   return {
     live: liveGameInProgress,
     hasTodayStats: true,
-    userScore: isHome ? homeWins : awayWins,
-    opponentScore: isHome ? awayWins : homeWins,
-    categoryScores,
-    livePoints,
+    userScore: isHome ? homeScore : awayScore,
+    opponentScore: isHome ? awayScore : homeScore,
+    categoryScores: input.scoringType === "h2h-points" ? [] : categoryScores,
+    livePoints: overlayPoints,
   };
 }
 
 /**
  * Recompute a team's active matchup category battle from each side's scoring-
- * period game lines plus today's boxscore lines (in-progress and finished
- * games), on demand. Returns a no-data result (so callers keep the stored
- * nightly values) whenever no active player's team has played today.
+ * period game lines plus unsynced boxscore lines, on demand. Returns a no-data
+ * result (so callers keep the stored nightly values) whenever no active
+ * player's team has played on a date awaiting handoff.
  */
 export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpdate | null> {
   return tryDatabase(
     async () => {
       const matchupResult = await query<{
         league_id: string;
+        scoring_type: LeagueScoringType;
         home_team_id: string;
         away_team_id: string;
         starts_at: Date | string;
         ends_at: Date | string;
       }>(
-        `select m.league_id, m.home_team_id, m.away_team_id, sp.starts_at, sp.ends_at
+        `select m.league_id, l.scoring_type, m.home_team_id, m.away_team_id, sp.starts_at, sp.ends_at
          from matchup m
          join scoring_period sp on sp.id = m.scoring_period_id
+         join league l on l.id = m.league_id
          where (m.home_team_id = $1 or m.away_team_id = $1) and m.status = 'active'
          limit 1`,
         [teamId],
@@ -144,33 +193,96 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
         return null;
       }
 
-      // Today is served by live boxscores, so today's game logs (if a manual
-      // sync wrote any) are excluded from the stored-period side to avoid
-      // double counting.
-      const excludeEtDate = todayEtDate();
       const isHome = matchup.home_team_id === teamId;
-      const [categoryRows, homePeriodStats, awayPeriodStats, homeActive, awayActive] = await Promise.all([
-        query<{ category: string }>(`select category from league_stat_category where league_id = $1 order by side, sort_order`, [
-          matchup.league_id,
-        ]),
-        periodLineupStats({ query }, matchup.home_team_id, matchup.starts_at, matchup.ends_at, { excludeEtDate }),
-        periodLineupStats({ query }, matchup.away_team_id, matchup.starts_at, matchup.ends_at, { excludeEtDate }),
-        activeLineupRows(matchup.home_team_id),
-        activeLineupRows(matchup.away_team_id),
+      const currentEtDate = todayEtDate();
+      const [categoryRows, latestStored] = await Promise.all([
+        matchup.scoring_type === "h2h-points"
+          ? Promise.resolve({ rows: [] as { category: string }[] })
+          : query<{ category: string }>(
+              `select category from league_stat_category where league_id = $1 order by side, sort_order`,
+              [matchup.league_id],
+            ),
+        query<{ stat_date: string | null }>(
+          `select max(stat_date)::text as stat_date
+           from player_stat_line
+           where split = 'game' and source = 'mlb-stats-api'
+             and stat_date >= ($1::timestamptz at time zone 'America/New_York')::date
+             and stat_date < ($2::timestamptz at time zone 'America/New_York')::date
+             and collected_at <= coalesce(
+               (select max(finished_at) from ingestion_run
+                where job_type = 'player-stats' and status = 'succeeded'),
+               '-infinity'::timestamptz
+             )`,
+          [matchup.starts_at, matchup.ends_at],
+        ),
       ]);
 
-      const liveRefs = [...homeActive, ...awayActive].filter((row) => row.mlb_player_id && row.current_mlb_team_id);
-      const today = await getTodayLinesForPlayers(liveRefs);
+      const overlayDates = liveOverlayDates({
+        periodStartsAt: matchup.starts_at,
+        periodEndsAt: matchup.ends_at,
+        currentEtDate,
+        latestStoredEtDate: latestStored.rows[0]?.stat_date ?? null,
+      });
+      const [homePeriodStats, awayPeriodStats, dailyOverlays] = await Promise.all([
+        periodLineupStats({ query }, matchup.home_team_id, matchup.starts_at, matchup.ends_at, {
+          excludeEtDates: overlayDates,
+        }),
+        periodLineupStats({ query }, matchup.away_team_id, matchup.starts_at, matchup.ends_at, {
+          excludeEtDates: overlayDates,
+        }),
+        Promise.all(
+          overlayDates.map(async (officialDate) => {
+            const [homeActive, awayActive] = await Promise.all([
+              activeLineupRows(matchup.home_team_id, officialDate),
+              activeLineupRows(matchup.away_team_id, officialDate),
+            ]);
+            const refs = [...homeActive, ...awayActive].filter((row) => row.mlb_player_id && row.current_mlb_team_id);
+            const gameLines = await getGameLinesForPlayersOnDate(refs, officialDate);
+            return { homeActive, awayActive, gameLines };
+          }),
+        ),
+      ]);
+
+      const homeOverlayStats: StatMap[] = [];
+      const awayOverlayStats: StatMap[] = [];
+      const overlayPoints: Record<string, number> = {};
+      let hasOverlayStats = false;
+      let liveGameInProgress = false;
+
+      for (const overlay of dailyOverlays) {
+        const { lines } = overlay.gameLines;
+        if (Object.keys(lines).length) {
+          hasOverlayStats = true;
+        }
+        liveGameInProgress ||= overlay.gameLines.liveGameInProgress;
+
+        for (const row of overlay.homeActive) {
+          const entry = lines[row.id];
+          if (entry) {
+            homeOverlayStats.push(entry.stats);
+            overlayPoints[row.id] = (overlayPoints[row.id] ?? 0) + entry.points;
+          }
+        }
+        for (const row of overlay.awayActive) {
+          const entry = lines[row.id];
+          if (entry) {
+            awayOverlayStats.push(entry.stats);
+            overlayPoints[row.id] = (overlayPoints[row.id] ?? 0) + entry.points;
+          }
+        }
+      }
 
       return buildLiveMatchupUpdate({
+        scoringType: matchup.scoring_type,
         isHome,
         categories: categoryRows.rows.map((row) => row.category),
         homePeriodStats,
         awayPeriodStats,
-        homeActive,
-        awayActive,
-        todayLines: today.lines,
-        liveGameInProgress: today.liveGameInProgress,
+        homeOverlayStats,
+        awayOverlayStats,
+        overlayPoints,
+        hasOverlayStats,
+        liveGameInProgress,
       });
     },
     () => notLive,

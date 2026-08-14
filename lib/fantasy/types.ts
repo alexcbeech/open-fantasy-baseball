@@ -241,6 +241,7 @@ export type MatchupCategoryScore = {
 export type MatchupDetails = {
   matchupId: string;
   periodLabel: string;
+  scoringType: LeagueScoringType;
   userTeam: Pick<TeamSummary, "id" | "teamName">;
   opponentTeam: Pick<TeamSummary, "id" | "teamName">;
   userScore: number;
@@ -254,15 +255,15 @@ export type LiveMatchupUpdate = {
   /** True when at least one active player on either side has a game in progress. */
   live: boolean;
   /**
-   * True when today's boxscore lines (in-progress or finished games) are
-   * folded into the values below. When false the update carries no data and
+   * True when recent boxscore lines awaiting nightly import are folded into
+   * the values below. When false the update carries no data and
    * callers should keep showing the stored nightly numbers.
    */
   hasTodayStats: boolean;
-  /** Categories won by the viewing team / opponent, live-adjusted. */
+  /** Matchup score for the viewing team / opponent, live-adjusted. */
   userScore: number;
   opponentScore: number;
-  /** Category battle recomputed from season stats plus live in-game lines. */
+  /** Category battle for category leagues; empty for points leagues. */
   categoryScores: MatchupCategoryScore[];
   /** Live fantasy points per player id, for the head-to-head rows. */
   livePoints: Record<string, number>;
