@@ -3,7 +3,7 @@ import { getPool } from "../db/client";
 export type AdpEntry = {
   espnPlayerId: number | null;
   fullName: string;
-  adp: number;
+  adp: number | null;
   /** Real-world roster ownership (0-100); null when the feed omits it. */
   rosteredPercent: number | null;
 };
@@ -22,10 +22,18 @@ export interface AdpProvider {
 const ESPN_ADP_URL = (seasonYear: number) =>
   `https://lm-api-reads.fantasy.espn.com/apis/v3/games/flb/seasons/${seasonYear}/segments/0/leaguedefaults/1?view=kona_player_info`;
 
-// ESPN caps responses by this filter header; 700 covers every draftable player.
-const ESPN_FANTASY_FILTER = JSON.stringify({
-  players: { limit: 700, sortDraftRanks: { sortPriority: 100, sortAsc: true, value: "STANDARD" } },
-});
+// ESPN caps responses by this filter header. Draft rank and ownership are
+// separate universes, so fetch both and merge them: low-ADP active players can
+// otherwise fall outside the draft-ranked page despite having ownership data.
+const espnFantasyFilter = (sort: "draft" | "ownership") =>
+  JSON.stringify({
+    players: {
+      limit: 700,
+      ...(sort === "draft"
+        ? { sortDraftRanks: { sortPriority: 100, sortAsc: true, value: "STANDARD" } }
+        : { sortPercOwned: { sortPriority: 100, sortAsc: false } }),
+    },
+  });
 
 type EspnPlayerEntry = {
   player?: {
@@ -39,34 +47,53 @@ export class EspnAdpProvider implements AdpProvider {
   readonly source = "espn-fantasy";
 
   async fetchAdp(seasonYear: number): Promise<AdpEntry[]> {
-    const response = await fetch(ESPN_ADP_URL(seasonYear), {
-      headers: { "X-Fantasy-Filter": ESPN_FANTASY_FILTER, accept: "application/json" },
-      signal: AbortSignal.timeout(30_000),
-    });
+    const responses = await Promise.all(
+      (["draft", "ownership"] as const).map((sort) =>
+        fetch(ESPN_ADP_URL(seasonYear), {
+          headers: { "X-Fantasy-Filter": espnFantasyFilter(sort), accept: "application/json" },
+          signal: AbortSignal.timeout(30_000),
+        }),
+      ),
+    );
 
-    if (!response.ok) {
-      throw new Error(`ESPN ADP request failed with status ${response.status}.`);
+    for (const response of responses) {
+      if (!response.ok) {
+        throw new Error(`ESPN ADP request failed with status ${response.status}.`);
+      }
     }
 
-    const payload = (await response.json()) as { players?: EspnPlayerEntry[] };
-    const entries: AdpEntry[] = [];
+    const payloads = (await Promise.all(responses.map((response) => response.json()))) as Array<{
+      players?: EspnPlayerEntry[];
+    }>;
+    const entriesByKey = new Map<string, AdpEntry>();
 
-    for (const entry of payload.players ?? []) {
-      const adp = entry.player?.ownership?.averageDraftPosition;
+    for (const entry of payloads.flatMap((payload) => payload.players ?? [])) {
+      const player = entry.player;
+      const rawAdp = player?.ownership?.averageDraftPosition;
+      const percentOwned = player?.ownership?.percentOwned;
 
-      if (!entry.player?.fullName || typeof adp !== "number" || adp <= 0) {
+      if (
+        !player?.fullName ||
+        ((typeof rawAdp !== "number" || rawAdp <= 0) && typeof percentOwned !== "number")
+      ) {
         continue;
       }
 
-      const percentOwned = entry.player.ownership?.percentOwned;
+      const key = player.id != null ? `id:${player.id}` : `name:${normalizePlayerName(player.fullName)}`;
+      const previous = entriesByKey.get(key);
 
-      entries.push({
-        espnPlayerId: entry.player.id ?? null,
-        fullName: entry.player.fullName,
-        adp,
-        rosteredPercent: typeof percentOwned === "number" ? Math.round(percentOwned) : null,
+      entriesByKey.set(key, {
+        espnPlayerId: player.id ?? null,
+        fullName: player.fullName,
+        adp: typeof rawAdp === "number" && rawAdp > 0 ? rawAdp : (previous?.adp ?? null),
+        rosteredPercent:
+          typeof percentOwned === "number"
+            ? Math.round(percentOwned * 100) / 100
+            : (previous?.rosteredPercent ?? null),
       });
     }
+
+    const entries = [...entriesByKey.values()];
 
     if (!entries.length) {
       throw new Error("ESPN ADP response contained no usable players.");
@@ -172,7 +199,7 @@ export type KnownPlayer = {
 
 export type MatchedAdp = {
   playerId: string;
-  adp: number;
+  adp: number | null;
   adpRank: number;
   espnPlayerId: number | null;
   rosteredPercent: number | null;
@@ -208,7 +235,12 @@ export function matchAdpToPlayers(
   const matched: MatchedAdp[] = [];
   const seen = new Set<string>();
 
-  for (const entry of [...entries].sort((left, right) => left.adp - right.adp)) {
+  for (const entry of [...entries].sort((left, right) => {
+    if (left.adp === null && right.adp === null) return 0;
+    if (left.adp === null) return 1;
+    if (right.adp === null) return -1;
+    return left.adp - right.adp;
+  })) {
     const mlbamId = entry.espnPlayerId !== null ? espnToMlbamId(espnToMlbam, entry.espnPlayerId) : null;
     const player =
       (mlbamId !== null ? byMlbamId.get(mlbamId) : undefined) ?? byName.get(normalizePlayerName(entry.fullName));
