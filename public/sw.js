@@ -1,11 +1,34 @@
-/* Open Fantasy Baseball service worker: Web Push receipt and notification focus. */
+/* Open Fantasy Baseball service worker: offline navigation fallback and Web Push. */
 
-self.addEventListener("install", () => {
+const CACHE_PREFIX = "ofb-";
+const CACHE_NAME = `${CACHE_PREFIX}offline-v1`;
+const OFFLINE_URL = "/offline.html";
+const OFFLINE_ASSETS = [OFFLINE_URL, "/offline.css", "/brand/ofb-tile.svg", "/icons/icon-192.png"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(OFFLINE_ASSETS)));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key))),
+      )
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET" || event.request.mode !== "navigate") {
+    return;
+  }
+
+  // Authenticated HTML can contain private league data, so navigation responses
+  // are deliberately never cached. Show a static explanation when offline.
+  event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE_URL)));
 });
 
 self.addEventListener("push", (event) => {
@@ -22,8 +45,8 @@ self.addEventListener("push", (event) => {
     body: payload.body || "",
     tag: payload.tag || "ofb",
     data: { url: payload.url || "/" },
-    badge: "/brand/ofb-tile.svg",
-    icon: "/brand/ofb-tile.svg",
+    badge: "/icons/icon-192.png",
+    icon: "/icons/icon-192.png",
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
