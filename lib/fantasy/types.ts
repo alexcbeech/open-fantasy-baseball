@@ -265,7 +265,7 @@ export type LiveMatchupUpdate = {
   opponentScore: number;
   /** Category battle for category leagues; empty for points leagues. */
   categoryScores: MatchupCategoryScore[];
-  /** Live fantasy points per player id, for the head-to-head rows. */
+  /** Complete matchup-period fantasy points per player id. */
   livePoints: Record<string, number>;
 };
 

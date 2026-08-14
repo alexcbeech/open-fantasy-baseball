@@ -1,7 +1,6 @@
 "use client";
 
 import { useLiveMatchup } from "@/app/use-live-matchup";
-import { rowPoints } from "@/lib/fantasy/player-view";
 import type { LineupPlayer, MatchupDetails, RosterSlot } from "@/lib/fantasy/types";
 
 // Order starters the way the lineup is displayed so the two rosters line up
@@ -16,8 +15,8 @@ function orderedStarters(lineup: LineupPlayer[]): LineupPlayer[] {
 
 /**
  * The Matchup tab. Server-rendered with the stored nightly score, then polls
- * for live recalculation. Category leagues include the category and starter
- * breakdowns; points leagues show only the matchup-period points head to head.
+ * for live recalculation. Category leagues include their category breakdown;
+ * every head-to-head league shows each starter's matchup-period points.
  */
 export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
   const update = useLiveMatchup(teamId);
@@ -88,25 +87,23 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
         ) : null}
       </section>
 
-      {!isPointsLeague ? (
-        <section className="panel" aria-labelledby="compare-heading">
-          <h3 id="compare-heading">Starters Head to Head</h3>
-          <div className="matchup-compare" aria-label="Starters head to head">
-            {Array.from({ length: rowCount }).map((_, index) => {
-              const user = userStarters[index];
-              const opponent = opponentStarters[index];
-              const slot = user?.slot ?? opponent?.slot ?? "";
-              return (
-                <div className="compare-row" key={`${slot}-${index}`}>
-                  <CompareSide entry={user} livePoints={livePoints} align="left" />
-                  <span className="compare-slot">{slot}</span>
-                  <CompareSide entry={opponent} livePoints={livePoints} align="right" />
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
+      <section className="panel" aria-labelledby="compare-heading">
+        <h3 id="compare-heading">{isPointsLeague ? "Player Matchup Points" : "Starters Head to Head"}</h3>
+        <div className="matchup-compare" aria-label="Player matchup points">
+          {Array.from({ length: rowCount }).map((_, index) => {
+            const user = userStarters[index];
+            const opponent = opponentStarters[index];
+            const slot = user?.slot ?? opponent?.slot ?? "";
+            return (
+              <div className="compare-row" key={`${slot}-${index}`}>
+                <CompareSide entry={user} livePoints={livePoints} align="left" />
+                <span className="compare-slot">{slot}</span>
+                <CompareSide entry={opponent} livePoints={livePoints} align="right" />
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
@@ -124,7 +121,7 @@ function CompareSide({
     return <span className={`compare-side ${align} empty`}>—</span>;
   }
   const live = livePoints[entry.player.id];
-  const points = live ?? rowPoints(entry.player).seasonPts;
+  const points = live ?? entry.matchupTotal;
   return (
     <span className={`compare-side ${align}`}>
       <span className="compare-info">
