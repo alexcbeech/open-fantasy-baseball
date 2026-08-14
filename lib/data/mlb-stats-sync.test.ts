@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { derivePitcherEligibility, mapMlbStat } from "./mlb-stats-sync";
+import { bulkSeasonStatsPath, derivePitcherEligibility, mapMlbStat } from "./mlb-stats-sync";
+
+describe("bulkSeasonStatsPath", () => {
+  it("requests MLB's complete player pool instead of qualified players only", () => {
+    expect(bulkSeasonStatsPath("hitting", 2026, 1000, 0)).toContain("playerPool=ALL");
+  });
+});
 
 describe("mapMlbStat", () => {
   it("maps hitting fields to OFB categories with rate stats as strings", () => {

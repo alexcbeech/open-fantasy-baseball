@@ -1,5 +1,72 @@
-import { describe, expect, it } from "vitest";
-import { matchAdpToPlayers, normalizePlayerName, parseEspnToMlbamCsv, type AdpEntry, type KnownPlayer } from "./adp-sync";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  EspnAdpProvider,
+  matchAdpToPlayers,
+  normalizePlayerName,
+  parseEspnToMlbamCsv,
+  type AdpEntry,
+  type KnownPlayer,
+} from "./adp-sync";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("EspnAdpProvider", () => {
+  it("merges the draft-ranked and ownership-ranked player universes", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            players: [
+              {
+                player: {
+                  id: 1,
+                  fullName: "Drafted Player",
+                  ownership: { averageDraftPosition: 10.5, percentOwned: 90.123 },
+                },
+              },
+            ],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            players: [
+              {
+                player: {
+                  id: 2,
+                  fullName: "Joey Ortiz",
+                  ownership: { averageDraftPosition: 267.39, percentOwned: 1.13 },
+                },
+              },
+              {
+                player: {
+                  id: 3,
+                  fullName: "Ownership Only",
+                  ownership: { percentOwned: 0.25 },
+                },
+              },
+            ],
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const entries = await new EspnAdpProvider().fetchAdp(2026);
+
+    expect(entries).toEqual([
+      { espnPlayerId: 1, fullName: "Drafted Player", adp: 10.5, rosteredPercent: 90.12 },
+      { espnPlayerId: 2, fullName: "Joey Ortiz", adp: 267.39, rosteredPercent: 1.13 },
+      { espnPlayerId: 3, fullName: "Ownership Only", adp: null, rosteredPercent: 0.25 },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1].headers["X-Fantasy-Filter"]).toContain("sortDraftRanks");
+    expect(fetchMock.mock.calls[1][1].headers["X-Fantasy-Filter"]).toContain("sortPercOwned");
+  });
+});
 
 describe("normalizePlayerName", () => {
   it("strips accents, punctuation, and suffixes", () => {

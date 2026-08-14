@@ -61,6 +61,9 @@ jobs:
       - name: Sync player stats (season, splits, game logs)
         run: npm run sync:stats
 
+      - name: Sync ADP and roster ownership
+        run: npm run sync:adp
+
       - name: Sync rest-of-season projections
         run: npm run sync:projections
 
