@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { liveLineSummary } from "@/lib/fantasy/player-view";
+import { liveLineSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
@@ -103,7 +103,7 @@ export function PlayerDetailView({
   const [claimBid, setClaimBid] = useState("0");
   const [dropPlayerId, setDropPlayerId] = useState("");
   const tabbed = variant === "card";
-  const health = healthBadges[player.status];
+  const health = { ...healthBadges[player.status], label: playerStatusLabel(player) };
   const summary = seasonSummary(player);
   const isLive = Boolean(liveStatus?.live);
   // A full roster makes adds and claims add-plus-drop transactions.

@@ -10,7 +10,7 @@ import { computeRosterNeeds } from "@/lib/draft/auto-pick";
 import type { DraftPlayer, DraftState } from "@/lib/draft/types";
 import type { DraftLobby } from "@/lib/data/draft";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { rowPoints, seasonStatLine, statusLabels } from "@/lib/fantasy/player-view";
+import { playerStatusLabel, rowPoints, seasonStatLine } from "@/lib/fantasy/player-view";
 import { positionGroupClass, positionGroupLegend } from "@/lib/fantasy/position-color";
 import type { RosterSlot } from "@/lib/fantasy/types";
 import { PickSheet } from "./pick-sheet";
@@ -548,7 +548,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
                             <span
                               className={`draft-player-health ${player.status === "injured" ? "health-injured" : player.status === "day-to-day" ? "health-dtd" : "health-minors"}`}
                             >
-                              {statusLabels[player.status]}
+                              {playerStatusLabel(player)}
                             </span>
                           ) : null}
                         </span>

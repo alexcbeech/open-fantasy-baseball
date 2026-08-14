@@ -26,6 +26,7 @@ export type DbPlayerRow = {
   full_name: string;
   mlb_team: string | null;
   status: Player["status"];
+  status_detail?: string | null;
   positions: string[] | null;
   availability?: Player["availability"];
   news_headline?: string | null;
@@ -114,6 +115,7 @@ export function mapPlayer(row: DbPlayerRow): Player {
     mlbTeam: row.mlb_team ?? "FA",
     positions: (row.positions?.length ? row.positions : ["UTIL"]) as Player["positions"],
     status: row.status,
+    statusDetail: row.status_detail ?? null,
     availability: row.availability ?? "free-agent",
     newsHeadline: row.news_headline ?? undefined,
     seasonStats: row.season_stats ?? {},

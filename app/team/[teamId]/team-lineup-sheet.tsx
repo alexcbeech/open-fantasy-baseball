@@ -138,7 +138,7 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                           {player.mlbTeam} &ndash; {player.positions.join(", ")}
                         </span>
                         <span className={injured ? "player-game injury" : "player-game"}>
-                          {formatGameLine(player.nextGame, player.status)}
+                          {formatGameLine(player.nextGame, player.status, player.statusDetail)}
                         </span>
                       </span>
                       <span className="player-points">

@@ -1332,6 +1332,7 @@ export async function listDraftPlayers(
              p.full_name,
              mt.abbreviation as mlb_team,
              p.status,
+             p.status_detail,
              coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
              'free-agent' as availability,
              coalesce(season_stats.stats, '{}'::jsonb) as season_stats,

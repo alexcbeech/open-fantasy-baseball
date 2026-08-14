@@ -25,6 +25,10 @@ type MlbRosterEntry = {
   position?: {
     abbreviation?: string;
   };
+  status?: {
+    code?: string;
+    description?: string;
+  };
 };
 
 type MlbTeamsResponse = {
@@ -116,6 +120,36 @@ function normalizePosition(position?: string) {
   return undefined;
 }
 
+type NormalizedPlayerStatus = {
+  status: "active" | "day-to-day" | "injured" | "minors";
+  statusDetail: string | null;
+};
+
+/** Convert MLB roster designations into app eligibility plus a display label. */
+export function normalizeMlbRosterStatus(rosterStatus?: MlbRosterEntry["status"]): NormalizedPlayerStatus {
+  const code = rosterStatus?.code?.trim().toUpperCase() ?? "";
+  const description = rosterStatus?.description?.trim() ?? "";
+  const injuredDays = code.match(/^D(\d+)$/)?.[1] ?? description.match(/injured\s+(\d+)[-\s]?day/i)?.[1];
+
+  if (injuredDays) {
+    return { status: "injured", statusDetail: `${injuredDays}-Day IL` };
+  }
+
+  if (code.startsWith("D") || /injured|disabled/i.test(description)) {
+    return { status: "injured", statusDetail: "IL" };
+  }
+
+  if (/day[-\s]?to[-\s]?day/i.test(description)) {
+    return { status: "day-to-day", statusDetail: "Day-to-Day" };
+  }
+
+  if (code === "MIN" || /minor|optioned/i.test(description)) {
+    return { status: "minors", statusDetail: null };
+  }
+
+  return { status: "active", statusDetail: null };
+}
+
 function toMlbDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -190,7 +224,7 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
     // A player can appear on more than one roster (active + 40-man, or two
     // teams mid-trade); a multi-row upsert can't touch the same key twice, so
     // dedupe with the last occurrence winning like the sequential upserts did.
-    const playerByMlbId = new Map<number, { fullName: string; teamId: number }>();
+    const playerByMlbId = new Map<number, { fullName: string; teamId: number; status: NormalizedPlayerStatus["status"]; statusDetail: string | null }>();
     const eligibilityByKey = new Map<string, { mlbPlayerId: number; position: string }>();
 
     for (const team of teams) {
@@ -204,7 +238,11 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
             continue;
           }
 
-          playerByMlbId.set(person.id, { fullName: person.fullName, teamId: team.id });
+          playerByMlbId.set(person.id, {
+            fullName: person.fullName,
+            teamId: team.id,
+            ...normalizeMlbRosterStatus(rosterEntry.status),
+          });
 
           if (position) {
             eligibilityByKey.set(`${person.id}|${position}`, { mlbPlayerId: person.id, position });
@@ -216,17 +254,22 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
     const idByMlbId = new Map<number, string>();
     for (const batch of chunk([...playerByMlbId.entries()], writeChunkSize)) {
       const result = await client.query<{ id: string; mlb_player_id: number }>(
-        `insert into player (mlb_player_id, full_name, status, current_mlb_team_id)
-         select t.mlb_player_id, t.full_name, 'active', t.team_id
-         from unnest($1::integer[], $2::text[], $3::integer[]) as t(mlb_player_id, full_name, team_id)
+        `insert into player (mlb_player_id, full_name, status, status_detail, current_mlb_team_id)
+         select t.mlb_player_id, t.full_name, t.status, t.status_detail, t.team_id
+         from unnest($1::integer[], $2::text[], $3::text[], $4::text[], $5::integer[])
+           as t(mlb_player_id, full_name, status, status_detail, team_id)
          on conflict (mlb_player_id) do update set
            full_name = excluded.full_name,
+           status = excluded.status,
+           status_detail = excluded.status_detail,
            current_mlb_team_id = excluded.current_mlb_team_id,
            updated_at = now()
          returning id, mlb_player_id`,
         [
           batch.map(([mlbPlayerId]) => mlbPlayerId),
           batch.map(([, player]) => player.fullName),
+          batch.map(([, player]) => player.status),
+          batch.map(([, player]) => player.statusDetail),
           batch.map(([, player]) => player.teamId),
         ],
       );

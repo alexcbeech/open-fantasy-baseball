@@ -375,7 +375,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
                     const locked = isEntryLocked(entry);
                     const boldPts = liveEntry ? liveEntry.points : seasonPts;
                     const injured = player.status === "injured" || player.status === "day-to-day";
-                    const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status);
+                    const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status, player.statusDetail);
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
                     const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
 
