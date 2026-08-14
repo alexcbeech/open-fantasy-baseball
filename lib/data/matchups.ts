@@ -1,11 +1,14 @@
 import { query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import type { LeagueScoringType, MatchupCategoryResult, MatchupCategoryScore, MatchupDetails } from "@/lib/fantasy/types";
+import { fantasyPointsByPlayer, periodLineupPlayerStats } from "./matchup-scoring";
 import { getLineupForTeam } from "./teams";
 
 type ActiveMatchupRow = {
   matchup_id: string;
   period_label: string;
+  starts_at: Date | string;
+  ends_at: Date | string;
   scoring_type: LeagueScoringType;
   home_team_id: string;
   away_team_id: string;
@@ -42,6 +45,8 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
         `select
            m.id as matchup_id,
            sp.label as period_label,
+           sp.starts_at,
+           sp.ends_at,
            l.scoring_type,
            m.home_team_id,
            m.away_team_id,
@@ -68,7 +73,7 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
 
       const isHome = matchup.home_team_id === teamId;
       const opponentTeamId = isHome ? matchup.away_team_id : matchup.home_team_id;
-      const [categoryResult, userLineup, opponentLineup] = await Promise.all([
+      const [categoryResult, userLineup, opponentLineup, userStatRows, opponentStatRows] = await Promise.all([
         matchup.scoring_type === "h2h-points"
           ? Promise.resolve({ rows: [] as CategoryScoreRow[] })
           : query<CategoryScoreRow>(
@@ -80,7 +85,11 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
             ),
         getLineupForTeam(teamId),
         getLineupForTeam(opponentTeamId),
+        periodLineupPlayerStats({ query }, teamId, matchup.starts_at, matchup.ends_at),
+        periodLineupPlayerStats({ query }, opponentTeamId, matchup.starts_at, matchup.ends_at),
       ]);
+      const userPlayerPoints = fantasyPointsByPlayer(userStatRows);
+      const opponentPlayerPoints = fantasyPointsByPlayer(opponentStatRows);
 
       return {
         matchupId: matchup.matchup_id,
@@ -98,12 +107,19 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
         opponentScore: toNumber(isHome ? matchup.away_score : matchup.home_score),
         // A real matchup with no scored categories yet is empty, not mock.
         categoryScores: categoryResult.rows.map((row) => mapCategoryScore(row, isHome)),
-        userLineup,
-        opponentLineup,
+        userLineup: withMatchupTotals(userLineup, userPlayerPoints),
+        opponentLineup: withMatchupTotals(opponentLineup, opponentPlayerPoints),
       };
     },
     async () => mockMatchupDetails(teamId),
   );
+}
+
+function withMatchupTotals(lineup: MatchupDetails["userLineup"], points: Record<string, number>) {
+  return lineup.map((entry) => ({
+    ...entry,
+    matchupTotal: points[entry.player.id] ?? 0,
+  }));
 }
 
 function mockMatchupDetails(teamId: string): MatchupDetails | null {

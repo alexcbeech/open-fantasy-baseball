@@ -87,8 +87,8 @@ export async function activeLineupStats(client: { query: <T>(sql: string, values
  * Period bounds are Monday-04:00-UTC boundaries with an exclusive end;
  * game-log stat_date is the ET official date, so bounds convert to ET days.
  */
-export async function periodLineupStats(
-  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ stats: StatMap }> }> },
+export async function periodLineupPlayerStats(
+  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ player_id: string; stats: StatMap }> }> },
   teamId: string,
   periodStartsAt: Date | string,
   periodEndsAt: Date | string,
@@ -105,7 +105,7 @@ export async function periodLineupStats(
 ) {
   const excludedDates = [...(options.excludeEtDates ?? []), ...(options.excludeEtDate ? [options.excludeEtDate] : [])];
   const result = await client.query(
-    `select psl.stats
+    `select psl.player_id, psl.stats
      from player_stat_line psl
      join lateral (
        select le.slot
@@ -122,7 +122,18 @@ export async function periodLineupStats(
        and lineup_on_date.slot not in ('BN', 'IL', 'NA')`,
     [teamId, periodStartsAt, periodEndsAt, excludedDates],
   );
-  return result.rows.map((row) => row.stats);
+  return result.rows.map((row) => ({ playerId: row.player_id, stats: row.stats }));
+}
+
+export async function periodLineupStats(
+  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ player_id: string; stats: StatMap }> }> },
+  teamId: string,
+  periodStartsAt: Date | string,
+  periodEndsAt: Date | string,
+  options: { excludeEtDate?: string; excludeEtDates?: string[] } = {},
+) {
+  const rows = await periodLineupPlayerStats(client, teamId, periodStartsAt, periodEndsAt, options);
+  return rows.map((row) => row.stats);
 }
 
 export type RecomputeMatchupsResult = {
@@ -134,6 +145,18 @@ export type RecomputeMatchupsResult = {
 export function totalFantasyPoints(statLines: StatMap[]): number {
   const total = statLines.reduce((sum, line) => sum + calculateFantasyPoints(line), 0);
   return Math.round(total * 10) / 10;
+}
+
+/** Matchup-period fantasy points grouped by player id, rounded to one decimal. */
+export function fantasyPointsByPlayer(rows: Array<{ playerId: string; stats: StatMap }>): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const row of rows) {
+    totals[row.playerId] = (totals[row.playerId] ?? 0) + calculateFantasyPoints(row.stats);
+  }
+  for (const playerId of Object.keys(totals)) {
+    totals[playerId] = Math.round(totals[playerId] * 10) / 10;
+  }
+  return totals;
 }
 
 /**

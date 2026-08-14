@@ -1,6 +1,12 @@
 import { query, tryDatabase } from "@/lib/db/client";
 import type { LeagueScoringType, LiveMatchupUpdate, MatchupCategoryResult } from "@/lib/fantasy/types";
-import { compareCategory, computeCategoryValue, periodLineupStats, totalFantasyPoints } from "./matchup-scoring";
+import {
+  compareCategory,
+  computeCategoryValue,
+  fantasyPointsByPlayer,
+  periodLineupPlayerStats,
+  totalFantasyPoints,
+} from "./matchup-scoring";
 import { getGameLinesForPlayersOnDate, todayEtDate, type LivePlayerRef } from "./mlb-live";
 
 type StatMap = Record<string, number | string>;
@@ -223,11 +229,11 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
         currentEtDate,
         latestStoredEtDate: latestStored.rows[0]?.stat_date ?? null,
       });
-      const [homePeriodStats, awayPeriodStats, dailyOverlays] = await Promise.all([
-        periodLineupStats({ query }, matchup.home_team_id, matchup.starts_at, matchup.ends_at, {
+      const [homePeriodRows, awayPeriodRows, dailyOverlays] = await Promise.all([
+        periodLineupPlayerStats({ query }, matchup.home_team_id, matchup.starts_at, matchup.ends_at, {
           excludeEtDates: overlayDates,
         }),
-        periodLineupStats({ query }, matchup.away_team_id, matchup.starts_at, matchup.ends_at, {
+        periodLineupPlayerStats({ query }, matchup.away_team_id, matchup.starts_at, matchup.ends_at, {
           excludeEtDates: overlayDates,
         }),
         Promise.all(
@@ -243,9 +249,14 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
         ),
       ]);
 
+      const homePeriodStats = homePeriodRows.map((row) => row.stats);
+      const awayPeriodStats = awayPeriodRows.map((row) => row.stats);
       const homeOverlayStats: StatMap[] = [];
       const awayOverlayStats: StatMap[] = [];
-      const overlayPoints: Record<string, number> = {};
+      const overlayPoints: Record<string, number> = {
+        ...fantasyPointsByPlayer(homePeriodRows),
+        ...fantasyPointsByPlayer(awayPeriodRows),
+      };
       let hasOverlayStats = false;
       let liveGameInProgress = false;
 

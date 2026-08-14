@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareCategory, computeCategoryValue } from "./matchup-scoring";
+import { compareCategory, computeCategoryValue, fantasyPointsByPlayer } from "./matchup-scoring";
 
 describe("computeCategoryValue", () => {
   it("sums counting categories across the lineup", () => {
@@ -60,5 +60,17 @@ describe("compareCategory", () => {
     expect(compareCategory("ERA", null, 3.4)).toBe("tie");
     expect(compareCategory("WHIP", 1.1, null)).toBe("tie");
     expect(compareCategory("AVG", null, null)).toBe("tie");
+  });
+});
+
+describe("fantasyPointsByPlayer", () => {
+  it("totals each player's game lines across the matchup period", () => {
+    expect(
+      fantasyPointsByPlayer([
+        { playerId: "hitter", stats: { HR: 1, R: 1 } },
+        { playerId: "hitter", stats: { RBI: 2 } },
+        { playerId: "pitcher", stats: { IP: 2, K: 3 } },
+      ]),
+    ).toEqual({ hitter: 7, pitcher: 9 });
   });
 });
