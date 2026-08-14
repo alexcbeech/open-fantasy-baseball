@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
+import { isPublicPagePath } from "@/lib/auth/public-paths";
 
-// Pages that intentionally render without a signed-in session even when Neon
-// Auth is configured: the API docs are public reference material. League
-// creation requires a session -- the creator becomes the commissioner.
-const publicPagePaths = new Set(["/api-docs"]);
-
+// Some pages intentionally render without a signed-in session even when Neon
+// Auth is configured. Invite pages must preserve the token while offering the
+// user sign-in; other league pages remain protected.
 const neonAuthConfigured = Boolean(process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_COOKIE_SECRET);
 
 // Built independently from lib/auth/neon-auth.ts, which imports the pg
@@ -51,7 +50,7 @@ export async function proxy(request: NextRequest) {
     const authResponse = await runNeonAuthProxy(request);
     const isLoginRedirect = authResponse.headers.has("location");
 
-    if (!isLoginRedirect || !publicPagePaths.has(request.nextUrl.pathname)) {
+    if (!isLoginRedirect || !isPublicPagePath(request.nextUrl.pathname)) {
       return authResponse;
     }
   }

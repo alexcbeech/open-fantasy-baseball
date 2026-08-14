@@ -99,8 +99,11 @@ export async function periodLineupStats(
      * log for today (e.g. from a manual mid-day sync) must not double count.
      */
     excludeEtDate?: string;
+    /** Multiple ET dates supplied by the live overlay during rollover. */
+    excludeEtDates?: string[];
   } = {},
 ) {
+  const excludedDates = [...(options.excludeEtDates ?? []), ...(options.excludeEtDate ? [options.excludeEtDate] : [])];
   const result = await client.query(
     `select psl.stats
      from player_stat_line psl
@@ -115,9 +118,9 @@ export async function periodLineupStats(
        and psl.player_id in (select player_id from lineup_entry where team_id = $1)
        and psl.stat_date >= ($2::timestamptz at time zone 'America/New_York')::date
        and psl.stat_date < ($3::timestamptz at time zone 'America/New_York')::date
-       and ($4::date is null or psl.stat_date <> $4::date)
+       and not (psl.stat_date = any($4::date[]))
        and lineup_on_date.slot not in ('BN', 'IL', 'NA')`,
-    [teamId, periodStartsAt, periodEndsAt, options.excludeEtDate ?? null],
+    [teamId, periodStartsAt, periodEndsAt, excludedDates],
   );
   return result.rows.map((row) => row.stats);
 }
@@ -128,7 +131,7 @@ export type RecomputeMatchupsResult = {
 };
 
 /** Team fantasy-point total across its active lineup, to one decimal. */
-function totalFantasyPoints(statLines: StatMap[]): number {
+export function totalFantasyPoints(statLines: StatMap[]): number {
   const total = statLines.reduce((sum, line) => sum + calculateFantasyPoints(line), 0);
   return Math.round(total * 10) / 10;
 }

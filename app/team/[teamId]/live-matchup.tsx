@@ -15,11 +15,9 @@ function orderedStarters(lineup: LineupPlayer[]): LineupPlayer[] {
 }
 
 /**
- * The Matchup tab. Server-rendered with the stored (nightly) category battle,
- * then polls for the live recalculation: whenever today's games have produced
- * stats (in progress or already final) the category values, categories-won
- * score, and each starter's points reflect them, with a LIVE pill while any
- * game is still going. When nobody has played today it shows stored values.
+ * The Matchup tab. Server-rendered with the stored nightly score, then polls
+ * for live recalculation. Category leagues include the category and starter
+ * breakdowns; points leagues show only the matchup-period points head to head.
  */
 export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
   const update = useLiveMatchup(teamId);
@@ -33,6 +31,7 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
 
   const userStarters = orderedStarters(matchup.userLineup);
   const opponentStarters = orderedStarters(matchup.opponentLineup);
+  const isPointsLeague = matchup.scoringType === "h2h-points";
   const rowCount = Math.max(userStarters.length, opponentStarters.length);
   const total = userScore + opponentScore;
   const userShare = total > 0 ? Math.round((userScore / total) * 100) : 50;
@@ -60,48 +59,54 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
           </div>
         </div>
 
-        {/* Yahoo-style category totals directly under the score: this week's
-            numbers hug the centered category column, and the leading side's
-            value reads green. The result is spelled out for screen readers. */}
-        <h3 id="category-heading">Category Breakdown</h3>
-        <div className="category-table" aria-labelledby="category-heading">
-          <div className="category-row category-head" aria-hidden="true">
-            <span>{matchup.userTeam.teamName}</span>
-            <span>Cat</span>
-            <span>{matchup.opponentTeam.teamName}</span>
-          </div>
-          {categoryScores.map((score) => (
-            <div className="category-row" key={score.category}>
-              <span className={score.result === "win" ? "category-value leading" : "category-value"}>{score.userValue}</span>
-              <span className="category-cat">{score.category}</span>
-              <span className={score.result === "loss" ? "category-value leading" : "category-value"}>
-                {score.opponentValue}
-              </span>
-              <span className="visually-hidden">
-                {score.result === "tie" ? "tied" : score.result === "win" ? "you lead" : "opponent leads"}
-              </span>
+        {!isPointsLeague ? (
+          <>
+            {/* Yahoo-style category totals directly under the score: this week's
+                numbers hug the centered category column, and the leading side's
+                value reads green. The result is spelled out for screen readers. */}
+            <h3 id="category-heading">Category Breakdown</h3>
+            <div className="category-table" aria-labelledby="category-heading">
+              <div className="category-row category-head" aria-hidden="true">
+                <span>{matchup.userTeam.teamName}</span>
+                <span>Cat</span>
+                <span>{matchup.opponentTeam.teamName}</span>
+              </div>
+              {categoryScores.map((score) => (
+                <div className="category-row" key={score.category}>
+                  <span className={score.result === "win" ? "category-value leading" : "category-value"}>{score.userValue}</span>
+                  <span className="category-cat">{score.category}</span>
+                  <span className={score.result === "loss" ? "category-value leading" : "category-value"}>
+                    {score.opponentValue}
+                  </span>
+                  <span className="visually-hidden">
+                    {score.result === "tie" ? "tied" : score.result === "win" ? "you lead" : "opponent leads"}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        ) : null}
       </section>
 
-      <section className="panel" aria-labelledby="compare-heading">
-        <h3 id="compare-heading">Starters Head to Head</h3>
-        <div className="matchup-compare" aria-label="Starters head to head">
-          {Array.from({ length: rowCount }).map((_, index) => {
-            const user = userStarters[index];
-            const opponent = opponentStarters[index];
-            const slot = user?.slot ?? opponent?.slot ?? "";
-            return (
-              <div className="compare-row" key={`${slot}-${index}`}>
-                <CompareSide entry={user} livePoints={livePoints} align="left" />
-                <span className="compare-slot">{slot}</span>
-                <CompareSide entry={opponent} livePoints={livePoints} align="right" />
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      {!isPointsLeague ? (
+        <section className="panel" aria-labelledby="compare-heading">
+          <h3 id="compare-heading">Starters Head to Head</h3>
+          <div className="matchup-compare" aria-label="Starters head to head">
+            {Array.from({ length: rowCount }).map((_, index) => {
+              const user = userStarters[index];
+              const opponent = opponentStarters[index];
+              const slot = user?.slot ?? opponent?.slot ?? "";
+              return (
+                <div className="compare-row" key={`${slot}-${index}`}>
+                  <CompareSide entry={user} livePoints={livePoints} align="left" />
+                  <span className="compare-slot">{slot}</span>
+                  <CompareSide entry={opponent} livePoints={livePoints} align="right" />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -286,23 +286,25 @@ export type TodayLines = {
 };
 
 /**
- * Today's boxscore lines for a set of players — in-progress games AND games
- * that already finished today. Finished games matter because the nightly sync
- * hasn't written their game logs yet: without them a day's production would
- * vanish from live scoring the moment the final out is recorded. Fetch cost is
- * bounded by the number of games, same as getLiveLinesForPlayers.
+ * Boxscore lines for one MLB official date. Keeping the date explicit lets
+ * matchup scoring bridge the ET date rollover until the nightly game-log
+ * import has safely persisted the prior day's results.
  */
-export async function getTodayLinesForPlayers(
+export async function getGameLinesForPlayersOnDate(
   players: LivePlayerRef[],
+  officialDate: string,
   baseUrl = defaultBaseUrl,
-  now = new Date(),
 ): Promise<TodayLines> {
   const none: TodayLines = { lines: {}, liveGameInProgress: false };
   if (!players.length) {
     return none;
   }
 
-  const schedule = await cachedFetchJson<ScheduleResponse>(`/schedule?sportId=1&date=${todayIso(now)}`, baseUrl, SCHEDULE_TTL_MS);
+  const schedule = await cachedFetchJson<ScheduleResponse>(
+    `/schedule?sportId=1&date=${officialDate}`,
+    baseUrl,
+    SCHEDULE_TTL_MS,
+  );
   const games = schedule?.dates?.[0]?.games ?? [];
   const gameByTeam = new Map<number, { gamePk: number; live: boolean }>();
   for (const game of games) {
@@ -354,6 +356,21 @@ export async function getTodayLinesForPlayers(
     lines[player.id] = { state: data.state, stats, points: livePoints(stats) };
   }
   return { lines, liveGameInProgress };
+}
+
+/**
+ * Today's boxscore lines for a set of players — in-progress games AND games
+ * that already finished today. Finished games matter because the nightly sync
+ * hasn't written their game logs yet: without them a day's production would
+ * vanish from live scoring the moment the final out is recorded. Fetch cost is
+ * bounded by the number of games, same as getLiveLinesForPlayers.
+ */
+export async function getTodayLinesForPlayers(
+  players: LivePlayerRef[],
+  baseUrl = defaultBaseUrl,
+  now = new Date(),
+): Promise<TodayLines> {
+  return getGameLinesForPlayersOnDate(players, todayIso(now), baseUrl);
 }
 
 /**
