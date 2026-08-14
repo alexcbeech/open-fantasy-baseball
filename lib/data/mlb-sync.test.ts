@@ -11,7 +11,7 @@ vi.mock("@/lib/db/client", () => ({
   getPool: () => ({ connect: async () => currentClient }),
 }));
 
-import { getDefaultScheduleWindow, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
+import { getDefaultScheduleWindow, normalizeMlbRosterStatus, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
 
 describe("MLB sync", () => {
   it("uses a schedule window from yesterday through the next week", () => {
@@ -19,6 +19,66 @@ describe("MLB sync", () => {
       startDate: "2026-07-01",
       endDate: "2026-07-09",
     });
+  });
+
+  it("preserves specific injured-list designations", () => {
+    expect(normalizeMlbRosterStatus({ code: "D60", description: "Injured 60-Day" })).toEqual({
+      status: "injured",
+      statusDetail: "60-Day IL",
+    });
+    expect(normalizeMlbRosterStatus({ code: "D10", description: "Injured 10-Day" })).toEqual({
+      status: "injured",
+      statusDetail: "10-Day IL",
+    });
+  });
+});
+
+describe("syncMlbTeamsAndRosters player statuses", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("writes MLB's D60 status instead of hard-coding active", async () => {
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      void values;
+      if (sql.includes("insert into ingestion_run")) return { rows: [{ id: "run-1" }] };
+      if (sql.includes("insert into player (mlb_player_id, full_name, status, status_detail")) {
+        return { rows: [{ id: "player-1", mlb_player_id: 804606 }] };
+      }
+      return { rows: [] };
+    });
+    currentClient = { query, release: vi.fn() };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        const body = url.includes("/teams?sportId=1")
+          ? { teams: [{ id: 134, abbreviation: "PIT", name: "Pittsburgh Pirates" }] }
+          : url.includes("rosterType=40Man")
+            ? {
+                roster: [
+                  {
+                    person: { id: 804606, fullName: "Konnor Griffin" },
+                    position: { abbreviation: "SS" },
+                    status: { code: "D60", description: "Injured 60-Day" },
+                  },
+                ],
+              }
+            : url.includes("rosterType=active")
+              ? { roster: [] }
+              : { dates: [] };
+        return { ok: true, json: async () => body };
+      }),
+    );
+
+    await syncMlbTeamsAndRosters("https://example.test");
+
+    const playerUpsert = query.mock.calls.find(([sql]) =>
+      (sql as string).includes("insert into player (mlb_player_id, full_name, status, status_detail"),
+    );
+    expect(playerUpsert?.[1]?.[2]).toEqual(["injured"]);
+    expect(playerUpsert?.[1]?.[3]).toEqual(["60-Day IL"]);
   });
 });
 

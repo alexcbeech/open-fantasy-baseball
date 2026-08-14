@@ -96,6 +96,8 @@ export type Player = {
   mlbTeam: string;
   positions: RosterSlot[];
   status: "active" | "day-to-day" | "injured" | "minors";
+  /** Specific upstream designation, such as "60-Day IL". */
+  statusDetail?: string | null;
   availability: "rostered" | "free-agent" | "waivers";
   newsHeadline?: string;
   seasonStats: Record<string, number | string>;

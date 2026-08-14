@@ -5,7 +5,7 @@ import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
 import type { DraftPlayer } from "@/lib/draft/types";
-import { rowPoints, seasonStatLine, statusLabels } from "@/lib/fantasy/player-view";
+import { playerStatusLabel, rowPoints, seasonStatLine } from "@/lib/fantasy/player-view";
 
 type PickSheetProps = {
   player: DraftPlayer;
@@ -75,7 +75,7 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
             </span>
           </span>
           <span className="pick-sheet-badges">
-            <span className={`health-badge ${healthClass}`}>{statusLabels[player.status]}</span>
+            <span className={`health-badge ${healthClass}`}>{playerStatusLabel(player)}</span>
             <PositionBadge slot={player.positions[0]} />
           </span>
         </div>

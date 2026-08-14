@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Player } from "./types";
-import { seasonStatLine } from "./player-view";
+import { formatGameLine, playerStatusLabel, seasonStatLine } from "./player-view";
 
 function player(overrides: Partial<Player> = {}): Player {
   return {
@@ -31,5 +31,15 @@ describe("seasonStatLine", () => {
 
   it("returns null when season stats are unavailable", () => {
     expect(seasonStatLine(player())).toBeNull();
+  });
+});
+
+describe("player status labels", () => {
+  it("shows a specific IL designation even when the player's team has a scheduled game", () => {
+    const injured = player({ status: "injured", statusDetail: "60-Day IL" });
+    const nextGame = { date: "2026-08-15T23:05:00.000Z", opponent: "CHC", homeAway: "home" as const, venue: null };
+
+    expect(playerStatusLabel(injured)).toBe("60-Day IL");
+    expect(formatGameLine(nextGame, injured.status, injured.statusDetail)).toBe("60-Day IL");
   });
 });

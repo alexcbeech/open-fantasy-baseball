@@ -18,6 +18,7 @@ const lineupRowsSql = `
             p.full_name,
             mt.abbreviation as mlb_team,
             p.status,
+            p.status_detail,
             coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
             null::text as news_headline,
             coalesce(season_stats.stats, '{}'::jsonb) as season_stats,

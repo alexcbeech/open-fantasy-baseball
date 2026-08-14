@@ -240,7 +240,7 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
                 filteredPlayers.map((player) => {
                   const liveEntry = live[player.id];
                   const injured = player.status === "injured" || player.status === "day-to-day";
-                  const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status);
+                  const gameLine = liveEntry?.state ?? formatGameLine(player.nextGame, player.status, player.statusDetail);
                   const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
 
                   return (

@@ -8,6 +8,11 @@ export const statusLabels: Record<Player["status"], string> = {
   minors: "Minors",
 };
 
+/** Prefer MLB's specific designation while retaining the coarse app status. */
+export function playerStatusLabel(player: Pick<Player, "status" | "statusDetail">): string {
+  return player.statusDetail || statusLabels[player.status];
+}
+
 /**
  * The two numbers shown on the right of a Yahoo-style player row: bold season
  * fantasy points to date, and the muted rest-of-season projection. The stored
@@ -70,7 +75,14 @@ export function liveLineSummary(stats: Record<string, number | string>): string 
  * The row's game-context line: the player's next game ("Fri 1:05 PM @ CHC"),
  * or a status note when they're not active or have no upcoming game.
  */
-export function formatGameLine(nextGame: PlayerNextGame | null | undefined, status: Player["status"]) {
+export function formatGameLine(
+  nextGame: PlayerNextGame | null | undefined,
+  status: Player["status"],
+  statusDetail?: string | null,
+) {
+  if (status !== "active") {
+    return statusDetail || statusLabels[status];
+  }
   if (nextGame) {
     const when = new Date(nextGame.date).toLocaleString("en-US", {
       weekday: "short",
@@ -79,9 +91,6 @@ export function formatGameLine(nextGame: PlayerNextGame | null | undefined, stat
     });
     const versus = nextGame.homeAway === "home" ? "vs" : "@";
     return `${when} ${versus} ${nextGame.opponent ?? "TBD"}`;
-  }
-  if (status !== "active") {
-    return statusLabels[status];
   }
   return "No game";
 }
