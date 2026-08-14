@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { formatGameLine, rowPoints } from "@/lib/fantasy/player-view";
+import { rowPoints } from "@/lib/fantasy/player-view";
 import type { LineupPlayer } from "@/lib/fantasy/types";
 import { buildLineupGroups } from "./lineup-editor";
+import { LocalGameLine } from "./local-game-line";
 import { PlayerAvatar } from "./player-avatar";
 import { PositionBadge } from "./position-badge";
 
@@ -137,9 +138,12 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                         <span className="player-meta">
                           {player.mlbTeam} &ndash; {player.positions.join(", ")}
                         </span>
-                        <span className={injured ? "player-game injury" : "player-game"}>
-                          {formatGameLine(player.nextGame, player.status, player.statusDetail)}
-                        </span>
+                        <LocalGameLine
+                          className={injured ? "player-game injury" : "player-game"}
+                          nextGame={player.nextGame}
+                          status={player.status}
+                          statusDetail={player.statusDetail}
+                        />
                       </span>
                       <span className="player-points">
                         <span className="points-live">{seasonPts}</span>
