@@ -62,6 +62,9 @@ export type DraftState = {
 export type DraftPlayer = Player & {
   adpRank: number | null;
   adp: number | null;
+  /** Most recent completed MLB game line available for draft-day context. */
+  recentStats: Record<string, number | string>;
+  recentGameDate: string | null;
 };
 
 export class DraftError extends Error {

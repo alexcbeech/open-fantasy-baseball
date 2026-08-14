@@ -1325,7 +1325,14 @@ export async function listDraftPlayers(
         }
 
         const limit = Math.min(Math.max(options.limit ?? 200, 1), 500);
-        const result = await client.query<DbPlayerRow & { adp: string | number | null; adp_rank: number | null }>(
+        const result = await client.query<
+          DbPlayerRow & {
+            adp: string | number | null;
+            adp_rank: number | null;
+            recent_stats: Record<string, number | string> | null;
+            recent_game_date: Date | string | null;
+          }
+        >(
           `select
              p.id,
              p.mlb_player_id,
@@ -1334,8 +1341,11 @@ export async function listDraftPlayers(
              p.status,
              coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
              'free-agent' as availability,
+             latest_news.headline as news_headline,
              coalesce(season_stats.stats, '{}'::jsonb) as season_stats,
              coalesce(projection_stats.stats, '{}'::jsonb) as projected_stats,
+             coalesce(recent_game.stats, '{}'::jsonb) as recent_stats,
+             recent_game.stat_date as recent_game_date,
              p.season_fan_points,
              adp.adp,
              (row_number() over (order by adp.adp_rank asc nulls last, p.season_fan_points desc nulls last, p.full_name))::int as adp_rank
@@ -1349,10 +1359,25 @@ export async function listDraftPlayers(
            left join lateral (
              select stats from player_stat_line psl where psl.player_id = p.id and split = 'projection_ros' order by stat_date desc, collected_at desc limit 1
            ) projection_stats on true
+           left join lateral (
+             select stats, stat_date
+             from player_stat_line psl
+             where psl.player_id = p.id and split = 'game'
+             order by stat_date desc, collected_at desc
+             limit 1
+           ) recent_game on true
+           left join lateral (
+             select headline
+             from player_news pn
+             where pn.player_id = p.id
+             order by published_at desc
+             limit 1
+           ) latest_news on true
            where ($1::uuid is null or p.id not in (select player_id from draft_pick where draft_id = $1))
              ${poolFilterSql(league.settings.playerPool)}
              ${filterSql}
-           group by p.id, mt.abbreviation, season_stats.stats, projection_stats.stats, adp.adp, adp.adp_rank
+           group by p.id, mt.abbreviation, latest_news.headline, season_stats.stats, projection_stats.stats,
+             recent_game.stats, recent_game.stat_date, adp.adp, adp.adp_rank
            order by adp.adp_rank asc nulls last, p.season_fan_points desc nulls last, p.full_name
            limit ${limit}`,
           values,
@@ -1362,6 +1387,8 @@ export async function listDraftPlayers(
           ...mapPlayer(row),
           adp: row.adp !== null && row.adp !== undefined ? Number(row.adp) : null,
           adpRank: row.adp_rank,
+          recentStats: row.recent_stats ?? {},
+          recentGameDate: row.recent_game_date ? new Date(row.recent_game_date).toISOString().slice(0, 10) : null,
         }));
 
         return options.position

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { derivePitcherEligibility, mapMlbStat } from "./mlb-stats-sync";
+import { derivePitcherEligibility, mapMlbStat, seasonStatsPath } from "./mlb-stats-sync";
 
 describe("mapMlbStat", () => {
   it("maps hitting fields to OFB categories with rate stats as strings", () => {
@@ -25,6 +25,12 @@ describe("mapMlbStat", () => {
 
   it("returns an empty map for missing stat objects", () => {
     expect(mapMlbStat(undefined, "hitting")).toEqual({});
+  });
+});
+
+describe("seasonStatsPath", () => {
+  it("requests the full player pool so non-qualified active players get season stats", () => {
+    expect(seasonStatsPath("hitting", 2026, 1000, 0)).toContain("playerPool=ALL");
   });
 });
 

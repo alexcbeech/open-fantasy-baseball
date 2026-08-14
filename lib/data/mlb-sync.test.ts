@@ -11,7 +11,7 @@ vi.mock("@/lib/db/client", () => ({
   getPool: () => ({ connect: async () => currentClient }),
 }));
 
-import { getDefaultScheduleWindow, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
+import { getDefaultScheduleWindow, mapMlbRosterStatus, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
 
 describe("MLB sync", () => {
   it("uses a schedule window from yesterday through the next week", () => {
@@ -19,6 +19,13 @@ describe("MLB sync", () => {
       startDate: "2026-07-01",
       endDate: "2026-07-09",
     });
+  });
+
+  it("maps MLB injured-list and minor-league roster codes", () => {
+    expect(mapMlbRosterStatus({ code: "A", description: "Active" })).toBe("active");
+    expect(mapMlbRosterStatus({ code: "D10", description: "Injured 10-Day" })).toBe("injured");
+    expect(mapMlbRosterStatus({ code: "D60", description: "Injured 60-Day" })).toBe("injured");
+    expect(mapMlbRosterStatus({ code: "RM", description: "Reassigned to Minors" })).toBe("minors");
   });
 });
 

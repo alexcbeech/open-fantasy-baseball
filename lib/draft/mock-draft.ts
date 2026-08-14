@@ -90,5 +90,7 @@ export function mockDraftPlayers(): DraftPlayer[] {
       availability: "free-agent" as const,
       adpRank: MOCK_PICK_COUNT + index + 1,
       adp: MOCK_PICK_COUNT + index + 1.4,
+      recentStats: {},
+      recentGameDate: null,
     }));
 }

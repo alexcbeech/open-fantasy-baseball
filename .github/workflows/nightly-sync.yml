@@ -64,6 +64,12 @@ jobs:
       - name: Sync rest-of-season projections
         run: npm run sync:projections
 
+      # ADP changes throughout draft season. Keep it in the same freshness
+      # pipeline as stats/projections so the draft room never relies on a
+      # one-time manual import.
+      - name: Sync average draft position
+        run: npm run sync:adp
+
       - name: Sync player news
         run: npm run sync:news
 

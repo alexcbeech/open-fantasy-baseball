@@ -285,6 +285,10 @@ async function detectCurrentSeason(baseUrl: string, today: Date): Promise<number
   return today.getUTCFullYear();
 }
 
+export function seasonStatsPath(group: "hitting" | "pitching", season: number, limit: number, offset: number) {
+  return `/stats?stats=season&group=${group}&season=${season}&sportId=1&gameType=R&playerPool=ALL&limit=${limit}&offset=${offset}`;
+}
+
 /**
  * Ingest real 2026 stats from the MLB Stats API into player_stat_line:
  * season stats for every player we know (via the bulk leaderboard), full game
@@ -326,7 +330,7 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
 
         for (;;) {
           const payload = await fetchJson<MlbStatsResponse>(
-            `/stats?stats=season&group=${group}&season=${season}&sportId=1&gameType=R&limit=${limit}&offset=${offset}`,
+            seasonStatsPath(group, season, limit, offset),
             baseUrl,
           );
           const splits = payload.stats?.[0]?.splits ?? [];

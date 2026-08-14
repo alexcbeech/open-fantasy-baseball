@@ -5,7 +5,7 @@ import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { PlayerAvatar } from "@/app/team/[teamId]/player-avatar";
 import { PositionBadge } from "@/app/team/[teamId]/position-badge";
 import type { DraftPlayer } from "@/lib/draft/types";
-import { rowPoints, seasonStatLine, statusLabels } from "@/lib/fantasy/player-view";
+import { rowPoints, statusLabels } from "@/lib/fantasy/player-view";
 
 type PickSheetProps = {
   player: DraftPlayer;
@@ -19,6 +19,20 @@ type PickSheetProps = {
   onToggleQueue: () => void;
   onClose: () => void;
 };
+
+const hitterStatOrder = ["H", "AB", "R", "HR", "RBI", "SB", "AVG"];
+const pitcherStatOrder = ["IP", "K", "ER", "W", "SV", "ERA", "WHIP", "BB", "HA"];
+
+/** Stable, baseball-friendly stat ordering for compact draft summaries. */
+export function draftStatLine(stats: Record<string, number | string>, limit = 7): string {
+  const preferred = "IP" in stats || "ERA" in stats || "WHIP" in stats ? pitcherStatOrder : hitterStatOrder;
+  const keys = [...preferred.filter((key) => key in stats), ...Object.keys(stats).filter((key) => !preferred.includes(key))];
+
+  return keys
+    .slice(0, limit)
+    .map((key) => `${stats[key]} ${key}`)
+    .join(" · ");
+}
 
 /** Bottom-sheet pick confirmation: player summary, health, key stats, draft + queue. */
 export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, isQueued, onConfirm, onToggleQueue, onClose }: PickSheetProps) {
@@ -37,7 +51,9 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
   }, [onClose]);
 
   const { seasonPts, projPts } = rowPoints(player);
-  const statLine = seasonStatLine(player);
+  const seasonLine = draftStatLine(player.seasonStats);
+  const recentLine = draftStatLine(player.recentStats);
+  const projectionLine = draftStatLine(player.projectedStats);
   const healthClass =
     player.status === "day-to-day"
       ? "health-dtd"
@@ -80,9 +96,19 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
           </span>
         </div>
 
+        {player.status !== "active" && player.newsHeadline ? (
+          <div className="draft-health-note" role="status">
+            {player.newsHeadline}
+          </div>
+        ) : null}
+
         <div className="pick-sheet-stats">
           <div className="metric">
             <span className="metric-label">ADP</span>
+            <strong className="metric-value">{player.adp !== null ? player.adp.toFixed(1) : "—"}</strong>
+          </div>
+          <div className="metric">
+            <span className="metric-label">ADP Rank</span>
             <strong className="metric-value">{player.adpRank ?? "—"}</strong>
           </div>
           <div className="metric">
@@ -94,9 +120,11 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
             <strong className="metric-value">{projPts}</strong>
           </div>
         </div>
-        <p className="player-meta pick-sheet-statline">
-          {statLine ? `Season: ${statLine}` : "Season stats are not available yet."}
-        </p>
+        <div className="pick-sheet-stat-groups">
+          <StatGroup label="Season" line={seasonLine} />
+          <StatGroup label={player.recentGameDate ? `Last game · ${player.recentGameDate}` : "Last game"} line={recentLine} />
+          <StatGroup label="Rest-of-season projection" line={projectionLine} />
+        </div>
 
         <button className="primary-button" type="button" disabled={!canPick || busy} aria-busy={busy} onClick={onConfirm}>
           {busy ? "Drafting..." : pickLabel ? `Draft with pick ${pickLabel}` : "Draft"}
@@ -108,6 +136,15 @@ export function PickSheet({ player, pickLabel, canPick, disabledReason, busy, is
         ) : null}
         {!canPick && disabledReason ? <p className="player-meta pick-sheet-reason">{disabledReason}</p> : null}
       </div>
+    </div>
+  );
+}
+
+function StatGroup({ label, line }: { label: string; line: string }) {
+  return (
+    <div className="pick-sheet-stat-group">
+      <span className="metric-label">{label}</span>
+      <p className="player-meta pick-sheet-statline">{line || "Not available yet"}</p>
     </div>
   );
 }
