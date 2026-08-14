@@ -132,7 +132,8 @@ select {
   justify-content: space-between;
   margin: 0 auto;
   max-width: 1100px;
-  padding: 18px 16px 12px;
+  padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px
+    max(16px, env(safe-area-inset-left));
 }
 
 .brand-lockup {
@@ -370,7 +371,79 @@ select {
 .page {
   margin: 0 auto;
   max-width: 1100px;
-  padding: 0 16px 40px;
+  padding: 0 max(16px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+
+.install-card {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  margin: 14px 0;
+  padding: 12px;
+}
+
+.install-card img {
+  border-radius: 10px;
+}
+
+.install-card-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.install-card-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.install-card-action {
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
+.install-card-dismiss {
+  align-self: start;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 5px;
+}
+
+.install-card-dismiss:hover {
+  color: var(--ink);
+}
+
+.install-card-dismiss:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .install-card {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .install-card-action {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .install-card-dismiss {
+    grid-column: 3;
+    grid-row: 1;
+  }
 }
 
 .summary-strip {
@@ -1445,7 +1518,8 @@ button.row {
   max-width: 480px;
   outline: none;
   overflow-y: auto;
-  padding: 8px 16px 24px;
+  padding: 8px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
   width: 100%;
 }
 
@@ -3757,7 +3831,7 @@ button.row {
   background: var(--brand);
   border: 0;
   border-radius: 999px;
-  bottom: 18px;
+  bottom: max(18px, env(safe-area-inset-bottom));
   box-shadow: var(--shadow);
   color: #fff;
   cursor: pointer;
@@ -3769,7 +3843,7 @@ button.row {
   height: 44px;
   padding: 0 18px;
   position: fixed;
-  right: 18px;
+  right: max(18px, env(safe-area-inset-right));
   transition: filter 0.15s ease, transform 0.15s ease;
   z-index: 40;
 }

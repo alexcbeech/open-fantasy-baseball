@@ -146,6 +146,12 @@ WEB_PUSH_SUBJECT="mailto:ops@your-domain"
 
 Without these keys the feature degrades gracefully: the profile screen reports push as unavailable and the send helpers become no-ops. The service worker lives at `public/sw.js`, per-device enable/disable/test controls are on the profile screen, and subscriptions persist in the `push_subscription` table (endpoints the push service reports as gone are pruned automatically). The `/profile/push` routes are documented in the OpenAPI spec.
 
+## Progressive Web App
+
+OFB is installable from supporting browsers through `app/manifest.ts`. On iPhone and iPad, use **Share → Add to Home Screen**; on Android and desktop Chromium, use the in-app install suggestion or the browser's install action. The installed app uses standalone display mode, home-screen icons, safe-area-aware layouts, and the same Web Push controls as the website.
+
+In production, the service worker is registered for every page. It intentionally does not cache authenticated league pages, because those responses contain private and fast-changing data. If a navigation fails without a connection, it serves a small cached offline page; reconnect before viewing data or submitting lineup changes.
+
 ## Testing
 
 Unit tests (Vitest) cover scoring, roster legality, league settings, waiver priority/FAAB, ingestion adapters, and API helpers:

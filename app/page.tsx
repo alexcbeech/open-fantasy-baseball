@@ -4,6 +4,7 @@ import { AuthControl } from "./auth-control";
 import { BrandLockup } from "./brand-lockup";
 import { DraftCountdown } from "./draft-countdown";
 import { LiveScoreRow } from "./live-score-row";
+import { PwaInstallCard } from "./pwa-install-card";
 import { TopbarMenu, type TopbarMenuItem } from "./topbar-menu";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listDraftableLeagues } from "@/lib/data/draft";
@@ -46,6 +47,7 @@ export default async function HomePage() {
       </header>
 
       <section className="page" aria-labelledby="teams-heading">
+        <PwaInstallCard />
         {draftableLeagues.length ? (
           <>
             <div className="section-title">
