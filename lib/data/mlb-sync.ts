@@ -286,11 +286,13 @@ export async function syncMlbTeamsAndRosters(baseUrl = defaultBaseUrl) {
 
     for (const batch of chunk(eligibilityRows, writeChunkSize)) {
       await client.query(
-        `insert into player_position_eligibility (player_id, position, source, valid_from)
-         select t.player_id, t.position, 'mlb-stats-api', current_date
+        `insert into player_position_eligibility (
+           player_id, position, source, valid_from, qualification_method, last_roster_confirmed_at
+         )
+         select t.player_id, t.position, 'mlb-stats-api', current_date, 'roster', current_date
          from unnest($1::uuid[], $2::text[]) as t(player_id, position)
          on conflict (player_id, position) where valid_to is null
-         do update set source = excluded.source`,
+         do update set last_roster_confirmed_at = current_date`,
         [batch.map((row) => row.playerId), batch.map((row) => row.position)],
       );
     }
