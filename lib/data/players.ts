@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { isUuid, query, withDemoFallback } from "@/lib/db/client";
 import { startedGameTodaySql } from "@/lib/data/game-locks";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
+import { countsTowardOrdinaryRoster, positionSetsAfterAdd } from "@/lib/fantasy/roster-capacity";
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
@@ -223,6 +224,7 @@ type PlayerRosterCandidateRow = {
   player_id: string;
   name: string;
   positions: RosterSlot[] | null;
+  current_slot: RosterSlot | null;
   game_started: boolean;
 };
 
@@ -396,14 +398,22 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           : Promise.resolve({ rows: [] as PlayerTeamContextRow[] }),
         hasTeamContext
           ? query<PlayerRosterCandidateRow>(
-              `select re.player_id, p.full_name as name,
-                 coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
-                 ${startedGameTodaySql("re.player_id")} as game_started
-               from roster_entry re
-               join player p on p.id = re.player_id
-               left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
-               where re.team_id = $1 and re.dropped_at is null
-               group by re.player_id, p.full_name
+               `select re.player_id, p.full_name as name,
+                  coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
+                  current_lineup.slot as current_slot,
+                  ${startedGameTodaySql("re.player_id")} as game_started
+                from roster_entry re
+                join player p on p.id = re.player_id
+                left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+                left join lateral (
+                  select le.slot
+                  from lineup_entry le
+                  where le.team_id = re.team_id and le.player_id = re.player_id
+                  order by le.lineup_date desc
+                  limit 1
+                ) current_lineup on true
+                where re.team_id = $1 and re.dropped_at is null
+                group by re.player_id, p.full_name, current_lineup.slot
                order by p.full_name`,
               [teamId],
             )
@@ -450,17 +460,19 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
         const slots = teamContext.settings?.rosterSlots;
 
         if (slots && rosterResult.rows.length) {
-          const postAdd = [
-            ...rosterResult.rows.map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
-            player.positions.length ? (player.positions as RosterSlot[]) : (["UTIL"] as RosterSlot[]),
-          ];
+          const postAdd = positionSetsAfterAdd(
+            rosterResult.rows.map((row) => ({ playerId: row.player_id, positions: row.positions, slot: row.current_slot })),
+            player.positions as RosterSlot[],
+          );
           needsDropToAdd = !rosterFits(postAdd, slots);
 
           if (needsDropToAdd) {
             // A started player's lineup row is immutable today, so they are
             // not a legal drop — the actions API rejects them (409).
             dropCandidates = rosterResult.rows
-              .filter((row) => !(locksApply && row.game_started))
+              .filter(
+                (row) => countsTowardOrdinaryRoster(row.current_slot) && !(locksApply && row.game_started),
+              )
               .map((row) => ({
                 id: row.player_id,
                 name: row.name,

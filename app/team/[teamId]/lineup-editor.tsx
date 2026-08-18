@@ -27,6 +27,7 @@ type LineupEditorProps = {
   initialLineup: LineupPlayer[];
   /** League lock mode: daily per-player locks or whole-lineup first-game. */
   lockMode?: LineupLockMode;
+  rosterSlots?: Record<RosterSlot, number>;
   /** Latest recent-news headline per player id; players absent have no news. */
   newsByPlayerId?: Record<string, string>;
 };
@@ -124,7 +125,13 @@ function ProbableStarterCheck() {
   );
 }
 
-export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsByPlayerId }: LineupEditorProps) {
+export function LineupEditor({
+  teamId,
+  initialLineup,
+  lockMode = "daily",
+  rosterSlots = defaultRosterSlots,
+  newsByPlayerId,
+}: LineupEditorProps) {
   const router = useRouter();
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
@@ -178,7 +185,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
     [initialLineup, slotByPlayerId],
   );
 
-  const groups = useMemo(() => buildLineupGroups(currentLineup, defaultRosterSlots), [currentLineup]);
+  const groups = useMemo(() => buildLineupGroups(currentLineup, rosterSlots), [currentLineup, rosterSlots]);
 
   // In first-game mode the whole lineup locks at the day's earliest first
   // pitch; otherwise a player locks when their own game starts. The live
@@ -250,7 +257,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
    */
   function commitSlots(nextSlots: Record<string, RosterSlot>) {
     const nextLineup = initialLineup.map((entry) => ({ ...entry, slot: nextSlots[entry.player.id] }));
-    const result = validateLineup(nextLineup);
+    const result = validateLineup(nextLineup, rosterSlots);
 
     if (!result.valid) {
       setError(result.issues[0]?.message ?? "That move would create an illegal lineup.");
@@ -475,7 +482,7 @@ export function LineupEditor({ teamId, initialLineup, lockMode = "daily", newsBy
         <MovePlayerSheet
           mover={movingEntry}
           lineup={currentLineup}
-          rosterSlots={defaultRosterSlots}
+          rosterSlots={rosterSlots}
           lockedPlayerIds={lockedPlayerIds}
           onSelect={applyMove}
           onClose={() => setMovingPlayerId(null)}

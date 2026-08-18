@@ -20,8 +20,9 @@ type LocalGameLineProps = {
  */
 export function LocalGameLine({ className, nextGame, status, statusDetail, liveText }: LocalGameLineProps) {
   const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
+  const preferredTimeZone = hydrated ? document.documentElement.dataset.timeZone : "UTC";
   const gameLine =
-    liveText ?? formatGameLine(nextGame, status, statusDetail, hydrated ? undefined : "UTC");
+    liveText ?? formatGameLine(nextGame, status, statusDetail, preferredTimeZone);
 
   return <span className={className}>{gameLine}</span>;
 }

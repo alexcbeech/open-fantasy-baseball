@@ -14,6 +14,7 @@ import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
 import { DeleteLeagueButton } from "./delete-league-button";
+import { TeamNameEditor } from "./team-name-editor";
 import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
@@ -23,7 +24,7 @@ import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import { measureServerOperation } from "@/lib/observability/server-performance";
-import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem } from "@/lib/fantasy/types";
+import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
 
 type TeamPageProps = {
   params: Promise<{
@@ -125,7 +126,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
       <section className="page">
         <div className="team-hero">
           <div>
-            <h1>{team.teamName}</h1>
+            {viewerManagesTeam ? <TeamNameEditor teamId={team.id} initialName={team.teamName} /> : <h1>{team.teamName}</h1>}
             <div className="subtle">
               {formatScoringType(team.scoringType)} - {team.record} - Rank #{team.rank}
             </div>
@@ -180,7 +181,13 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         </nav>
 
         {selectedTab === "Team" ? (
-          <TeamTab teamId={team.id} lineup={teamLineup} watchItems={watchItems} lockMode={leagueSettings.lineupLockMode} />
+          <TeamTab
+            teamId={team.id}
+            lineup={teamLineup}
+            watchItems={watchItems}
+            lockMode={leagueSettings.lineupLockMode}
+            rosterSlots={leagueSettings.rosterSlots}
+          />
         ) : null}
         {selectedTab === "Matchup" ? (
           matchupDetails ? <MatchupTab matchup={matchupDetails} teamId={team.id} /> : <MatchupEmptyState teamName={team.teamName} />
@@ -205,11 +212,13 @@ function TeamTab({
   lineup,
   watchItems,
   lockMode,
+  rosterSlots,
 }: {
   teamId: string;
   lineup: LineupPlayer[];
   watchItems: PlayerWatchItem[];
   lockMode: LineupLockMode;
+  rosterSlots: Record<RosterSlot, number>;
 }) {
   // Recent news renders as a small icon on each affected player's row (the
   // detail sheet carries the full story), replacing the old Player Watch button.
@@ -217,7 +226,13 @@ function TeamTab({
 
   return (
     <div className="team-tab">
-      <LineupEditor teamId={teamId} initialLineup={lineup} lockMode={lockMode} newsByPlayerId={newsByPlayerId} />
+      <LineupEditor
+        teamId={teamId}
+        initialLineup={lineup}
+        lockMode={lockMode}
+        rosterSlots={rosterSlots}
+        newsByPlayerId={newsByPlayerId}
+      />
     </div>
   );
 }

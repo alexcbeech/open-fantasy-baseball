@@ -634,6 +634,62 @@ select {
   margin: 0 0 4px;
 }
 
+.team-name-heading {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.team-name-edit {
+  background: transparent;
+  border: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px;
+}
+
+.team-name-form {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.team-name-form input {
+  font-size: 18px;
+  font-weight: 800;
+  min-width: min(280px, 100%);
+}
+
+.team-name-form :where(.primary-button, .secondary-button) {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.team-name-error {
+  color: var(--loss);
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.text-button {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  color: var(--brand);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 0;
+  text-align: left;
+}
+
 /* The team route performs several permission and data lookups before it can
    render. Keep navigation responsive with a layout-shaped loading state. */
 .team-loading-back {

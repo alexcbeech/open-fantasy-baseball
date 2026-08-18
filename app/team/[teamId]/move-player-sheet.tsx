@@ -31,7 +31,7 @@ type MoveOption =
  * of an eligible slot (the occupant takes the mover's vacated slot). Occupants
  * whose game has started are locked in place, so they're never offered as swaps.
  */
-function buildMoveOptions(
+export function buildMoveOptions(
   mover: LineupPlayer,
   lineup: LineupPlayer[],
   rosterSlots: Record<RosterSlot, number>,
@@ -49,13 +49,15 @@ function buildMoveOptions(
 
     if (occupants.length < limit) {
       options.push({ kind: "open", slot });
-    } else {
-      for (const occupant of occupants) {
-        if (lockedPlayerIds?.has(occupant.player.id)) {
-          continue;
-        }
-        options.push({ kind: "swap", slot, occupant });
+    }
+
+    // Existing occupants remain valid direct-swap targets even when the slot
+    // also has spare capacity (most notably a partially filled bench).
+    for (const occupant of occupants) {
+      if (lockedPlayerIds?.has(occupant.player.id)) {
+        continue;
       }
+      options.push({ kind: "swap", slot, occupant });
     }
   }
 

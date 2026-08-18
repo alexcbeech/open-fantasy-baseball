@@ -1,5 +1,5 @@
 import type { QueryResult, QueryResultRow } from "pg";
-import { getPool, query, withDemoFallback } from "@/lib/db/client";
+import { getPool, isUniqueViolation, query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
@@ -213,6 +213,40 @@ export class LineupSaveError extends Error {
   }
 }
 
+export class TeamNameUpdateError extends Error {
+  constructor(
+    message: string,
+    public status = 409,
+  ) {
+    super(message);
+  }
+}
+
+/** Rename a fantasy team while preserving the league-level unique-name rule. */
+export async function updateTeamName(teamId: string, name: string): Promise<string> {
+  try {
+    const result = await query<{ name: string }>(
+      `update fantasy_team
+       set name = $2, updated_at = now()
+       where id = $1
+       returning name`,
+      [teamId, name],
+    );
+
+    if (!result.rows[0]) {
+      throw new TeamNameUpdateError("Team not found.", 404);
+    }
+
+    return result.rows[0].name;
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new TeamNameUpdateError("Another team in this league already uses that name.", 409);
+    }
+
+    throw error;
+  }
+}
+
 /**
  * Persist the team's current-day lineup slots. Entries are upserted against the
  * team's latest lineup date, so a save is a full or partial slot assignment for
@@ -233,8 +267,14 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
     // or rollback. hashtext maps the team id to the int the lock function takes.
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [teamId]);
 
-    const teamResult = await client.query<{ league_id: string; lineup_lock_mode: string | null }>(
-      `select ft.league_id, l.settings->>'lineupLockMode' as lineup_lock_mode
+    const teamResult = await client.query<{
+      league_id: string;
+      lineup_lock_mode: string | null;
+      roster_slots: Record<RosterSlot, number> | null;
+    }>(
+      `select ft.league_id,
+              l.settings->>'lineupLockMode' as lineup_lock_mode,
+              l.settings->'rosterSlots' as roster_slots
        from fantasy_team ft
        join league l on l.id = ft.league_id
        where ft.id = $1`,
@@ -242,6 +282,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
     );
     const leagueId = teamResult.rows[0]?.league_id;
     const lockMode = teamResult.rows[0]?.lineup_lock_mode === "first-game" ? "first-game" : "daily";
+    const rosterSlots = teamResult.rows[0]?.roster_slots ?? undefined;
 
     if (!leagueId) {
       throw new LineupSaveError("Team not found.", 404);
@@ -265,7 +306,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       player: entry.player,
       matchupTotal: entry.matchupTotal,
     }));
-    const validation = validateLineup(proposedLineup);
+    const validation = validateLineup(proposedLineup, rosterSlots);
     const lockIssues = findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
     if (lockIssues.length) {

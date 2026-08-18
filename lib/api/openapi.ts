@@ -162,6 +162,13 @@ export const openApiDocument = {
           },
         },
       },
+      TeamPatchInput: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string", minLength: 3, maxLength: 40 },
+        },
+      },
       LeagueCreateInput: {
         type: "object",
         required: ["name", "scoringType", "teamCount"],
@@ -435,6 +442,23 @@ export const openApiDocument = {
         responses: {
           "200": { description: "Player detail with news, stat windows, projections, and management flags." },
           "404": { description: "Player not found.", content: errorContent() },
+        },
+      },
+    },
+    "/teams/{teamId}": {
+      patch: {
+        tags: ["Teams"],
+        summary: "Rename a managed fantasy team",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "write:team",
+        parameters: [pathParameter("teamId", "Fantasy team id.")],
+        requestBody: jsonBody({ $ref: "#/components/schemas/TeamPatchInput" }),
+        responses: {
+          "200": { description: "Team renamed." },
+          "400": { description: "Invalid team name.", content: errorContent() },
+          "403": { description: "The caller does not manage this team.", content: errorContent() },
+          "404": { description: "Team not found.", content: errorContent() },
+          "409": { description: "The name is already used in this league.", content: errorContent() },
         },
       },
     },

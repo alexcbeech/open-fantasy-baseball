@@ -18,6 +18,7 @@ vi.mock("@/lib/auth/neon-auth", () => ({
 
 import { GET as playersGet } from "./players/route";
 import { GET as lineupGet, PATCH as lineupPatch } from "./teams/[teamId]/lineup/route";
+import { PATCH as teamPatch } from "./teams/[teamId]/route";
 import { POST as actionsPost } from "./teams/[teamId]/players/[playerId]/actions/route";
 import { DELETE as leagueDelete } from "./leagues/[leagueId]/route";
 
@@ -134,6 +135,21 @@ describe("POST /teams/{teamId}/players/{playerId}/actions (write:transactions)",
         body: JSON.stringify({ action: "add" }),
       }),
       playerContext("team-1", "player-1"),
+    );
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toMatch(/configured database/i);
+  });
+});
+
+describe("PATCH /teams/{teamId} (write:team)", () => {
+  it("does not pretend to rename demo data without a configured database", async () => {
+    const response = await teamPatch(
+      new Request(`${base}/teams/team-1`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "New Team Name" }),
+      }),
+      teamContext("team-1"),
     );
     expect(response.status).toBe(503);
     expect((await response.json()).error).toMatch(/configured database/i);

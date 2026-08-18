@@ -46,7 +46,7 @@ export default async function RootLayout({
   const showFeedback = !authEnabled || Boolean(await getCurrentOfbUser());
 
   return (
-    <html lang="en" data-theme={profile.displayMode} suppressHydrationWarning>
+    <html lang="en" data-theme={profile.displayMode} data-time-zone={profile.timeZone} suppressHydrationWarning>
       <body>
         <PwaRegistration />
         {children}

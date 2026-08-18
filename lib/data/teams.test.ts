@@ -10,9 +10,10 @@ vi.mock("@/lib/db/client", () => ({
   tryDatabase: async (op: () => unknown) => op(),
   withDemoFallback: async (op: () => unknown) => op(),
   query,
+  isUniqueViolation: () => false,
 }));
 
-import { getLineupForTeam, getTeamSummary, listTeamsForCurrentUser } from "./teams";
+import { getLineupForTeam, getTeamSummary, listTeamsForCurrentUser, updateTeamName } from "./teams";
 
 beforeEach(() => {
   poolQuery.mockReset();
@@ -48,6 +49,13 @@ describe("teams data layer with a configured database", () => {
     const [sql, params] = query.mock.calls[0];
     expect(sql).toMatch(/u\.id::text = \$1 or u\.email = \$2/);
     expect(params).toEqual(["demo-user", "alex@example.local"]);
+  });
+
+  it("renames a team and returns the normalized stored name", async () => {
+    query.mockResolvedValueOnce({ rows: [{ name: "Moon Shots" }] });
+
+    await expect(updateTeamName("team-1", "Moon Shots")).resolves.toBe("Moon Shots");
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("update fantasy_team"), ["team-1", "Moon Shots"]);
   });
 
   it("computes standings once when multiple managed teams share a league", async () => {
