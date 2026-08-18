@@ -7,6 +7,7 @@ import type { Player, RosterSlot } from "@/lib/fantasy/types";
 import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 import { LocalGameLine } from "./local-game-line";
+import { ProbableStarterCheck } from "./probable-starter-check";
 
 type PlayersBrowserProps = {
   teamId: string;
@@ -256,7 +257,10 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={`View ${player.name} details`}
                         >
-                          <span className="player-name">{player.name}</span>
+                          <span className="player-name-row">
+                            <span className="player-name">{player.name}</span>
+                            {player.probableStarterToday ? <ProbableStarterCheck /> : null}
+                          </span>
                           <LocalGameLine
                             className={gameClass}
                             nextGame={player.nextGame}
