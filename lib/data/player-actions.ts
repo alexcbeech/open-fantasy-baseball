@@ -4,6 +4,7 @@ import { getPlayerDetail } from "@/lib/data/players";
 import { isPlayerInPool } from "@/lib/data/player-pool";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
+import { positionSetsAfterAdd } from "@/lib/fantasy/roster-capacity";
 import { nextWaiverProcessingTime } from "@/lib/fantasy/waivers";
 import type { LeagueSettings, PlayerDetail, RosterSlot } from "@/lib/fantasy/types";
 import type { PoolClient } from "pg";
@@ -51,6 +52,9 @@ export async function applyPlayerManagementAction(
 
   try {
     await client.query("begin");
+    // Serialize roster and lineup mutations for this team so simultaneous adds
+    // cannot both observe the same final open active-roster seat.
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [teamId]);
 
     const team = await getTeamContext(client, teamId);
     const player = await getPlayerContext(client, playerId);
@@ -452,13 +456,21 @@ async function assertPostActionRosterFits(
   dropPlayerId: string | undefined,
   noRoomMessage: string,
 ) {
-  const roster = await client.query<{ player_id: string; positions: RosterSlot[] | null }>(
+  const roster = await client.query<{ player_id: string; positions: RosterSlot[] | null; current_slot: RosterSlot | null }>(
     `select re.player_id,
-       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions
+       coalesce(array_agg(distinct ppe.position) filter (where ppe.position is not null), '{}') as positions,
+       current_lineup.slot as current_slot
      from roster_entry re
      left join player_position_eligibility ppe on ppe.player_id = re.player_id and ppe.valid_to is null
+     left join lateral (
+       select le.slot
+       from lineup_entry le
+       where le.team_id = re.team_id and le.player_id = re.player_id
+       order by le.lineup_date desc
+       limit 1
+     ) current_lineup on true
      where re.team_id = $1 and re.dropped_at is null
-     group by re.player_id`,
+     group by re.player_id, current_lineup.slot`,
     [teamId],
   );
 
@@ -470,12 +482,11 @@ async function assertPostActionRosterFits(
     `select position from player_position_eligibility where player_id = $1 and valid_to is null`,
     [incomingPlayerId],
   );
-  const postAction = [
-    ...roster.rows
-      .filter((row) => row.player_id !== dropPlayerId)
-      .map((row) => (row.positions?.length ? row.positions : (["UTIL"] as RosterSlot[]))),
-    incomingPositions.rows.length ? incomingPositions.rows.map((row) => row.position) : (["UTIL"] as RosterSlot[]),
-  ];
+  const postAction = positionSetsAfterAdd(
+    roster.rows.map((row) => ({ playerId: row.player_id, positions: row.positions, slot: row.current_slot })),
+    incomingPositions.rows.map((row) => row.position),
+    dropPlayerId,
+  );
 
   if (!rosterFits(postAction, team.settings.rosterSlots)) {
     throw new PlayerActionError(noRoomMessage, 409);
@@ -507,13 +518,25 @@ async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: s
   // same as any other slot change.
   await assertLineupChangeUnlocked(client, team, teamId, playerId, "Lineup moves");
 
-  const slotCount = await client.query<{ count: number | string }>(
-    "select count from league_roster_slot where league_id = $1 and slot = $2",
-    [team.leagueId, slot],
+  const slotCount = await client.query<{ count: number | string; used: number | string }>(
+    `select lrs.count,
+       (select count(*)
+        from lineup_entry le
+        where le.team_id = $3
+          and le.player_id <> $4
+          and le.slot = $2
+          and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $3)) as used
+     from league_roster_slot lrs
+     where lrs.league_id = $1 and lrs.slot = $2`,
+    [team.leagueId, slot, teamId, playerId],
   );
 
-  if (Number(slotCount.rows[0]?.count ?? 0) <= 0) {
+  const slotLimit = Number(slotCount.rows[0]?.count ?? 0);
+  if (slotLimit <= 0) {
     throw new PlayerActionError(`${slot} slots are not enabled for this league.`, 422);
+  }
+  if (Number(slotCount.rows[0]?.used ?? 0) >= slotLimit) {
+    throw new PlayerActionError(`All ${slot} slots are full.`, 409);
   }
 
   const scoringPeriod = await client.query<{ id: string }>(

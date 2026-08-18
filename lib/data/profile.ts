@@ -4,9 +4,23 @@ import { getPool, query, tryDatabase } from "@/lib/db/client";
 export const demoUserEmail = "alex@example.local";
 export const displayModes = ["auto", "light", "dark"] as const;
 
+export function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const profilePreferenceUpdateSchema = z.object({
   displayName: z.string().trim().min(1, "Display name is required.").max(80, "Display name is too long."),
-  timeZone: z.string().trim().min(1, "Time zone is required.").max(80, "Time zone is too long."),
+  timeZone: z
+    .string()
+    .trim()
+    .min(1, "Time zone is required.")
+    .max(80, "Time zone is too long.")
+    .refine(isValidTimeZone, "Choose a valid time zone."),
   displayMode: z.enum(displayModes),
   notifications: z.object({
     injuries: z.boolean(),

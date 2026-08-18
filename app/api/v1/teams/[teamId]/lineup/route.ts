@@ -36,14 +36,16 @@ export async function GET(_request: Request, { params }: RouteContext) {
       return accessDenied;
     }
 
-    if (!(await findTeam(teamId))) {
+    const team = await findTeam(teamId);
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
     const lineup = await getLineupForTeam(teamId);
+    const leagueSettings = await getLeagueSettings(team.leagueId);
 
     return NextResponse.json({
       lineup,
-      validation: validateLineup(lineup),
+      validation: validateLineup(lineup, leagueSettings.rosterSlots),
     });
   });
 }
@@ -68,7 +70,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Team not found" }, { status: 404 });
   }
 
-  const lockMode = (await getLeagueSettings(team.leagueId)).lineupLockMode ?? "daily";
+  const leagueSettings = await getLeagueSettings(team.leagueId);
+  const lockMode = leagueSettings.lineupLockMode ?? "daily";
 
   let body: {
     entries?: Array<{
@@ -110,7 +113,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     matchupTotal: current.matchupTotal,
   }));
 
-  const validation = validateLineup(proposedLineup);
+  const validation = validateLineup(proposedLineup, leagueSettings.rosterSlots);
   // A player whose MLB game has started is locked in place until the next
   // daily rollover (first-game mode locks the whole lineup at the day's first
   // pitch); the API enforces this so it can't be bypassed client-side.

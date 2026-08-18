@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import { oauthScopes, scopeDescriptions } from "@/lib/auth/scopes";
 import { PushNotificationsControl } from "./push-notifications-control";
 import type { ApiTokenSummary, CreatedApiToken } from "@/lib/data/api-tokens";
@@ -40,6 +40,31 @@ const notificationOptions = [
   },
 ] as const;
 
+const commonTimeZones = [
+  ["America/Los_Angeles", "Pacific Time"],
+  ["America/Denver", "Mountain Time"],
+  ["America/Chicago", "Central Time"],
+  ["America/New_York", "Eastern Time"],
+  ["America/Halifax", "Atlantic Time"],
+  ["America/Sao_Paulo", "São Paulo"],
+  ["Europe/London", "London"],
+  ["Europe/Paris", "Paris"],
+  ["Europe/Berlin", "Berlin"],
+  ["Europe/Madrid", "Madrid"],
+  ["Europe/Rome", "Rome"],
+  ["Europe/Warsaw", "Warsaw"],
+  ["Europe/Athens", "Athens"],
+  ["Asia/Dubai", "Dubai"],
+  ["Asia/Kolkata", "India"],
+  ["Asia/Singapore", "Singapore"],
+  ["Asia/Tokyo", "Tokyo"],
+  ["Australia/Sydney", "Sydney"],
+  ["Pacific/Auckland", "Auckland"],
+  ["UTC", "UTC"],
+] as const;
+
+const subscribe = () => () => undefined;
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
 }
@@ -47,6 +72,8 @@ function formatDate(value: string) {
 export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: ProfilePreferencesFormProps) {
   const [displayName, setDisplayName] = useState(initialProfile.displayName);
   const [timeZone, setTimeZone] = useState(initialProfile.timeZone);
+  const hydrated = useSyncExternalStore(subscribe, () => true, () => false);
+  const deviceTimeZone = hydrated ? Intl.DateTimeFormat().resolvedOptions().timeZone || null : null;
   const [displayMode, setDisplayMode] = useState<DisplayMode>(initialProfile.displayMode);
   const [notifications, setNotifications] = useState(initialProfile.notifications);
   const [apiTokens, setApiTokens] = useState(initialApiTokens);
@@ -94,6 +121,7 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
 
       setDisplayName(result.profile.displayName);
       setTimeZone(result.profile.timeZone);
+      document.documentElement.dataset.timeZone = result.profile.timeZone;
       setDisplayMode(result.profile.displayMode);
       setNotifications(result.profile.notifications);
       setSubmitState({ kind: "success", message: "Preferences saved." });
@@ -196,12 +224,23 @@ export function ProfilePreferencesForm({ initialProfile, initialApiTokens }: Pro
             <label className="field">
               <span>Time Zone</span>
               <select value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>
-                <option value="America/Los_Angeles">Pacific Time</option>
-                <option value="America/Denver">Mountain Time</option>
-                <option value="America/Chicago">Central Time</option>
-                <option value="America/New_York">Eastern Time</option>
-                <option value="UTC">UTC</option>
+                {!commonTimeZones.some(([value]) => value === timeZone) && timeZone !== deviceTimeZone ? (
+                  <option value={timeZone}>{timeZone}</option>
+                ) : null}
+                {deviceTimeZone && !commonTimeZones.some(([value]) => value === deviceTimeZone) ? (
+                  <option value={deviceTimeZone}>{deviceTimeZone} (this device)</option>
+                ) : null}
+                {commonTimeZones.map(([value, label]) => (
+                  <option value={value} key={value}>
+                    {label}{deviceTimeZone === value ? " (this device)" : ""}
+                  </option>
+                ))}
               </select>
+              {deviceTimeZone && deviceTimeZone !== timeZone ? (
+                <button className="text-button" type="button" onClick={() => setTimeZone(deviceTimeZone)}>
+                  Use this device: {deviceTimeZone}
+                </button>
+              ) : null}
             </label>
             <label className="field">
               <span>Display Mode</span>

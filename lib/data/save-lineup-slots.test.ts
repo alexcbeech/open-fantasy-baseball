@@ -41,13 +41,13 @@ function lineupRow(overrides: Partial<LineupRow> & Pick<LineupRow, "id" | "slot"
   };
 }
 
-function makeClient(lineupRows: LineupRow[]): FakeClient {
+function makeClient(lineupRows: LineupRow[], rosterSlots?: Record<string, number>): FakeClient {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes("player_position_eligibility")) {
       return { rows: lineupRows };
     }
     if (sql.includes("select ft.league_id")) {
-      return { rows: [{ league_id: "league-1", lineup_lock_mode: "daily" }] };
+      return { rows: [{ league_id: "league-1", lineup_lock_mode: "daily", roster_slots: rosterSlots ?? null }] };
     }
     if (sql.includes("from scoring_period")) {
       return { rows: [{ id: "scoring-period-1" }] };
@@ -91,6 +91,19 @@ describe("saveLineupSlots atomic re-validation", () => {
     ]);
 
     await expect(saveLineupSlots("team-1", [{ playerId: "locked-star", slot: "BN" }])).rejects.toThrow(/locked/i);
+    expect(sqlCalls().some((sql) => sql.includes("insert into lineup_entry"))).toBe(false);
+  });
+
+  it("uses the league's configured IL capacity instead of the app default", async () => {
+    currentClient = makeClient(
+      [
+        lineupRow({ id: "injured-a", slot: "IL", status: "injured", positions: ["OF"] }),
+        lineupRow({ id: "injured-b", slot: "BN", status: "injured", positions: ["OF"] }),
+      ],
+      { C: 1, "1B": 1, "2B": 1, "3B": 1, SS: 1, OF: 3, UTIL: 2, SP: 2, RP: 2, P: 4, BN: 5, IL: 1, NA: 0 },
+    );
+
+    await expect(saveLineupSlots("team-1", [{ playerId: "injured-b", slot: "IL" }])).rejects.toThrow(/IL has 2 players/i);
     expect(sqlCalls().some((sql) => sql.includes("insert into lineup_entry"))).toBe(false);
   });
 
