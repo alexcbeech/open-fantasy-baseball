@@ -1,9 +1,62 @@
 import { describe, expect, it } from "vitest";
-import { bulkSeasonStatsPath, derivePitcherEligibility, mapMlbStat } from "./mlb-stats-sync";
+import {
+  bulkFieldingStatsPath,
+  bulkSeasonStatsPath,
+  deriveHitterEligibilityFromMlbSplits,
+  derivePitcherEligibility,
+  mapMlbStat,
+} from "./mlb-stats-sync";
 
 describe("bulkSeasonStatsPath", () => {
   it("requests MLB's complete player pool instead of qualified players only", () => {
     expect(bulkSeasonStatsPath("hitting", 2026, 1000, 0)).toContain("playerPool=ALL");
+  });
+});
+
+describe("bulkFieldingStatsPath", () => {
+  it("requests the complete MLB player pool for a specific season", () => {
+    expect(bulkFieldingStatsPath(2025, 1000, 0)).toBe(
+      "/stats?stats=season&group=fielding&season=2025&sportId=1&gameType=R&playerPool=ALL&limit=1000&offset=0",
+    );
+  });
+});
+
+describe("deriveHitterEligibilityFromMlbSplits", () => {
+  it("grants Ivan Herrera catcher eligibility from his 2025 MLB fielding line", () => {
+    const result = deriveHitterEligibilityFromMlbSplits(
+      [
+        {
+          player: { id: 671056 },
+          position: { abbreviation: "C" },
+          stat: { gamesStarted: 13, gamesPlayed: 14 },
+        },
+        {
+          player: { id: 671056 },
+          position: { abbreviation: "LF" },
+          stat: { gamesStarted: 4, gamesPlayed: 4 },
+        },
+        {
+          player: { id: 671056 },
+          position: { abbreviation: "DH" },
+          stat: { gamesStarted: 89, gamesPlayed: 89 },
+        },
+      ],
+      2025,
+      new Map([[671056, "herrera-id"]]),
+    );
+
+    expect(result.observations).toEqual([
+      { playerId: "herrera-id", season: 2025, position: "C", gamesStarted: 13, appearances: 14 },
+      { playerId: "herrera-id", season: 2025, position: "OF", gamesStarted: 4, appearances: 4 },
+    ]);
+    expect(result.eligibility).toEqual([
+      {
+        playerId: "herrera-id",
+        position: "C",
+        qualificationMethod: "fielding",
+        lastQualifiedSeason: 2025,
+      },
+    ]);
   });
 });
 

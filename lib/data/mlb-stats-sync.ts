@@ -1,5 +1,10 @@
 import type { PoolClient } from "pg";
 import { getPool } from "../db/client";
+import {
+  deriveHitterPositionEligibility,
+  normalizeHitterFieldingPosition,
+  type FieldingUsage,
+} from "../fantasy/position-eligibility-rules";
 import { calculateFantasyPoints } from "../fantasy/scoring";
 import { chunk, mapWithConcurrency } from "./batching";
 
@@ -51,12 +56,14 @@ type MlbSplit = {
   stat?: Record<string, unknown>;
   date?: string;
   game?: { gamePk?: number };
+  position?: { abbreviation?: string };
 };
 
 type MlbStatBlock = {
   group?: { displayName?: string };
   type?: { displayName?: string };
   splits?: MlbSplit[];
+  totalSplits?: number;
 };
 
 type MlbStatsResponse = { stats?: MlbStatBlock[] };
@@ -147,7 +154,7 @@ export function derivePitcherEligibility(gamesStarted: number, gamesPlayed: numb
  * Starter/reliever eligibility rows for one pitcher derived from a season
  * pitching stat block. Empty for players with no pitching appearances yet.
  */
-function pitcherEligibilityRows(playerId: string, stat: Record<string, unknown> | undefined): EligibilityRow[] {
+function pitcherEligibilityRows(playerId: string, stat: Record<string, unknown> | undefined, season: number): EligibilityRow[] {
   if (!stat) {
     return [];
   }
@@ -155,6 +162,8 @@ function pitcherEligibilityRows(playerId: string, stat: Record<string, unknown> 
   return derivePitcherEligibility(Number(stat.gamesStarted ?? 0), Number(stat.gamesPlayed ?? 0)).map((position) => ({
     playerId,
     position,
+    qualificationMethod: "pitching",
+    lastQualifiedSeason: season,
   }));
 }
 
@@ -166,7 +175,20 @@ type StatLineRow = {
   stats: StatMap;
 };
 
-type EligibilityRow = { playerId: string; position: string };
+type EligibilityRow = {
+  playerId: string;
+  position: string;
+  qualificationMethod: "fielding" | "pitching";
+  lastQualifiedSeason: number;
+};
+
+type PositionObservationRow = {
+  playerId: string;
+  season: number;
+  position: string;
+  gamesStarted: number;
+  appearances: number;
+};
 
 /**
  * Multi-row upsert of stat lines. The feed can emit two rows for one conflict
@@ -218,16 +240,77 @@ async function flushFanPoints(client: PoolClient, pointsByPlayerId: Map<string, 
 }
 
 async function flushEligibility(client: PoolClient, rows: EligibilityRow[]) {
-  const rowByKey = new Map(rows.map((row) => [`${row.playerId}|${row.position}`, row]));
+  const rowByKey = new Map<string, EligibilityRow>();
+  for (const row of rows) {
+    const key = `${row.playerId}|${row.position}`;
+    const existing = rowByKey.get(key);
+    if (!existing || row.lastQualifiedSeason > existing.lastQualifiedSeason) {
+      rowByKey.set(key, row);
+    }
+  }
 
   for (const batch of chunk([...rowByKey.values()], writeChunkSize)) {
     await client.query(
-      `insert into player_position_eligibility (player_id, position, source, valid_from)
-       select t.player_id, t.position, $3, current_date
-       from unnest($1::uuid[], $2::text[]) as t(player_id, position)
+      `insert into player_position_eligibility (
+         player_id, position, source, valid_from, qualification_method, last_qualified_season
+       )
+       select t.player_id, t.position, $5, current_date, t.qualification_method, t.last_qualified_season
+       from unnest($1::uuid[], $2::text[], $3::text[], $4::integer[])
+         as t(player_id, position, qualification_method, last_qualified_season)
        on conflict (player_id, position) where valid_to is null
-       do update set source = excluded.source`,
-      [batch.map((row) => row.playerId), batch.map((row) => row.position), source],
+       do update set
+         source = excluded.source,
+         qualification_method = excluded.qualification_method,
+         last_qualified_season = greatest(
+           coalesce(player_position_eligibility.last_qualified_season, excluded.last_qualified_season),
+           excluded.last_qualified_season
+         )`,
+      [
+        batch.map((row) => row.playerId),
+        batch.map((row) => row.position),
+        batch.map((row) => row.qualificationMethod),
+        batch.map((row) => row.lastQualifiedSeason),
+        source,
+      ],
+    );
+  }
+}
+
+async function flushPositionObservations(client: PoolClient, rows: PositionObservationRow[]) {
+  for (const batch of chunk(rows, writeChunkSize)) {
+    await client.query(
+      `insert into player_position_observation (
+         player_id, season_year, position, games_started, appearances, source
+       )
+       select t.player_id, t.season_year, t.position, t.games_started, t.appearances, $6
+       from unnest($1::uuid[], $2::integer[], $3::text[], $4::integer[], $5::integer[])
+         as t(player_id, season_year, position, games_started, appearances)
+       on conflict (player_id, season_year, position, source) do update set
+         games_started = excluded.games_started,
+         appearances = excluded.appearances,
+         observed_at = now()`,
+      [
+        batch.map((row) => row.playerId),
+        batch.map((row) => row.season),
+        batch.map((row) => row.position),
+        batch.map((row) => row.gamesStarted),
+        batch.map((row) => row.appearances),
+        source,
+      ],
+    );
+  }
+}
+
+async function flushSeasonAppearances(client: PoolClient, season: number, gamesByPlayerId: Map<string, number>) {
+  for (const batch of chunk([...gamesByPlayerId.entries()], writeChunkSize)) {
+    await client.query(
+      `insert into player_season_appearance (player_id, season_year, games_played, source)
+       select t.player_id, $2, t.games_played, $3
+       from unnest($1::uuid[], $4::integer[]) as t(player_id, games_played)
+       on conflict (player_id, season_year, source) do update set
+         games_played = excluded.games_played,
+         observed_at = now()`,
+      [batch.map(([playerId]) => playerId), season, source, batch.map(([, games]) => games)],
     );
   }
 }
@@ -242,8 +325,10 @@ async function flushEligibility(client: PoolClient, rows: EligibilityRow[]) {
 export async function backfillPitcherSlotEligibility(client: PoolClient) {
   // Scheduled starters are starters, even before they clear the start threshold.
   await client.query(
-    `insert into player_position_eligibility (player_id, position, source, valid_from)
-     select distinct probable.player_id, 'SP', $1, current_date
+    `insert into player_position_eligibility (
+       player_id, position, source, valid_from, qualification_method
+     )
+     select distinct probable.player_id, 'SP', $1, current_date, 'pitching-fallback'
      from (
        select home_probable_pitcher_player_id as player_id from mlb_game where home_probable_pitcher_player_id is not null
        union
@@ -259,8 +344,10 @@ export async function backfillPitcherSlotEligibility(client: PoolClient) {
 
   // Any pitcher still lacking a dedicated slot defaults to reliever.
   await client.query(
-    `insert into player_position_eligibility (player_id, position, source, valid_from)
-     select distinct pitcher.player_id, 'RP', $1, current_date
+    `insert into player_position_eligibility (
+       player_id, position, source, valid_from, qualification_method
+     )
+     select distinct pitcher.player_id, 'RP', $1, current_date, 'pitching-fallback'
      from player_position_eligibility pitcher
      where pitcher.position = 'P' and pitcher.valid_to is null
        and not exists (
@@ -293,6 +380,114 @@ export function bulkSeasonStatsPath(
   offset: number,
 ) {
   return `/stats?stats=season&group=${group}&season=${season}&sportId=1&gameType=R&playerPool=ALL&limit=${limit}&offset=${offset}`;
+}
+
+export function bulkFieldingStatsPath(season: number, limit: number, offset: number) {
+  return `/stats?stats=season&group=fielding&season=${season}&sportId=1&gameType=R&playerPool=ALL&limit=${limit}&offset=${offset}`;
+}
+
+function usageCount(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0;
+}
+
+export function deriveHitterEligibilityFromMlbSplits(
+  splits: MlbSplit[],
+  season: number,
+  idByMlb: Map<number, string>,
+) {
+  const usageByPlayerPosition = new Map<string, PositionObservationRow>();
+
+  for (const split of splits) {
+    const playerId = split.player?.id != null ? idByMlb.get(split.player.id) : undefined;
+    const statPosition = (split.stat?.position as { abbreviation?: string } | undefined)?.abbreviation;
+    const position = normalizeHitterFieldingPosition(split.position?.abbreviation ?? statPosition);
+    if (!playerId || !position) {
+      continue;
+    }
+
+    const key = `${playerId}|${position}`;
+    const current = usageByPlayerPosition.get(key) ?? {
+      playerId,
+      season,
+      position,
+      gamesStarted: 0,
+      appearances: 0,
+    };
+    current.gamesStarted += usageCount(split.stat?.gamesStarted);
+    current.appearances += usageCount(split.stat?.gamesPlayed ?? split.stat?.games);
+    usageByPlayerPosition.set(key, current);
+  }
+
+  const observations = [...usageByPlayerPosition.values()];
+  const eligibility: EligibilityRow[] = [];
+  const usageByPlayer = new Map<string, FieldingUsage[]>();
+  for (const observation of observations) {
+    const usages = usageByPlayer.get(observation.playerId) ?? [];
+    usages.push({
+      position: observation.position,
+      gamesStarted: observation.gamesStarted,
+      appearances: observation.appearances,
+    });
+    usageByPlayer.set(observation.playerId, usages);
+  }
+
+  for (const [playerId, usages] of usageByPlayer) {
+    for (const qualified of deriveHitterPositionEligibility(usages)) {
+      eligibility.push({
+        playerId,
+        position: qualified.position,
+        qualificationMethod: "fielding",
+        lastQualifiedSeason: season,
+      });
+    }
+  }
+
+  return { observations, eligibility };
+}
+
+/**
+ * Read current and recent MLB fielding totals, retaining every observed
+ * position while granting only positions that meet the 5-start/10-appearance
+ * rule. Multiple team stints and LF/CF/RF rows are aggregated before the rule
+ * is evaluated.
+ */
+async function fetchHitterPositionEligibility(
+  baseUrl: string,
+  currentSeason: number,
+  idByMlb: Map<number, string>,
+) {
+  const observations: PositionObservationRow[] = [];
+  const eligibility: EligibilityRow[] = [];
+  let rowsSeen = 0;
+
+  for (const season of [currentSeason, currentSeason - 1, currentSeason - 2]) {
+    const seasonSplits: MlbSplit[] = [];
+    const limit = 1000;
+    let offset = 0;
+
+    for (;;) {
+      const payload = await fetchJson<MlbStatsResponse>(bulkFieldingStatsPath(season, limit, offset), baseUrl);
+      const block = payload.stats?.[0];
+      const splits = block?.splits ?? [];
+
+      for (const split of splits) {
+        rowsSeen += 1;
+        seasonSplits.push(split);
+      }
+
+      offset += splits.length;
+      if (splits.length === 0 || offset >= (block?.totalSplits ?? offset)) {
+        break;
+      }
+    }
+
+    const seasonResult = deriveHitterEligibilityFromMlbSplits(seasonSplits, season, idByMlb);
+    observations.push(...seasonResult.observations);
+    eligibility.push(...seasonResult.eligibility);
+  }
+
+  return { observations, eligibility, rowsSeen };
 }
 
 /**
@@ -328,6 +523,7 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
       // 1) Bulk season stats for every player we can match by MLB id.
       const seasonLines: StatLineRow[] = [];
       const seasonFanPoints = new Map<string, number>();
+      const seasonAppearances = new Map<string, number>();
       const seasonEligibility: EligibilityRow[] = [];
 
       for (const group of ["hitting", "pitching"] as const) {
@@ -349,8 +545,14 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
               seasonLines.push({ playerId, statDate, gamePk: null, split: "season", stats });
               seasonFanPoints.set(playerId, calculateFantasyPoints(stats));
             }
+            if (group === "hitting") {
+              seasonAppearances.set(
+                playerId,
+                Math.max(seasonAppearances.get(playerId) ?? 0, usageCount(split.stat?.gamesPlayed)),
+              );
+            }
             if (group === "pitching") {
-              seasonEligibility.push(...pitcherEligibilityRows(playerId, split.stat));
+              seasonEligibility.push(...pitcherEligibilityRows(playerId, split.stat, season));
             }
           }
 
@@ -363,6 +565,12 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
 
       rowsWritten += await flushStatLines(client, seasonLines);
       await flushFanPoints(client, seasonFanPoints);
+      await flushSeasonAppearances(client, season, seasonAppearances);
+
+      const hitterPositions = await fetchHitterPositionEligibility(baseUrl, season, idByMlb);
+      rowsSeen += hitterPositions.rowsSeen;
+      await flushPositionObservations(client, hitterPositions.observations);
+      seasonEligibility.push(...hitterPositions.eligibility);
       await flushEligibility(client, seasonEligibility);
 
       // 2) Rostered players get full detail: season (guaranteed), game log, splits.
@@ -485,7 +693,7 @@ async function fetchRosteredPlayerStats(
       fanPoints = calculateFantasyPoints(stats);
     }
     if (group === "pitching") {
-      eligibility.push(...pitcherEligibilityRows(player.id, block.splits?.[0]?.stat));
+      eligibility.push(...pitcherEligibilityRows(player.id, block.splits?.[0]?.stat, season));
     }
   }
 

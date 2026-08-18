@@ -26,6 +26,7 @@
     "sync:projections": "tsx scripts/sync-projections.ts",
     "sync:adp": "tsx scripts/sync-adp.ts",
     "sync:news": "tsx scripts/sync-news.ts",
+    "eligibility:offseason": "tsx scripts/reconcile-position-eligibility.ts",
     "sync:matchups": "tsx scripts/sync-matchups.ts",
     "seed:opponent": "tsx scripts/seed-opponent.ts"
   },
