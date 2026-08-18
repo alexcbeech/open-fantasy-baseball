@@ -40,4 +40,16 @@ describe("listPlayers league pool", () => {
     expect(playerSql).toContain("coalesce(pool_league.settings->>'playerPool', 'all') = 'all'");
     expect(playerSql).toContain("left join (\n            select distinct player_id, position");
   });
+
+  it("includes today's probable-starter signal in player-list rows", async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] });
+
+    await listPlayers({ leagueId: LEAGUE_ID });
+
+    const playerSql = dbQuery.mock.calls[0][0] as string;
+    expect(playerSql).toContain("as todays_probable_starter");
+    expect(playerSql).toContain("bool_or(g.home_probable_pitcher_player_id = p.id");
+    expect(playerSql).toContain("g.official_date");
+    expect(playerSql).toContain("America/New_York");
+  });
 });

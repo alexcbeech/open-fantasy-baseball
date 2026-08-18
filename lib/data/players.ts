@@ -94,6 +94,8 @@ export async function listPlayers(
             next_game.game_date,
             next_game.home_away,
             next_game.opponent,
+            todays_game.first_pitch as todays_game_start,
+            todays_game.probable_starter as todays_probable_starter,
             -- Real-world ownership from the ADP feed when known, else the share
             -- of this app's fantasy teams that roster the player.
             coalesce(
@@ -139,9 +141,22 @@ export async function listPlayers(
             order by g.game_date asc
             limit 1
           ) next_game on true
+          left join lateral (
+            -- Baseball's current day follows MLB's ET official date. A team
+            -- may play twice, so aggregate all of today's games and flag the
+            -- player when MLB lists them as either probable starter.
+            select
+              min(g.game_date) as first_pitch,
+              bool_or(g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id) as probable_starter
+            from mlb_game g
+            where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
+              and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
+                = (now() at time zone 'America/New_York')::date
+          ) todays_game on true
           ${filters.length ? `where ${filters.join(" and ")}` : ""}
           group by p.id, mt.abbreviation, active_roster.player_id, latest_news.headline, season_stats.stats, projection_stats.stats,
-            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, adp.rostered_percent
+            p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent,
+            todays_game.first_pitch, todays_game.probable_starter, adp.rostered_percent
           order by p.full_name
           limit 500
         `,
