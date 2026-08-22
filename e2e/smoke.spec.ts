@@ -136,8 +136,9 @@ test.describe("commissioner settings", () => {
   test("shows commissioner controls on the League tab", async ({ page }) => {
     await page.goto("/team/team-1?tab=league");
 
-    await expect(page.getByRole("heading", { name: "Commissioner" })).toBeVisible();
-    await expect(page.getByText("Waivers")).toBeVisible();
-    await expect(page.getByText("FAAB")).toBeVisible();
+    const commissioner = page.getByRole("complementary", { name: "Commissioner" });
+    await expect(commissioner.getByRole("heading", { name: "Commissioner" })).toBeVisible();
+    await expect(commissioner.getByText("Waivers")).toBeVisible();
+    await expect(commissioner.getByText("FAAB")).toBeVisible();
   });
 });
