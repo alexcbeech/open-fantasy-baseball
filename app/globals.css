@@ -3137,6 +3137,138 @@ p.player-meta,
   color: var(--loss);
 }
 
+/* League-wide Yahoo-style transaction ledger. */
+.transaction-panel {
+  grid-column: 1 / -1;
+}
+
+.transaction-heading-row {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.transaction-heading-row h2 {
+  margin-bottom: 3px;
+}
+
+.transaction-subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.transaction-count {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 9px;
+}
+
+.transaction-filters {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+  padding-bottom: 12px;
+}
+
+.transaction-days {
+  display: grid;
+}
+
+.transaction-day {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0 4px;
+}
+
+.transaction-day:last-child {
+  border-bottom: 0;
+}
+
+.transaction-day h3 {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.transaction-list {
+  display: grid;
+}
+
+.transaction-row {
+  align-items: start;
+  border-top: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  padding: 10px 0;
+}
+
+.transaction-row:first-child {
+  border-top: 0;
+}
+
+.transaction-badge {
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 3px 5px;
+  text-align: center;
+}
+
+.transaction-badge-add,
+.transaction-badge-waiver {
+  color: var(--win);
+}
+
+.transaction-badge-drop {
+  color: var(--loss);
+}
+
+.transaction-badge-trade {
+  color: var(--brand);
+}
+
+.transaction-copy {
+  display: grid;
+  font-size: 13px;
+  gap: 3px;
+}
+
+.transaction-detail,
+.transaction-row time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.transaction-row time {
+  white-space: nowrap;
+}
+
+.transaction-more {
+  display: block;
+  margin: 12px auto 0;
+}
+
+@media (max-width: 560px) {
+  .transaction-row {
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
+  .transaction-row time {
+    grid-column: 2;
+  }
+}
+
 /* Team cell as a tap target: opens that team's current lineup. */
 .standings-team-button {
   background: transparent;

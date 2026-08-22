@@ -19,12 +19,15 @@ import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
 import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
+import { listLeagueTransactions } from "@/lib/data/transactions";
 import { LiveMatchup } from "./live-matchup";
+import { TransactionLog } from "./transaction-log";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import { measureServerOperation } from "@/lib/observability/server-performance";
 import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
+import type { LeagueTransactionItem } from "@/lib/fantasy/transaction-types";
 
 type TeamPageProps = {
   params: Promise<{
@@ -87,6 +90,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     watchItems,
     matchupDetails,
     leagueOverview,
+    leagueTransactions,
     viewerIsCommissioner,
     viewerIsCreator,
   ] = await Promise.all([
@@ -107,6 +111,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     selectedTab === "League"
       ? measureServerOperation("team.league-overview", () => getLeagueOverview(team.leagueId))
       : Promise.resolve(null),
+    selectedTab === "League"
+      ? measureServerOperation("team.league-transactions", () => listLeagueTransactions(team.leagueId))
+      : Promise.resolve([]),
     selectedTab === "League" && currentUser ? isLeagueCommissioner(team.leagueId, currentUser) : Promise.resolve(false),
     selectedTab === "League" && currentUser ? isLeagueCreator(team.leagueId, currentUser) : Promise.resolve(false),
   ]);
@@ -200,6 +207,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
             canDelete={viewerIsCreator}
             viewerTeamId={team.id}
             canTrade={viewerManagesTeam}
+            transactions={leagueTransactions}
           />
         ) : null}
       </section>
@@ -263,12 +271,14 @@ function LeagueTab({
   canDelete,
   viewerTeamId,
   canTrade,
+  transactions,
 }: {
   overview: LeagueOverview;
   canManage: boolean;
   canDelete: boolean;
   viewerTeamId: string;
   canTrade: boolean;
+  transactions: LeagueTransactionItem[];
 }) {
   return (
     <div className="content-grid">
@@ -283,6 +293,8 @@ function LeagueTab({
       </section>
 
       <TradesPanel leagueId={overview.leagueId} viewerTeamId={viewerTeamId} />
+
+      <TransactionLog transactions={transactions} />
 
       <aside className="panel" aria-labelledby="settings-heading">
         <h3 id="settings-heading">Commissioner</h3>
