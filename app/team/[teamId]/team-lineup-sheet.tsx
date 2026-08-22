@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
+import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
 import { rowPoints } from "@/lib/fantasy/player-view";
 import type { LineupPlayer } from "@/lib/fantasy/types";
 import { buildLineupGroups } from "./lineup-editor";
@@ -109,7 +110,7 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                   <span>{group.label}</span>
                   <span className="lineup-col-heads" aria-hidden="true">
                     <span>Pts</span>
-                    <span>Proj</span>
+                    <span>Today</span>
                   </span>
                 </div>
                 {group.rows.map((row) => {
@@ -126,7 +127,8 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                   }
 
                   const player = row.entry.player;
-                  const { seasonPts, projPts } = rowPoints(player);
+                  const { seasonPts } = rowPoints(player);
+                  const todayPts = Math.round(projectTodayPoints(player) * 10) / 10;
                   const injured = player.status === "injured" || player.status === "day-to-day";
 
                   return (
@@ -147,7 +149,7 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                       </span>
                       <span className="player-points">
                         <span className="points-live">{seasonPts}</span>
-                        <span className="points-proj">{projPts}</span>
+                        <span className="points-proj">{todayPts}</span>
                       </span>
                     </div>
                   );

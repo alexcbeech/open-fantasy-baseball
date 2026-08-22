@@ -21,6 +21,7 @@ function entry(slot: RosterSlot, overrides: PlayerOverrides): LineupPlayer {
       availability: "rostered",
       seasonStats: {},
       projectedStats: {},
+      remainingTeamGames: 35,
       todaysGameStart: "2026-07-09T23:05:00.000Z",
       ...overrides,
     },

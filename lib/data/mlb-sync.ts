@@ -150,20 +150,14 @@ export function normalizeMlbRosterStatus(rosterStatus?: MlbRosterEntry["status"]
   return { status: "active", statusDetail: null };
 }
 
-function toMlbDate(value: Date) {
-  return value.toISOString().slice(0, 10);
-}
-
-function addDays(value: Date, days: number) {
-  const next = new Date(value);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}
-
 export function getDefaultScheduleWindow(today = new Date()) {
+  const year = today.getUTCFullYear();
   return {
-    startDate: toMlbDate(addDays(today, -1)),
-    endDate: toMlbDate(addDays(today, 7)),
+    // Keep the entire MLB season locally. Daily and ROS projections need the
+    // real number of games each team has played and still has scheduled, not a
+    // fixed approximation that drifts as the season progresses.
+    startDate: `${year}-01-01`,
+    endDate: `${year}-12-31`,
   };
 }
 

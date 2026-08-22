@@ -11,8 +11,10 @@ function player(overrides: PlayerOverrides): Player {
     status: "active",
     availability: "rostered",
     seasonStats: {},
-    // HR is worth 4 points: proj(HR: 73) = 292 ROS points = 4/game over 73 games.
-    projectedStats: { HR: 73 },
+    // HR is worth 4 points: 35 projected HR over 35 remaining team games.
+    projectedStats: { HR: 35 },
+    remainingTeamGames: 35,
+    todaysGameCount: 1,
     todaysGameStart: "2026-07-11T23:05:00.000Z",
     ...overrides,
   };
@@ -59,8 +61,8 @@ describe("projectTodayPoints", () => {
 
   it("projects a full start for probable starters and zero for idle SPs", () => {
     const probable = projectTodayPoints(player({ id: "sp", positions: ["SP"], probableStarterToday: true }));
-    // 292 ROS points over ~14 remaining starts ≈ 20.9 per start.
-    expect(probable).toBeCloseTo(292 / 14, 5);
+    // Without a projected GS count, a five-man rotation implies seven starts.
+    expect(probable).toBeCloseTo(140 / 7, 5);
     expect(projectTodayPoints(player({ id: "idle-sp", positions: ["SP"] }))).toBe(0);
   });
 
@@ -69,5 +71,24 @@ describe("projectTodayPoints", () => {
       player({ id: "rp", positions: ["RP"], bats: "L", todaysOpposingPitcherThrows: "L" }),
     );
     expect(rp).toBeCloseTo(4, 5);
+  });
+
+  it("uses the real remaining schedule and counts both ends of a doubleheader", () => {
+    const single = projectTodayPoints(player({ id: "single", positions: ["OF"] }));
+    const double = projectTodayPoints(player({ id: "double", positions: ["OF"], todaysGameCount: 2 }));
+    expect(double).toBeCloseTo(single * 2, 5);
+  });
+
+  it("discounts day-to-day players for uncertain availability", () => {
+    const active = projectTodayPoints(player({ id: "active", positions: ["OF"] }));
+    const dayToDay = projectTodayPoints(player({ id: "dtd", positions: ["OF"], status: "day-to-day" }));
+    expect(dayToDay).toBeCloseTo(active * 0.6, 5);
+  });
+
+  it("uses projected starts when the ROS line provides them", () => {
+    const probable = projectTodayPoints(
+      player({ id: "sp-gs", positions: ["SP"], probableStarterToday: true, projectedStats: { HR: 20, GS: 4 } }),
+    );
+    expect(probable).toBeCloseTo(20, 5);
   });
 });

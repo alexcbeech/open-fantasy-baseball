@@ -28,7 +28,9 @@ const lineupRowsSql = `
             next_game.home_away,
             next_game.opponent,
             todays_game.first_pitch as todays_game_start,
+            todays_game.game_count as todays_game_count,
             todays_game.probable_starter as todays_probable_starter,
+            team_schedule.remaining_games as remaining_team_games,
             p.bats,
             todays_game.opposing_pitcher_throws as todays_opposing_pitcher_throws,
             adp.adp,
@@ -65,6 +67,7 @@ const lineupRowsSql = `
             -- probable starter, for platoon-aware daily projections.
             select
               min(g.game_date) as first_pitch,
+              count(*) as game_count,
               bool_or(g.home_probable_pitcher_player_id = p.id or g.away_probable_pitcher_player_id = p.id) as probable_starter,
               (array_agg(opp.throws order by g.game_date) filter (where opp.throws is not null))[1] as opposing_pitcher_throws
             from mlb_game g
@@ -76,11 +79,20 @@ const lineupRowsSql = `
               and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
                 = (now() at time zone 'America/New_York')::date
           ) todays_game on true
+          left join lateral (
+            select count(*) as remaining_games
+            from mlb_game g
+            where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
+              and coalesce(g.status, 'Preview') <> 'Final'
+              and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
+                >= (now() at time zone 'America/New_York')::date
+          ) team_schedule on true
           where le.team_id = $1
             and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch,
-            todays_game.probable_starter, todays_game.opposing_pitcher_throws, adp.adp
+            todays_game.game_count, todays_game.probable_starter, todays_game.opposing_pitcher_throws,
+            team_schedule.remaining_games, adp.adp
           order by le.lineup_date desc, le.id
 `;
 
