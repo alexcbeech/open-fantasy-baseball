@@ -7,6 +7,9 @@ export type PlayerProjectionContext = {
   fullName: string;
   season: StatMap;
   recent: StatMap | null;
+  teamGamesPlayed?: number;
+  teamGamesRemaining?: number;
+  recentTeamGames?: number;
 };
 
 export type PlayerProjection = {
@@ -34,6 +37,12 @@ const SEASON_MONTHS = 6;
 export type DerivationOptions = {
   // Fraction of the season still to play. Counting stats are paced against it.
   remainingFraction?: number;
+  // Fraction already played. When present, season totals are converted to a
+  // per-team-game pace before being extended over the games remaining.
+  elapsedFraction?: number;
+  // Fraction represented by the recent window, used instead of assuming that
+  // every trailing window is exactly one sixth of a season.
+  recentSampleFraction?: number;
   // How strongly the trailing-30-day window pulls the projection toward recent form.
   recentWeight?: number;
 };
@@ -59,6 +68,10 @@ function roundRate(value: number) {
  */
 export function deriveRosProjection(season: StatMap, recent: StatMap | null, options: DerivationOptions = {}): StatMap {
   const remainingFraction = Math.min(Math.max(options.remainingFraction ?? 0.45, 0), 1);
+  const elapsedFraction =
+    options.elapsedFraction == null ? null : Math.min(Math.max(options.elapsedFraction, 0), 1);
+  const recentSampleFraction =
+    options.recentSampleFraction == null ? null : Math.min(Math.max(options.recentSampleFraction, 0), 1);
   const recentWeight = Math.min(Math.max(options.recentWeight ?? 0.3, 0), 1);
   const remainingMonths = remainingFraction * SEASON_MONTHS;
   const keys = new Set<string>([...Object.keys(season), ...Object.keys(recent ?? {})]);
@@ -75,11 +88,18 @@ export function deriveRosProjection(season: StatMap, recent: StatMap | null, opt
       continue;
     }
 
-    // Counting stat: pace the season total across the games left, then nudge
-    // toward the trailing-30-day rate (~one month of production) extrapolated
-    // over the remaining months.
-    const seasonEstimate = seasonValue * remainingFraction;
-    const recentEstimate = hasRecent ? recentValue * remainingMonths : seasonEstimate;
+    // Counting stat: convert both season and recent totals to per-team-game
+    // rates when schedule coverage is available, extend them over the actual
+    // games remaining, then blend the two estimates.
+    const seasonEstimate =
+      elapsedFraction != null && elapsedFraction > 0
+        ? seasonValue * (remainingFraction / elapsedFraction)
+        : seasonValue * remainingFraction;
+    const recentEstimate = hasRecent
+      ? recentSampleFraction != null && recentSampleFraction > 0
+        ? recentValue * (remainingFraction / recentSampleFraction)
+        : recentValue * remainingMonths
+      : seasonEstimate;
     projection[key] = Math.round(seasonEstimate * (1 - recentWeight) + recentEstimate * recentWeight);
   }
 
@@ -92,10 +112,22 @@ export class DerivedProjectionsProvider implements ProjectionsProvider {
   constructor(private readonly options: DerivationOptions = {}) {}
 
   project(contexts: PlayerProjectionContext[]): PlayerProjection[] {
-    return contexts.map((context) => ({
-      playerId: context.playerId,
-      stats: deriveRosProjection(context.season, context.recent, this.options),
-    }));
+    return contexts.map((context) => {
+      const totalTeamGames = (context.teamGamesPlayed ?? 0) + (context.teamGamesRemaining ?? 0);
+      const scheduleOptions =
+        totalTeamGames > 0
+          ? {
+              remainingFraction: (context.teamGamesRemaining ?? 0) / totalTeamGames,
+              elapsedFraction: (context.teamGamesPlayed ?? 0) / totalTeamGames,
+              recentSampleFraction: (context.recentTeamGames ?? 0) / totalTeamGames,
+            }
+          : {};
+
+      return {
+        playerId: context.playerId,
+        stats: deriveRosProjection(context.season, context.recent, { ...scheduleOptions, ...this.options }),
+      };
+    });
   }
 }
 
@@ -104,6 +136,9 @@ type StatLineRow = {
   full_name: string;
   split: string;
   stats: StatMap;
+  team_games_played: string | number | null;
+  team_games_remaining: string | number | null;
+  recent_team_games: string | number | null;
 };
 
 export type SyncProjectionsResult = {
@@ -141,11 +176,29 @@ export async function syncProjections(
     try {
       const lines = await client.query<StatLineRow>(
         `select distinct on (psl.player_id, psl.split)
-           psl.player_id, p.full_name, psl.split, psl.stats
+           psl.player_id, p.full_name, psl.split, psl.stats,
+           team_schedule.team_games_played, team_schedule.team_games_remaining, team_schedule.recent_team_games
          from player_stat_line psl
          join player p on p.id = psl.player_id
+         left join lateral (
+           select
+             count(*) filter (where g.status = 'Final') as team_games_played,
+             count(*) filter (
+               where coalesce(g.status, 'Preview') <> 'Final'
+                 and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
+                   >= $1::date
+             ) as team_games_remaining,
+             count(*) filter (
+               where g.status = 'Final'
+                 and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
+                   >= $1::date - 30
+             ) as recent_team_games
+           from mlb_game g
+           where g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id
+         ) team_schedule on true
          where psl.split in ('season', 'last_30')
          order by psl.player_id, psl.split, psl.stat_date desc`,
+        [statDate],
       );
 
       const byPlayer = new Map<string, PlayerProjectionContext>();
@@ -157,6 +210,9 @@ export async function syncProjections(
           fullName: row.full_name,
           season: {},
           recent: null,
+          teamGamesPlayed: Number(row.team_games_played ?? 0),
+          teamGamesRemaining: Number(row.team_games_remaining ?? 0),
+          recentTeamGames: Number(row.recent_team_games ?? 0),
         };
 
         if (row.split === "season") {

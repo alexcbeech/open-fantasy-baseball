@@ -112,6 +112,10 @@ export type Player = {
    * slot is locked until the next daily roster rollover.
    */
   todaysGameStart?: string | null;
+  /** Number of MLB games the player's team has scheduled today. */
+  todaysGameCount?: number;
+  /** Team games still scheduled, including today; sourced from the full MLB schedule. */
+  remainingTeamGames?: number | null;
   /** Percent of leagues where the player is rostered; null when unknown. */
   rosteredPercent?: number | null;
   /**

@@ -24,6 +24,7 @@ type StatMap = Record<string, number | string>;
 // carried so team rate categories (AVG/ERA/WHIP) can be recomputed from
 // components rather than averaged; they are not shown in the primary stat list.
 const HITTING_MAP: Record<string, string> = {
+  gamesPlayed: "G",
   runs: "R",
   homeRuns: "HR",
   rbi: "RBI",
@@ -33,6 +34,8 @@ const HITTING_MAP: Record<string, string> = {
   atBats: "AB",
 };
 const PITCHING_MAP: Record<string, string> = {
+  gamesPlayed: "G",
+  gamesStarted: "GS",
   wins: "W",
   saves: "SV",
   strikeOuts: "K",

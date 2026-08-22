@@ -14,6 +14,22 @@ describe("deriveRosProjection", () => {
     expect(projection.RBI).toBe(30);
   });
 
+  it("converts season and recent totals to actual team-game rates", () => {
+    const projection = deriveRosProjection(
+      { HR: 20 },
+      { HR: 6 },
+      {
+        elapsedFraction: 100 / 162,
+        remainingFraction: 62 / 162,
+        recentSampleFraction: 25 / 162,
+        recentWeight: 0.3,
+      },
+    );
+
+    // Season pace: 20 / 100 * 62 = 12.4. Recent pace: 6 / 25 * 62 = 14.88.
+    expect(projection.HR).toBe(13);
+  });
+
   it("blends rate stats toward recent form", () => {
     const projection = deriveRosProjection(
       { AVG: 0.3 },
@@ -59,5 +75,22 @@ describe("DerivedProjectionsProvider", () => {
       { playerId: "a", stats: { HR: 10 } },
       { playerId: "b", stats: { HR: 4 } },
     ]);
+  });
+
+  it("derives the remaining fraction from each player's team schedule", () => {
+    const provider = new DerivedProjectionsProvider({ recentWeight: 0 });
+    const result = provider.project([
+      {
+        playerId: "late",
+        fullName: "Late Season Player",
+        season: { HR: 20, G: 100 },
+        recent: null,
+        teamGamesPlayed: 100,
+        teamGamesRemaining: 20,
+        recentTeamGames: 20,
+      },
+    ]);
+
+    expect(result).toEqual([{ playerId: "late", stats: { HR: 4, G: 20 } }]);
   });
 });

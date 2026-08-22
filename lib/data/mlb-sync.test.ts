@@ -14,10 +14,10 @@ vi.mock("@/lib/db/client", () => ({
 import { getDefaultScheduleWindow, normalizeMlbRosterStatus, syncMlbSchedule, syncMlbTeamsAndRosters } from "./mlb-sync";
 
 describe("MLB sync", () => {
-  it("uses a schedule window from yesterday through the next week", () => {
+  it("loads the full season so projection pacing can count team games", () => {
     expect(getDefaultScheduleWindow(new Date("2026-07-02T12:00:00.000Z"))).toEqual({
-      startDate: "2026-07-01",
-      endDate: "2026-07-09",
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
     });
   });
 

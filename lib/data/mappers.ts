@@ -37,6 +37,8 @@ export type DbPlayerRow = {
   home_away?: "home" | "away" | null;
   opponent?: string | null;
   todays_game_start?: Date | string | null;
+  todays_game_count?: string | number | null;
+  remaining_team_games?: string | number | null;
   todays_probable_starter?: boolean | null;
   bats?: string | null;
   todays_opposing_pitcher_throws?: string | null;
@@ -123,6 +125,8 @@ export function mapPlayer(row: DbPlayerRow): Player {
     seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points)) : null,
     nextGame,
     todaysGameStart: row.todays_game_start ? new Date(row.todays_game_start).toISOString() : null,
+    todaysGameCount: Math.max(0, Math.round(toNumber(row.todays_game_count))),
+    remainingTeamGames: row.remaining_team_games == null ? null : Math.max(0, Math.round(toNumber(row.remaining_team_games))),
     probableStarterToday: row.todays_probable_starter ?? null,
     bats: row.bats ?? null,
     todaysOpposingPitcherThrows: row.todays_opposing_pitcher_throws ?? null,

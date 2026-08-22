@@ -4,14 +4,13 @@ import type { Player, RosterSlot } from "./types";
 const pitcherPositions: RosterSlot[] = ["SP", "RP", "P"];
 const batterPositions: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF"];
 
-// Per-day pacing derived from the same assumptions as the rest-of-season
-// projection model (deriveRosProjection): ROS stats cover ~45% of a 162-game
-// season, so a hitter's per-game expectation is ROS points spread over ~73
-// team games, and a starter's per-start expectation is ROS points spread over
-// ~45% of a 32-start workload.
-const ROS_REMAINING_FRACTION = 0.45;
-const REMAINING_TEAM_GAMES = Math.round(162 * ROS_REMAINING_FRACTION);
-const REMAINING_STARTS = Math.round(32 * ROS_REMAINING_FRACTION);
+const DEFAULT_ROTATION_SIZE = 5;
+const DAY_TO_DAY_AVAILABILITY = 0.6;
+
+function positiveStat(stats: Record<string, number | string>, key: string): number | null {
+  const value = Number(stats[key]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
 
 /**
  * Whether the player counts as "active today" for Start Active Players:
@@ -83,15 +82,29 @@ export function projectTodayPoints(player: Player): number {
     return 0;
   }
 
+  const availability = player.status === "day-to-day" ? DAY_TO_DAY_AVAILABILITY : 1;
+  const remainingTeamGames = player.remainingTeamGames ?? positiveStat(player.projectedStats, "G");
+  const todayGames = Math.max(player.todaysGameCount ?? 1, 1);
+
   if (player.probableStarterToday === true) {
-    return rosPoints / REMAINING_STARTS;
+    const remainingStarts =
+      positiveStat(player.projectedStats, "GS") ??
+      (remainingTeamGames != null ? Math.max(remainingTeamGames / DEFAULT_ROTATION_SIZE, 1) : null);
+    return remainingStarts == null ? 0 : (rosPoints / remainingStarts) * availability;
   }
 
   const pitcherOnly = player.positions.every((position) => pitcherPositions.includes(position));
 
   if (pitcherOnly) {
-    return rosPoints / REMAINING_TEAM_GAMES;
+    return remainingTeamGames == null || remainingTeamGames <= 0
+      ? 0
+      : (rosPoints / remainingTeamGames) * todayGames * availability;
   }
 
-  return (rosPoints / REMAINING_TEAM_GAMES) * platoonFactor(player.bats, player.todaysOpposingPitcherThrows);
+  return remainingTeamGames == null || remainingTeamGames <= 0
+    ? 0
+    : (rosPoints / remainingTeamGames) *
+        todayGames *
+        availability *
+        platoonFactor(player.bats, player.todaysOpposingPitcherThrows);
 }

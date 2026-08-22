@@ -62,13 +62,19 @@ describe("deriveHitterEligibilityFromMlbSplits", () => {
 
 describe("mapMlbStat", () => {
   it("maps hitting fields to OFB categories with rate stats as strings", () => {
-    const stats = mapMlbStat({ runs: 27, homeRuns: 8, rbi: 43, stolenBases: 0, avg: ".252", ignored: 99 }, "hitting");
-    expect(stats).toEqual({ R: 27, HR: 8, RBI: 43, SB: 0, AVG: ".252" });
+    const stats = mapMlbStat(
+      { gamesPlayed: 81, runs: 27, homeRuns: 8, rbi: 43, stolenBases: 0, avg: ".252", ignored: 99 },
+      "hitting",
+    );
+    expect(stats).toEqual({ G: 81, R: 27, HR: 8, RBI: 43, SB: 0, AVG: ".252" });
   });
 
   it("maps pitching fields to OFB categories", () => {
-    const stats = mapMlbStat({ wins: 9, saves: 0, strikeOuts: 156, era: "1.47", whip: "0.78" }, "pitching");
-    expect(stats).toEqual({ W: 9, SV: 0, K: 156, ERA: "1.47", WHIP: "0.78" });
+    const stats = mapMlbStat(
+      { gamesPlayed: 22, gamesStarted: 21, wins: 9, saves: 0, strikeOuts: 156, era: "1.47", whip: "0.78" },
+      "pitching",
+    );
+    expect(stats).toEqual({ G: 22, GS: 21, W: 9, SV: 0, K: 156, ERA: "1.47", WHIP: "0.78" });
   });
 
   it("keeps counting stats numeric and rate stats textual", () => {
