@@ -14,6 +14,9 @@ const source = "mlb-stats-api";
 // The MLB Stats API has no published rate limit but throttles aggressive
 // clients; a small pool keeps the sync fast without hammering it.
 const fetchConcurrency = 8;
+const fetchTimeoutMs = 30_000;
+const fetchMaxAttempts = 3;
+const fetchRetryDelayMs = 500;
 // Rows per multi-row insert. Well under the 65,535-parameter limit at our
 // column counts; mainly bounds statement size.
 const writeChunkSize = 500;
@@ -81,16 +84,74 @@ export type SyncPlayerStatsResult = {
   source: string;
 };
 
-async function fetchJson<T>(path: string, baseUrl: string): Promise<T> {
-  // Timeout so a hung upstream request fails the job instead of stalling it
-  // until the stale-job reclaimer burns an attempt.
-  const response = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(30_000) });
+type FetchJsonOptions = {
+  maxAttempts?: number;
+  retryDelayMs?: number;
+  timeoutMs?: number;
+};
 
-  if (!response.ok) {
-    throw new Error(`MLB Stats API request failed: ${response.status} ${response.statusText} ${path}`);
+/**
+ * Fetch MLB data with bounded retries for transient upstream failures. The
+ * request path is included in terminal errors so ingestion_run identifies the
+ * affected player and stat type instead of recording a generic timeout.
+ */
+export async function fetchJson<T>(path: string, baseUrl: string, options: FetchJsonOptions = {}): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? fetchMaxAttempts;
+  const retryDelayMs = options.retryDelayMs ?? fetchRetryDelayMs;
+  const timeoutMs = options.timeoutMs ?? fetchTimeoutMs;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
+
+    try {
+      // Timeout so a hung upstream request fails its attempt instead of
+      // stalling the entire sync until the workflow limit is reached.
+      response = await fetch(`${baseUrl}${path}`, { signal: AbortSignal.timeout(timeoutMs) });
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await waitBeforeRetry(retryDelayMs, attempt);
+      continue;
+    }
+
+    if (!response.ok) {
+      const error = new Error(`MLB Stats API request failed: ${response.status} ${response.statusText} ${path}`);
+      if (response.status !== 429 && response.status < 500) {
+        throw error;
+      }
+      lastError = error;
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await waitBeforeRetry(retryDelayMs, attempt);
+      continue;
+    }
+
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxAttempts) {
+        break;
+      }
+      await waitBeforeRetry(retryDelayMs, attempt);
+    }
   }
 
-  return response.json() as Promise<T>;
+  const detail = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`MLB Stats API request failed after ${maxAttempts} attempts: ${path} (${detail})`, {
+    cause: lastError,
+  });
+}
+
+async function waitBeforeRetry(baseDelayMs: number, attempt: number) {
+  const delayMs = baseDelayMs * 2 ** (attempt - 1);
+  if (delayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
 }
 
 export function mapMlbStat(stat: Record<string, unknown> | undefined, group: "hitting" | "pitching"): StatMap {
