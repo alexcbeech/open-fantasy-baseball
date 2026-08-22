@@ -1,11 +1,60 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bulkFieldingStatsPath,
   bulkSeasonStatsPath,
   deriveHitterEligibilityFromMlbSplits,
   derivePitcherEligibility,
+  fetchJson,
   mapMlbStat,
 } from "./mlb-stats-sync";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("fetchJson", () => {
+  it("retries a timeout and returns the next successful response", async () => {
+    const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ stats: [] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchJson("/people/123/stats?stats=gameLog", "https://stats.example", { retryDelayMs: 0 }),
+    ).resolves.toEqual({ stats: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("includes the player request path after exhausting retries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockRejectedValue(
+        Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }),
+      ),
+    );
+
+    await expect(
+      fetchJson("/people/456/stats?stats=season", "https://stats.example", {
+        maxAttempts: 2,
+        retryDelayMs: 0,
+      }),
+    ).rejects.toThrow(
+      "MLB Stats API request failed after 2 attempts: /people/456/stats?stats=season (The operation was aborted due to timeout)",
+    );
+  });
+
+  it("does not retry a permanent client error", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 404, statusText: "Not Found" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchJson("/people/missing", "https://stats.example", { retryDelayMs: 0 }),
+    ).rejects.toThrow("MLB Stats API request failed: 404 Not Found /people/missing");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("bulkSeasonStatsPath", () => {
   it("requests MLB's complete player pool instead of qualified players only", () => {
