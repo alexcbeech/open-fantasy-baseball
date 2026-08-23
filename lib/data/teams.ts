@@ -4,6 +4,7 @@ import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-dat
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
+import { ensureTodayLineupSnapshot } from "./lineup-snapshots";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
 import { rotoStandingsForLeague } from "./roto";
 import { teamRecordsForLeague } from "./season";
@@ -88,7 +89,12 @@ const lineupRowsSql = `
                 >= (now() at time zone 'America/New_York')::date
           ) team_schedule on true
           where le.team_id = $1
-            and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
+            and le.lineup_date = (
+              select max(lineup_date)
+              from lineup_entry
+              where team_id = $1
+                and lineup_date <= coalesce($2::date, (now() at time zone 'America/New_York')::date)
+            )
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch,
             todays_game.game_count, todays_game.probable_starter, todays_game.opposing_pitcher_throws,
@@ -96,8 +102,8 @@ const lineupRowsSql = `
           order by le.lineup_date desc, le.id
 `;
 
-async function queryLineupRows(executor: Executor, teamId: string): Promise<LineupPlayer[]> {
-  const result = await executor.query<DbLineupRow>(lineupRowsSql, [teamId]);
+async function queryLineupRows(executor: Executor, teamId: string, lineupDate?: string): Promise<LineupPlayer[]> {
+  const result = await executor.query<DbLineupRow>(lineupRowsSql, [teamId, lineupDate ?? null]);
   return result.rows.map(mapLineupPlayer);
 }
 
@@ -207,11 +213,11 @@ export async function getTeamSummary(teamId: string): Promise<TeamSummary | unde
   );
 }
 
-export async function getLineupForTeam(teamId: string): Promise<LineupPlayer[]> {
+export async function getLineupForTeam(teamId: string, lineupDate?: string): Promise<LineupPlayer[]> {
   return withDemoFallback(
     // An empty lineup (a real team that hasn't set one) renders as empty
     // slots; the demo fallback serves the mock lineup only in demo mode.
-    () => queryLineupRows({ query }, teamId),
+    () => queryLineupRows({ query }, teamId, lineupDate),
     () => mockLineup,
   );
 }
@@ -260,9 +266,9 @@ export async function updateTeamName(teamId: string, name: string): Promise<stri
 }
 
 /**
- * Persist the team's current-day lineup slots. Entries are upserted against the
- * team's latest lineup date, so a save is a full or partial slot assignment for
- * today.
+ * Persist the team's current-day lineup slots. The latest effective lineup is
+ * first copied into an ET-dated snapshot, so changes today never rewrite the
+ * lineup that was used to score an earlier day.
  *
  * The API route pre-validates for fast user feedback, but that check reads the
  * lineup outside this transaction. To stop two concurrent saves from each
@@ -300,7 +306,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       throw new LineupSaveError("Team not found.", 404);
     }
 
-    // Re-read the current lineup inside the lock and validate the whole
+    // Re-read the effective lineup inside the lock and validate the whole
     // resulting lineup, so a save that raced the route's pre-check can't
     // persist a duplicate, overfilled, ineligible, or locked-player slot.
     const currentLineup = await queryLineupRows(client, teamId);
@@ -329,25 +335,11 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       throw new LineupSaveError(validation.issues[0]?.message ?? "The lineup is invalid.", 409);
     }
 
-    const scoringPeriod = await client.query<{ id: string }>(
-      `select id
-       from scoring_period
-       where league_id = $1 and status = 'active'
-       order by starts_at desc
-       limit 1`,
-      [leagueId],
-    );
-    const scoringPeriodId = scoringPeriod.rows[0]?.id;
+    const snapshot = await ensureTodayLineupSnapshot(client, teamId, leagueId);
 
-    if (!scoringPeriodId) {
+    if (!snapshot) {
       throw new LineupSaveError("No active scoring period is available.");
     }
-
-    const latestLineupDate = await client.query<{ lineup_date: Date | string }>(
-      "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
-      [teamId],
-    );
-    const lineupDate = latestLineupDate.rows[0].lineup_date;
 
     for (const entry of entries) {
       await client.query(
@@ -355,7 +347,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
          values ($1, $2, $3, $4, $5)
          on conflict (team_id, player_id, lineup_date)
          do update set slot = excluded.slot`,
-        [teamId, entry.playerId, scoringPeriodId, lineupDate, entry.slot],
+        [teamId, entry.playerId, snapshot.scoringPeriodId, snapshot.lineupDate, entry.slot],
       );
     }
 

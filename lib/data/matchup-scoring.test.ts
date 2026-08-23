@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { compareCategory, computeCategoryValue, fantasyPointsByPlayer, replaceMatchupPlayerScores } from "./matchup-scoring";
+import {
+  compareCategory,
+  computeCategoryValue,
+  fantasyPointsByPlayer,
+  periodLineupPlayerStats,
+  replaceMatchupPlayerScores,
+} from "./matchup-scoring";
 
 describe("computeCategoryValue", () => {
   it("sums counting categories across the lineup", () => {
@@ -90,5 +96,23 @@ describe("fantasyPointsByPlayer", () => {
       ["hitter", "pitcher", "opponent"],
       [7, 9, 4.5],
     ]);
+  });
+});
+
+describe("periodLineupPlayerStats", () => {
+  it("scores a game line only from the active lineup effective on that game date", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ player_id: "active-player", stats: { HR: 1 } }] });
+
+    await periodLineupPlayerStats(
+      { query },
+      "team-1",
+      "2026-08-17T04:00:00.000Z",
+      "2026-08-24T04:00:00.000Z",
+    );
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toContain("le.lineup_date <= psl.stat_date");
+    expect(sql).toContain("order by le.lineup_date desc");
+    expect(sql).toContain("lineup_on_date.slot not in ('BN', 'IL', 'NA')");
   });
 });

@@ -534,7 +534,7 @@ async function completeDraft(client: PoolClient, context: DraftContext): Promise
     for (const assignment of assignments) {
       await client.query(
         `insert into lineup_entry (team_id, player_id, scoring_period_id, lineup_date, slot)
-         values ($1, $2, $3, current_date, $4)
+         values ($1, $2, $3, (now() at time zone 'America/New_York')::date, $4)
          on conflict (team_id, player_id, lineup_date) do update set slot = excluded.slot`,
         [team.team_id, assignment.playerId, scoringPeriodId, assignment.slot],
       );

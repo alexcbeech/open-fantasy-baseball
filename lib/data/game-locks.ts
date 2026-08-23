@@ -46,7 +46,11 @@ export async function lineupHasStartedGameToday(db: Queryable, teamId: string): 
        select 1
        from lineup_entry le
        where le.team_id = $1
-         and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
+         and le.lineup_date = (
+           select max(lineup_date)
+           from lineup_entry
+           where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+         )
          and ${startedGameTodaySql("le.player_id")}
      ) as locked`,
     [teamId],
