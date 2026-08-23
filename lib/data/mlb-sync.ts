@@ -399,6 +399,10 @@ async function writeMlbSchedule(
   pitcherHandByMlbId: Map<number, string> = new Map(),
 ) {
   let rowsSeen = 0;
+  // MLB publishes future postseason games against placeholder teams before
+  // the qualifiers are known. Skip them until the feed assigns real clubs.
+  const teamResult = await client.query(`select id from mlb_team`);
+  const knownTeamIds = new Set(getRows<{ id: number }>(teamResult).map((team) => team.id));
   // A postponed game can appear under two dates with the same gamePk; the
   // batched upsert can't touch a row twice, so keep the last occurrence.
   const gameByPk = new Map<number, MlbScheduleGame>();
@@ -407,7 +411,19 @@ async function writeMlbSchedule(
     for (const game of scheduleDate.games ?? []) {
       rowsSeen += 1;
 
-      if (!game.gamePk || !game.gameDate || !game.gameType || !realGameTypes.has(game.gameType)) {
+      const awayTeamId = game.teams?.away?.team?.id;
+      const homeTeamId = game.teams?.home?.team?.id;
+
+      if (
+        !game.gamePk ||
+        !game.gameDate ||
+        !game.gameType ||
+        !realGameTypes.has(game.gameType) ||
+        awayTeamId == null ||
+        homeTeamId == null ||
+        !knownTeamIds.has(awayTeamId) ||
+        !knownTeamIds.has(homeTeamId)
+      ) {
         continue;
       }
 

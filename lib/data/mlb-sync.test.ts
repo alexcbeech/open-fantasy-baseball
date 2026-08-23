@@ -82,9 +82,9 @@ describe("syncMlbTeamsAndRosters player statuses", () => {
   });
 });
 
-// The schedule feed includes All-Star and exhibition games whose pseudo-teams
-// (e.g. AL/NL All-Stars, ids 159/160) aren't in mlb_team; writing those games
-// or their probable pitchers violates the team foreign keys.
+// The schedule feed includes All-Star, exhibition, and unresolved postseason
+// games whose pseudo-teams aren't in mlb_team; writing those games or their
+// probable pitchers violates the team foreign keys.
 describe("syncMlbSchedule game-type filtering", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -121,7 +121,12 @@ describe("syncMlbSchedule game-type filtering", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
-    const query = vi.fn(async (_sql: string, _values?: unknown[]) => ({ rows: [] as unknown[] }));
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("select id from mlb_team")) {
+        return { rows: [{ id: 121 }, { id: 143 }] };
+      }
+      return { rows: [] as unknown[] };
+    });
 
     const rowsSeen = await syncMlbSchedule({ query });
 
@@ -131,6 +136,52 @@ describe("syncMlbSchedule game-type filtering", () => {
     // The batched insert's first parameter is the game_pk array.
     expect(gameInserts[0][1]?.[0]).toEqual([2]);
     // No player upsert for the All-Star probable pitchers either.
+    expect(query.mock.calls.some(([sql]) => sql.includes("insert into player"))).toBe(false);
+  });
+
+  it("skips postseason games that still reference placeholder teams", async () => {
+    const schedulePayload = {
+      dates: [
+        {
+          games: [
+            {
+              gamePk: 849851,
+              gameType: "F",
+              gameDate: "2026-09-29T07:33:00Z",
+              teams: {
+                away: { team: { id: 4944 }, probablePitcher: { id: 900003, fullName: "Wild Card Two" } },
+                home: { team: { id: 4618 }, probablePitcher: { id: 900004, fullName: "Wild Card One" } },
+              },
+            },
+            {
+              gamePk: 849900,
+              gameType: "F",
+              gameDate: "2026-10-03T20:00:00Z",
+              teams: {
+                away: { team: { id: 121 } },
+                home: { team: { id: 143 } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
+    );
+    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("select id from mlb_team")) {
+        return { rows: [{ id: 121 }, { id: 143 }] };
+      }
+      return { rows: [] as unknown[] };
+    });
+
+    const rowsSeen = await syncMlbSchedule({ query });
+
+    expect(rowsSeen).toBe(2);
+    const gameInsert = query.mock.calls.find(([sql]) => sql.includes("insert into mlb_game"));
+    expect(gameInsert?.[1]?.[0]).toEqual([849900]);
     expect(query.mock.calls.some(([sql]) => sql.includes("insert into player"))).toBe(false);
   });
 
@@ -157,6 +208,9 @@ describe("syncMlbSchedule game-type filtering", () => {
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
     const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+      if (sql.includes("select id from mlb_team")) {
+        return { rows: [{ id: 121 }, { id: 143 }] };
+      }
       if (sql.includes("insert into player")) {
         return {
           rows: [
