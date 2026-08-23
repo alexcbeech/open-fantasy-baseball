@@ -1457,7 +1457,7 @@ button.row {
   flex: 1;
 }
 
-/* Right-aligned stacked numbers (season points over projected), Yahoo-style. */
+/* Right-aligned stacked numbers, Yahoo-style. */
 .player-points {
   background: transparent;
   border: 0;
@@ -1490,7 +1490,7 @@ button.row {
   gap: 0;
   justify-items: end;
   line-height: 1.15;
-  min-width: 52px;
+  min-width: 64px;
   padding-right: 2px;
 }
 
