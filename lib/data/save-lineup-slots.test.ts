@@ -49,11 +49,11 @@ function makeClient(lineupRows: LineupRow[], rosterSlots?: Record<string, number
     if (sql.includes("select ft.league_id")) {
       return { rows: [{ league_id: "league-1", lineup_lock_mode: "daily", roster_slots: rosterSlots ?? null }] };
     }
+    if (sql.includes("as scoring_period_id")) {
+      return { rows: [{ lineup_date: "2026-07-08", scoring_period_id: "scoring-period-1" }] };
+    }
     if (sql.includes("from scoring_period")) {
       return { rows: [{ id: "scoring-period-1" }] };
-    }
-    if (sql.includes("coalesce(max(lineup_date)")) {
-      return { rows: [{ lineup_date: "2026-07-08" }] };
     }
     return { rows: [] };
   });

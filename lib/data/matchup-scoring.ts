@@ -69,7 +69,11 @@ export async function activeLineupStats(client: { query: <T>(sql: string, values
        order by stat_date desc limit 1
      ) season_stats on true
      where le.team_id = $1
-       and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
+       and le.lineup_date = (
+         select max(lineup_date)
+         from lineup_entry
+         where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+       )
        and le.slot not in ('BN', 'IL', 'NA')`,
     [teamId],
   );

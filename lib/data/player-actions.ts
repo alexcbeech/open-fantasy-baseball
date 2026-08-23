@@ -1,6 +1,7 @@
 import { getPool, isUniqueViolation } from "@/lib/db/client";
 import { hasActiveScoringPeriod, hasStartedGameToday, lineupHasStartedGameToday } from "@/lib/data/game-locks";
 import { getPlayerDetail } from "@/lib/data/players";
+import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
 import { isPlayerInPool } from "@/lib/data/player-pool";
 import { rosterFits } from "@/lib/draft/lineup-assignment";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
@@ -278,17 +279,9 @@ export async function assignLineupSlotForAdd(
   playerId: string,
   player: PlayerContext,
 ): Promise<RosterSlot | null> {
-  const scoringPeriod = await client.query<{ id: string }>(
-    `select id
-     from scoring_period
-     where league_id = $1 and status = 'active'
-     order by starts_at desc
-     limit 1`,
-    [team.leagueId],
-  );
-  const scoringPeriodId = scoringPeriod.rows[0]?.id;
+  const snapshot = await ensureTodayLineupSnapshot(client, teamId, team.leagueId);
 
-  if (!scoringPeriodId) {
+  if (!snapshot) {
     return null;
   }
 
@@ -302,14 +295,9 @@ export async function assignLineupSlotForAdd(
     "select slot, count from league_roster_slot where league_id = $1",
     [team.leagueId],
   );
-  const lineupDateResult = await client.query<{ lineup_date: Date | string }>(
-    "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
-    [teamId],
-  );
-  const lineupDate = lineupDateResult.rows[0].lineup_date;
   const usageResult = await client.query<{ slot: RosterSlot; used: number | string }>(
     "select slot, count(*) as used from lineup_entry where team_id = $1 and lineup_date = $2 group by slot",
-    [teamId, lineupDate],
+    [teamId, snapshot.lineupDate],
   );
 
   const eligibility = {
@@ -354,7 +342,7 @@ export async function assignLineupSlotForAdd(
      values ($1, $2, $3, $4, $5)
      on conflict (team_id, player_id, lineup_date)
      do update set slot = excluded.slot`,
-    [teamId, playerId, scoringPeriodId, lineupDate, slot],
+    [teamId, playerId, snapshot.scoringPeriodId, snapshot.lineupDate, slot],
   );
 
   return slot;
@@ -364,6 +352,7 @@ async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string,
   // A drop deletes the player's lineup row for today, so a started player
   // must stay put or their in-progress stats would vanish from the matchup.
   await assertLineupChangeUnlocked(client, team, teamId, playerId, "Drops");
+  const snapshot = await ensureTodayLineupSnapshot(client, teamId, team.leagueId);
 
   // Dropped players sit on waivers until the league's next processing time,
   // so a hot drop can't be instantly re-added by whoever refreshes first.
@@ -379,13 +368,12 @@ async function dropPlayer(client: PoolClient, team: TeamContext, teamId: string,
     throw new PlayerActionError("Player is not on this roster.", 409);
   }
 
-  await client.query(
-    `delete from lineup_entry
-     where team_id = $1
-       and player_id = $2
-       and lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)`,
-    [teamId, playerId],
-  );
+  if (snapshot) {
+    await client.query(
+      `delete from lineup_entry where team_id = $1 and player_id = $2 and lineup_date = $3`,
+      [teamId, playerId, snapshot.lineupDate],
+    );
+  }
   await insertTransaction(client, team, teamId, "drop", { playerId });
 }
 
@@ -517,6 +505,11 @@ async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: s
   // Moving to IL/NA rewrites today's lineup row — locked players stay put,
   // same as any other slot change.
   await assertLineupChangeUnlocked(client, team, teamId, playerId, "Lineup moves");
+  const snapshot = await ensureTodayLineupSnapshot(client, teamId, team.leagueId);
+
+  if (!snapshot) {
+    throw new PlayerActionError("No active scoring period is available.", 409);
+  }
 
   const slotCount = await client.query<{ count: number | string; used: number | string }>(
     `select lrs.count,
@@ -525,10 +518,10 @@ async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: s
         where le.team_id = $3
           and le.player_id <> $4
           and le.slot = $2
-          and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $3)) as used
+          and le.lineup_date = $5::date) as used
      from league_roster_slot lrs
      where lrs.league_id = $1 and lrs.slot = $2`,
-    [team.leagueId, slot, teamId, playerId],
+    [team.leagueId, slot, teamId, playerId, snapshot.lineupDate],
   );
 
   const slotLimit = Number(slotCount.rows[0]?.count ?? 0);
@@ -539,32 +532,12 @@ async function movePlayerToSlot(client: PoolClient, team: TeamContext, teamId: s
     throw new PlayerActionError(`All ${slot} slots are full.`, 409);
   }
 
-  const scoringPeriod = await client.query<{ id: string }>(
-    `select id
-     from scoring_period
-     where league_id = $1 and status = 'active'
-     order by starts_at desc
-     limit 1`,
-    [team.leagueId],
-  );
-  const scoringPeriodId = scoringPeriod.rows[0]?.id;
-
-  if (!scoringPeriodId) {
-    throw new PlayerActionError("No active scoring period is available.", 409);
-  }
-
-  const latestLineupDate = await client.query<{ lineup_date: Date | string }>(
-    "select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1",
-    [teamId],
-  );
-  const lineupDate = latestLineupDate.rows[0].lineup_date;
-
   await client.query(
     `insert into lineup_entry (team_id, player_id, scoring_period_id, lineup_date, slot)
      values ($1, $2, $3, $4, $5)
      on conflict (team_id, player_id, lineup_date)
      do update set slot = excluded.slot`,
-    [teamId, playerId, scoringPeriodId, lineupDate, slot],
+    [teamId, playerId, snapshot.scoringPeriodId, snapshot.lineupDate, slot],
   );
   await insertTransaction(client, team, teamId, "lineup_change", { playerId, slot });
 }

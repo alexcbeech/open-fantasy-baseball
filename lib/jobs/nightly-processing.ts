@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
+import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
 import { assignLineupSlotForAdd } from "@/lib/data/player-actions";
 import { processDueTrades } from "@/lib/data/trades";
 
@@ -303,6 +304,7 @@ async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCan
     [claim.leagueId],
   );
   const waiverMode = settings.rows[0]?.waiver_mode ?? "rolling";
+  const snapshot = await ensureTodayLineupSnapshot(client, claim.teamId, claim.leagueId);
 
   if (claim.dropPlayerId) {
     await client.query(
@@ -311,12 +313,12 @@ async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCan
        where team_id = $1 and player_id = $2 and dropped_at is null`,
       [claim.teamId, claim.dropPlayerId],
     );
-    await client.query(
-      `delete from lineup_entry
-       where team_id = $1 and player_id = $2
-         and lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)`,
-      [claim.teamId, claim.dropPlayerId],
-    );
+    if (snapshot) {
+      await client.query(
+        `delete from lineup_entry where team_id = $1 and player_id = $2 and lineup_date = $3`,
+        [claim.teamId, claim.dropPlayerId, snapshot.lineupDate],
+      );
+    }
   }
 
   await client.query(

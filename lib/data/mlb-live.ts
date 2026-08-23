@@ -404,7 +404,11 @@ export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseU
          from lineup_entry le
          join player p on p.id = le.player_id
          where le.team_id = $1
-           and le.lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)
+           and le.lineup_date = (
+             select max(lineup_date)
+             from lineup_entry
+             where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+           )
            and p.mlb_player_id is not null
            and p.current_mlb_team_id is not null`,
         [teamId],

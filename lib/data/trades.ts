@@ -3,6 +3,7 @@ import { getPool } from "@/lib/db/client";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { hasActiveScoringPeriod, startedGameTodaySql } from "@/lib/data/game-locks";
 import { enqueueNotificationForTeam } from "@/lib/data/notifications";
+import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
 import { planInitialLineup, type AssignablePlayer } from "@/lib/draft/lineup-assignment";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
@@ -167,13 +168,17 @@ async function executeTrade(client: PoolClient, context: LeagueContext, trade: T
   ];
 
   const dropClearsAt = nextWaiverProcessingTime(context.settings.waiverProcessingDays ?? [], new Date());
+  const snapshots = new Map<string, Awaited<ReturnType<typeof ensureTodayLineupSnapshot>>>();
+  for (const teamId of [trade.from_team_id, trade.to_team_id]) {
+    snapshots.set(teamId, await ensureTodayLineupSnapshot(client, teamId, context.leagueId));
+  }
 
   for (const drop of drops) {
     await client.query(
       `update roster_entry set dropped_at = now(), waiver_until = $3 where team_id = $1 and player_id = $2 and dropped_at is null`,
       [drop.teamId, drop.playerId, dropClearsAt],
     );
-    await removeLineupEntry(client, drop.teamId, drop.playerId);
+    await removeLineupEntry(client, drop.teamId, drop.playerId, snapshots.get(drop.teamId)?.lineupDate);
   }
 
   for (const move of moves) {
@@ -181,7 +186,7 @@ async function executeTrade(client: PoolClient, context: LeagueContext, trade: T
       move.fromTeamId,
       move.playerId,
     ]);
-    await removeLineupEntry(client, move.fromTeamId, move.playerId);
+    await removeLineupEntry(client, move.fromTeamId, move.playerId, snapshots.get(move.fromTeamId)?.lineupDate);
     await client.query(`insert into roster_entry (team_id, player_id, acquisition_type) values ($1, $2, 'trade')`, [
       move.toTeamId,
       move.playerId,
@@ -216,12 +221,14 @@ async function executeTrade(client: PoolClient, context: LeagueContext, trade: T
   return "processed";
 }
 
-async function removeLineupEntry(client: PoolClient, teamId: string, playerId: string): Promise<void> {
+async function removeLineupEntry(client: PoolClient, teamId: string, playerId: string, lineupDate?: string): Promise<void> {
+  if (!lineupDate) {
+    return;
+  }
+
   await client.query(
-    `delete from lineup_entry
-     where team_id = $1 and player_id = $2
-       and lineup_date = (select max(lineup_date) from lineup_entry where team_id = $1)`,
-    [teamId, playerId],
+    `delete from lineup_entry where team_id = $1 and player_id = $2 and lineup_date = $3`,
+    [teamId, playerId, lineupDate],
   );
 }
 
@@ -245,13 +252,9 @@ async function assignIncomingLineupSlots(
     return;
   }
 
-  const scoringPeriod = await client.query<{ id: string }>(
-    `select id from scoring_period where league_id = $1 and status = 'active' order by starts_at desc limit 1`,
-    [context.leagueId],
-  );
-  const scoringPeriodId = scoringPeriod.rows[0]?.id;
+  const snapshot = await ensureTodayLineupSnapshot(client, teamId, context.leagueId);
 
-  if (!scoringPeriodId) {
+  if (!snapshot) {
     return;
   }
 
@@ -272,14 +275,9 @@ async function assignIncomingLineupSlots(
   }));
   const playerById = new Map(rosterPlayers.map((player) => [player.playerId, player]));
 
-  const lineupDateResult = await client.query<{ lineup_date: Date | string }>(
-    `select coalesce(max(lineup_date), current_date) as lineup_date from lineup_entry where team_id = $1`,
-    [teamId],
-  );
-  const lineupDate = lineupDateResult.rows[0].lineup_date;
   const currentSlots = await client.query<{ slot: RosterSlot; used: string | number }>(
     `select slot, count(*) as used from lineup_entry where team_id = $1 and lineup_date = $2 group by slot`,
-    [teamId, lineupDate],
+    [teamId, snapshot.lineupDate],
   );
   const limits = rosterSlotCounts(context.settings);
   const used = new Map(currentSlots.rows.map((row) => [row.slot, Number(row.used)]));
@@ -312,7 +310,7 @@ async function assignIncomingLineupSlots(
        values ($1, $2, $3, $4, $5)
        on conflict (team_id, player_id, lineup_date)
        do update set slot = excluded.slot`,
-      [teamId, assignment.playerId, scoringPeriodId, lineupDate, assignment.slot],
+      [teamId, assignment.playerId, snapshot.scoringPeriodId, snapshot.lineupDate, assignment.slot],
     );
   }
 }
