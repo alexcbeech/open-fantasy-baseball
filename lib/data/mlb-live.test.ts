@@ -42,18 +42,16 @@ const boxscore = {
 describe("extractLine", () => {
   it("maps a home hitter line and drops the partial-game AVG", () => {
     const line = extractLine(boxscore, 100);
-    expect(line).toEqual({ R: 1, HR: 1, RBI: 2, SB: 0, H: 2, AB: 4 });
+    expect(line).toEqual({ R: 1, HR: 1, RBI: 2, SB: 0, H: 2, AB: 4, "1B": 1 });
     expect(line.AVG).toBeUndefined();
-    // R + HR*4 + RBI = 1 + 4 + 2 = 7
-    expect(calculateFantasyPoints(line)).toBe(7);
+    expect(calculateFantasyPoints(line)).toBeCloseTo(18.7, 5);
   });
 
   it("finds a player on the away team and drops the partial-game ERA", () => {
     const line = extractLine(boxscore, 200);
-    expect(line).toMatchObject({ IP: 5, K: 7, ER: 1, W: 1 });
+    expect(line).toMatchObject({ IP: 5, O: 15, K: 7, ER: 1, W: 1, P_BB: 1, P_H: 3 });
     expect(line.ERA).toBeUndefined();
-    // IP*3 + K - ER + W*5 = 15 + 7 - 1 + 5 = 26
-    expect(calculateFantasyPoints(line)).toBe(26);
+    expect(calculateFantasyPoints(line)).toBeCloseTo(35.8, 5);
   });
 
   it("returns an empty line for a player not in the boxscore or a null payload", () => {
@@ -102,6 +100,50 @@ describe("getGameLinesForPlayersOnDate", () => {
 
     expect(requestedUrls[0]).toContain("date=2026-08-13");
     expect(result.liveGameInProgress).toBe(false);
-    expect(result.lines["player-100"]).toMatchObject({ state: "Final", points: 7 });
+    expect(result.lines["player-100"]).toMatchObject({ state: "Final", points: 18.7 });
+  });
+
+  it("combines both games of a doubleheader", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/schedule?")) {
+          return new Response(
+            JSON.stringify({
+              dates: [
+                {
+                  games: [
+                    {
+                      gamePk: 123,
+                      status: { abstractGameState: "Final" },
+                      teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                    },
+                    {
+                      gamePk: 124,
+                      status: { abstractGameState: "Final" },
+                      teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                    },
+                  ],
+                },
+              ],
+            }),
+          );
+        }
+        if (url.endsWith("/game/123/boxscore") || url.endsWith("/game/124/boxscore")) {
+          return new Response(JSON.stringify(boxscore));
+        }
+        return new Response("Not found", { status: 404 });
+      }),
+    );
+
+    const result = await getGameLinesForPlayersOnDate(
+      [{ id: "player-100", mlb_player_id: 100, current_mlb_team_id: 10 }],
+      "2026-08-13",
+      "https://stats.test/api/v1",
+    );
+
+    expect(result.lines["player-100"].stats).toMatchObject({ R: 2, HR: 2, RBI: 4, H: 4, AB: 8, "1B": 2 });
+    expect(result.lines["player-100"].points).toBe(37.4);
   });
 });

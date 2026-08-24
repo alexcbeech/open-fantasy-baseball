@@ -1,5 +1,13 @@
 import { getPool } from "../db/client";
-import { calculateFantasyPoints, inningsFromIpNotation } from "@/lib/fantasy/scoring";
+import {
+  buildPointsWeightMap,
+  calculateFantasyPoints,
+  inningsFromIpNotation,
+  yahooPointsWeights,
+  type PointStatSide,
+  type PointsWeightMap,
+} from "@/lib/fantasy/scoring";
+import type { LeagueScoringType } from "@/lib/fantasy/types";
 import { ensureSeasonSchedule } from "./season";
 
 type StatMap = Record<string, number | string>;
@@ -37,12 +45,23 @@ export function computeCategoryValue(category: string, stats: StatMap[]): number
   }
   if (category === "WHIP") {
     const innings = sumInnings();
-    return innings ? (sum("BB") + sum("HA")) / innings : null;
+    const walks = stats.reduce(
+      (total, line) => total + num(line.P_BB ?? (isPitchingStatLine(line) ? line.BB : undefined)),
+      0,
+    );
+    const hits = stats.reduce((total, line) => total + num(line.P_H ?? line.HA), 0);
+    return innings ? (walks + hits) / innings : null;
   }
   if (category === "IP") {
     return sumInnings();
   }
   return sum(category);
+}
+
+function isPitchingStatLine(line: StatMap) {
+  return ["IP", "O", "ER", "W", "SV", "P_BB", "P_H", "HA", "P_HBP", "ERA", "WHIP", "GS"].some(
+    (key) => line[key] !== undefined,
+  );
 }
 
 export function compareCategory(
@@ -147,16 +166,19 @@ export type RecomputeMatchupsResult = {
 };
 
 /** Team fantasy-point total across its active lineup, to one decimal. */
-export function totalFantasyPoints(statLines: StatMap[]): number {
-  const total = statLines.reduce((sum, line) => sum + calculateFantasyPoints(line), 0);
+export function totalFantasyPoints(statLines: StatMap[], weights: PointsWeightMap = yahooPointsWeights): number {
+  const total = statLines.reduce((sum, line) => sum + calculateFantasyPoints(line, weights), 0);
   return Math.round(total * 10) / 10;
 }
 
 /** Matchup-period fantasy points grouped by player id, rounded to one decimal. */
-export function fantasyPointsByPlayer(rows: Array<{ playerId: string; stats: StatMap }>): Record<string, number> {
+export function fantasyPointsByPlayer(
+  rows: Array<{ playerId: string; stats: StatMap }>,
+  weights: PointsWeightMap = yahooPointsWeights,
+): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const row of rows) {
-    totals[row.playerId] = (totals[row.playerId] ?? 0) + calculateFantasyPoints(row.stats);
+    totals[row.playerId] = (totals[row.playerId] ?? 0) + calculateFantasyPoints(row.stats, weights);
   }
   for (const playerId of Object.keys(totals)) {
     totals[playerId] = Math.round(totals[playerId] * 10) / 10;
@@ -210,7 +232,7 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
       league_id: string;
       home_team_id: string;
       away_team_id: string;
-      scoring_type: string | null;
+      scoring_type: LeagueScoringType;
       starts_at: Date | string;
       ends_at: Date | string;
     }>(
@@ -226,19 +248,38 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
     let playerScoresWritten = 0;
 
     for (const matchup of matchups.rows) {
-      const categoryRows = await client.query<{ category: string }>(
-        `select category from league_stat_category where league_id = $1 order by side, sort_order`,
-        [matchup.league_id],
-      );
+      const [categoryRows, pointRows] = await Promise.all([
+        matchup.scoring_type === "h2h-points"
+          ? Promise.resolve({ rows: [] as Array<{ category: string }> })
+          : client.query<{ category: string }>(
+              `select category from league_stat_category where league_id = $1 order by side, sort_order`,
+              [matchup.league_id],
+            ),
+        matchup.scoring_type === "h2h-points"
+          ? client.query<{
+              category: string;
+              side: PointStatSide;
+              points_weight: string | number | null;
+            }>(
+              `select category, side, points_weight
+               from league_stat_category
+               where league_id = $1 and points_weight is not null
+               order by side, sort_order`,
+              [matchup.league_id],
+            )
+          : Promise.resolve({ rows: [] }),
+      ]);
       const categories = categoryRows.rows.map((row) => row.category);
+      const configuredWeights = buildPointsWeightMap(pointRows.rows);
+      const pointsWeights = Object.keys(configuredWeights).length ? configuredWeights : yahooPointsWeights;
       const [homePlayerStats, awayPlayerStats] = await Promise.all([
         periodLineupPlayerStats(client, matchup.home_team_id, matchup.starts_at, matchup.ends_at),
         periodLineupPlayerStats(client, matchup.away_team_id, matchup.starts_at, matchup.ends_at),
       ]);
       const homeStats = homePlayerStats.map((row) => row.stats);
       const awayStats = awayPlayerStats.map((row) => row.stats);
-      const homePlayerPoints = fantasyPointsByPlayer(homePlayerStats);
-      const awayPlayerPoints = fantasyPointsByPlayer(awayPlayerStats);
+      const homePlayerPoints = fantasyPointsByPlayer(homePlayerStats, pointsWeights);
+      const awayPlayerPoints = fantasyPointsByPlayer(awayPlayerStats, pointsWeights);
 
       playerScoresWritten += await replaceMatchupPlayerScores(client, matchup.id, [
         { teamId: matchup.home_team_id, scores: homePlayerPoints },
@@ -282,7 +323,7 @@ export async function recomputeMatchups(leagueId?: string): Promise<RecomputeMat
       // h2h-points compares total fantasy points; categories compares wins.
       const [homeScore, awayScore] =
         matchup.scoring_type === "h2h-points"
-          ? [totalFantasyPoints(homeStats), totalFantasyPoints(awayStats)]
+          ? [totalFantasyPoints(homeStats, pointsWeights), totalFantasyPoints(awayStats, pointsWeights)]
           : [homeWins, awayWins];
 
       await client.query(`update matchup set home_score = $1, away_score = $2 where id = $3`, [homeScore, awayScore, matchup.id]);

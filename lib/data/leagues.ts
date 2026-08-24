@@ -3,6 +3,7 @@ import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
 import { currentSeasonYear, formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
+import { yahooPointCategories } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { rotoStandingsForLeague } from "./roto";
@@ -316,21 +317,24 @@ export async function createLeague(input: CreateLeagueInput, commissioner: Leagu
           );
         }
 
-        for (const [index, category] of settings.hitterCategories.entries()) {
-          await client.query(
-            `insert into league_stat_category (league_id, category, side, sort_order)
-             values ($1, $2, 'hitting', $3)
-             on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
-            [leagueId, category, index],
-          );
-        }
+        const statCategories =
+          input.scoringType === "h2h-points"
+            ? yahooPointCategories
+            : [
+                ...settings.hitterCategories.map((category) => ({ category, side: "hitting" as const, weight: null })),
+                ...settings.pitcherCategories.map((category) => ({ category, side: "pitching" as const, weight: null })),
+              ];
+        const sideOrder = { hitting: 0, pitching: 0 };
 
-        for (const [index, category] of settings.pitcherCategories.entries()) {
+        for (const entry of statCategories) {
+          const sortOrder = sideOrder[entry.side]++;
           await client.query(
-            `insert into league_stat_category (league_id, category, side, sort_order)
-             values ($1, $2, 'pitching', $3)
-             on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
-            [leagueId, category, index],
+            `insert into league_stat_category (league_id, category, side, sort_order, points_weight)
+             values ($1, $2, $3, $4, $5)
+             on conflict (league_id, side, category) do update set
+               sort_order = excluded.sort_order,
+               points_weight = excluded.points_weight`,
+            [leagueId, entry.category, entry.side, sortOrder, entry.weight],
           );
         }
 
