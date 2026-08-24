@@ -112,18 +112,73 @@ describe("deriveHitterEligibilityFromMlbSplits", () => {
 describe("mapMlbStat", () => {
   it("maps hitting fields to OFB categories with rate stats as strings", () => {
     const stats = mapMlbStat(
-      { gamesPlayed: 81, runs: 27, homeRuns: 8, rbi: 43, stolenBases: 0, avg: ".252", ignored: 99 },
+      {
+        gamesPlayed: 81,
+        runs: 27,
+        doubles: 12,
+        triples: 3,
+        homeRuns: 8,
+        rbi: 43,
+        baseOnBalls: 20,
+        stolenBases: 0,
+        hitByPitch: 4,
+        hits: 60,
+        atBats: 200,
+        avg: ".252",
+        ignored: 99,
+      },
       "hitting",
     );
-    expect(stats).toEqual({ G: 81, R: 27, HR: 8, RBI: 43, SB: 0, AVG: ".252" });
+    expect(stats).toEqual({
+      G: 81,
+      R: 27,
+      "2B": 12,
+      "3B": 3,
+      HR: 8,
+      RBI: 43,
+      BB: 20,
+      SB: 0,
+      HBP: 4,
+      AVG: ".252",
+      H: 60,
+      AB: 200,
+      "1B": 37,
+    });
   });
 
   it("maps pitching fields to OFB categories", () => {
     const stats = mapMlbStat(
-      { gamesPlayed: 22, gamesStarted: 21, wins: 9, saves: 0, strikeOuts: 156, era: "1.47", whip: "0.78" },
+      {
+        gamesPlayed: 22,
+        gamesStarted: 21,
+        wins: 9,
+        saves: 0,
+        strikeOuts: 156,
+        era: "1.47",
+        whip: "0.78",
+        inningsPitched: "120.2",
+        earnedRuns: 20,
+        baseOnBalls: 15,
+        hits: 70,
+        hitBatsmen: 3,
+      },
       "pitching",
     );
-    expect(stats).toEqual({ G: 22, GS: 21, W: 9, SV: 0, K: 156, ERA: "1.47", WHIP: "0.78" });
+    expect(stats).toEqual({
+      G: 22,
+      GS: 21,
+      W: 9,
+      SV: 0,
+      K: 156,
+      ERA: "1.47",
+      WHIP: "0.78",
+      IP: 120.2,
+      ER: 20,
+      P_BB: 15,
+      P_H: 70,
+      P_HBP: 3,
+      O: 362,
+    });
   });
 
   it("keeps counting stats numeric and rate stats textual", () => {

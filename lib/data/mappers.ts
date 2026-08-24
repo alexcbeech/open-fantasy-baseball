@@ -122,7 +122,7 @@ export function mapPlayer(row: DbPlayerRow): Player {
     newsHeadline: row.news_headline ?? undefined,
     seasonStats: row.season_stats ?? {},
     projectedStats: row.projected_stats ?? {},
-    seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points)) : null,
+    seasonPoints: row.season_fan_points != null ? Math.round(Number(row.season_fan_points) * 10) / 10 : null,
     nextGame,
     todaysGameStart: row.todays_game_start ? new Date(row.todays_game_start).toISOString() : null,
     todaysGameCount: Math.max(0, Math.round(toNumber(row.todays_game_count))),

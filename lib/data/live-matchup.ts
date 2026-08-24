@@ -1,4 +1,11 @@
 import { query, tryDatabase } from "@/lib/db/client";
+import {
+  buildPointsWeightMap,
+  calculateFantasyPoints,
+  yahooPointsWeights,
+  type PointStatSide,
+  type PointsWeightMap,
+} from "@/lib/fantasy/scoring";
 import type { LeagueScoringType, LiveMatchupUpdate, MatchupCategoryResult } from "@/lib/fantasy/types";
 import {
   compareCategory,
@@ -117,6 +124,7 @@ export function buildLiveMatchupUpdate(input: {
   hasOverlayStats: boolean;
   /** True while any of those games is still in progress. */
   liveGameInProgress: boolean;
+  pointsWeights?: PointsWeightMap;
 }): LiveMatchupUpdate {
   const {
     isHome,
@@ -128,6 +136,7 @@ export function buildLiveMatchupUpdate(input: {
     overlayPoints,
     hasOverlayStats,
     liveGameInProgress,
+    pointsWeights = yahooPointsWeights,
   } = input;
 
   if (!hasOverlayStats) {
@@ -156,8 +165,8 @@ export function buildLiveMatchupUpdate(input: {
     };
   });
 
-  const homeScore = input.scoringType === "h2h-points" ? totalFantasyPoints(homeStats) : homeWins;
-  const awayScore = input.scoringType === "h2h-points" ? totalFantasyPoints(awayStats) : awayWins;
+  const homeScore = input.scoringType === "h2h-points" ? totalFantasyPoints(homeStats, pointsWeights) : homeWins;
+  const awayScore = input.scoringType === "h2h-points" ? totalFantasyPoints(awayStats, pointsWeights) : awayWins;
 
   return {
     live: liveGameInProgress,
@@ -201,13 +210,26 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
 
       const isHome = matchup.home_team_id === teamId;
       const currentEtDate = todayEtDate();
-      const [categoryRows, latestStored] = await Promise.all([
+      const [categoryRows, pointRows, latestStored] = await Promise.all([
         matchup.scoring_type === "h2h-points"
           ? Promise.resolve({ rows: [] as { category: string }[] })
           : query<{ category: string }>(
               `select category from league_stat_category where league_id = $1 order by side, sort_order`,
               [matchup.league_id],
             ),
+        matchup.scoring_type === "h2h-points"
+          ? query<{
+              category: string;
+              side: PointStatSide;
+              points_weight: string | number | null;
+            }>(
+              `select category, side, points_weight
+               from league_stat_category
+               where league_id = $1 and points_weight is not null
+               order by side, sort_order`,
+              [matchup.league_id],
+            )
+          : Promise.resolve({ rows: [] }),
         query<{ stat_date: string | null }>(
           `select max(stat_date)::text as stat_date
            from player_stat_line
@@ -222,6 +244,8 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
           [matchup.starts_at, matchup.ends_at],
         ),
       ]);
+      const configuredWeights = buildPointsWeightMap(pointRows.rows);
+      const pointsWeights = Object.keys(configuredWeights).length ? configuredWeights : yahooPointsWeights;
 
       const overlayDates = liveOverlayDates({
         periodStartsAt: matchup.starts_at,
@@ -254,8 +278,8 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
       const homeOverlayStats: StatMap[] = [];
       const awayOverlayStats: StatMap[] = [];
       const overlayPoints: Record<string, number> = {
-        ...fantasyPointsByPlayer(homePeriodRows),
-        ...fantasyPointsByPlayer(awayPeriodRows),
+        ...fantasyPointsByPlayer(homePeriodRows, pointsWeights),
+        ...fantasyPointsByPlayer(awayPeriodRows, pointsWeights),
       };
       let hasOverlayStats = false;
       let liveGameInProgress = false;
@@ -271,14 +295,16 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
           const entry = lines[row.id];
           if (entry) {
             homeOverlayStats.push(entry.stats);
-            overlayPoints[row.id] = (overlayPoints[row.id] ?? 0) + entry.points;
+            overlayPoints[row.id] =
+              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(entry.stats, pointsWeights)) * 10) / 10;
           }
         }
         for (const row of overlay.awayActive) {
           const entry = lines[row.id];
           if (entry) {
             awayOverlayStats.push(entry.stats);
-            overlayPoints[row.id] = (overlayPoints[row.id] ?? 0) + entry.points;
+            overlayPoints[row.id] =
+              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(entry.stats, pointsWeights)) * 10) / 10;
           }
         }
       }
@@ -294,6 +320,7 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
         overlayPoints,
         hasOverlayStats,
         liveGameInProgress,
+        pointsWeights,
       });
     },
     () => notLive,

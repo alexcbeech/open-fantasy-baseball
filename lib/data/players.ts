@@ -498,7 +498,8 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
       }
 
       const nextGameRow = staticDetail.nextGame;
-      const fanPoints = playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points)) : null;
+      const fanPoints =
+        playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points) * 10) / 10 : null;
       const valueRow = staticDetail.value;
       const totalTeams = valueRow ? Number(valueRow.total_teams) : 0;
       // Prefer real-world ownership from the ADP feed; fall back to this app's

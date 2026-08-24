@@ -20,8 +20,8 @@ export function playerStatusLabel(player: Pick<Player, "status" | "statusDetail"
  * computing from the season stat line in demo/mock mode.
  */
 export function rowPoints(player: Player) {
-  const seasonPts = player.seasonPoints ?? Math.round(calculateFantasyPoints(player.seasonStats));
-  const projPts = Math.round(calculateFantasyPoints(player.projectedStats));
+  const seasonPts = player.seasonPoints ?? Math.round(calculateFantasyPoints(player.seasonStats) * 10) / 10;
+  const projPts = Math.round(calculateFantasyPoints(player.projectedStats) * 10) / 10;
   return { seasonPts, projPts };
 }
 

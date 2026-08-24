@@ -11,7 +11,7 @@ function player(overrides: PlayerOverrides): Player {
     status: "active",
     availability: "rostered",
     seasonStats: {},
-    // HR is worth 4 points: 35 projected HR over 35 remaining team games.
+    // Yahoo HR is worth 10.4 points: 35 projected HR over 35 remaining games.
     projectedStats: { HR: 35 },
     remainingTeamGames: 35,
     todaysGameCount: 1,
@@ -47,7 +47,7 @@ describe("projectTodayPoints", () => {
 
   it("gives hitters their per-game ROS slice, platoon-adjusted", () => {
     const neutral = projectTodayPoints(player({ id: "of", positions: ["OF"] }));
-    expect(neutral).toBeCloseTo(4, 5);
+    expect(neutral).toBeCloseTo(10.4, 5);
 
     const leftyVsLefty = projectTodayPoints(
       player({ id: "lhb", positions: ["OF"], bats: "L", todaysOpposingPitcherThrows: "L" }),
@@ -62,7 +62,7 @@ describe("projectTodayPoints", () => {
   it("projects a full start for probable starters and zero for idle SPs", () => {
     const probable = projectTodayPoints(player({ id: "sp", positions: ["SP"], probableStarterToday: true }));
     // Without a projected GS count, a five-man rotation implies seven starts.
-    expect(probable).toBeCloseTo(140 / 7, 5);
+    expect(probable).toBeCloseTo(364 / 7, 5);
     expect(projectTodayPoints(player({ id: "idle-sp", positions: ["SP"] }))).toBe(0);
   });
 
@@ -70,7 +70,7 @@ describe("projectTodayPoints", () => {
     const rp = projectTodayPoints(
       player({ id: "rp", positions: ["RP"], bats: "L", todaysOpposingPitcherThrows: "L" }),
     );
-    expect(rp).toBeCloseTo(4, 5);
+    expect(rp).toBeCloseTo(10.4, 5);
   });
 
   it("uses the real remaining schedule and counts both ends of a doubleheader", () => {
@@ -89,6 +89,6 @@ describe("projectTodayPoints", () => {
     const probable = projectTodayPoints(
       player({ id: "sp-gs", positions: ["SP"], probableStarterToday: true, projectedStats: { HR: 20, GS: 4 } }),
     );
-    expect(probable).toBeCloseTo(20, 5);
+    expect(probable).toBeCloseTo(52, 5);
   });
 });

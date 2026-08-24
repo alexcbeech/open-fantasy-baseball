@@ -1,3 +1,4 @@
+import { yahooPointCategories, type YahooPointCategory } from "./scoring";
 import type { DraftType, LeagueScoringType, LineupLockMode, PlayerPool, RosterSlot, StatCategory, TradeReviewMode, WaiverMode } from "./types";
 
 export type CommissionerSettingKind =
@@ -20,6 +21,7 @@ export type CommissionerSettingDefinition = {
     | number[]
     | RosterSlot[]
     | StatCategory[]
+    | YahooPointCategory[]
     | Record<RosterSlot, number>;
   options?: readonly string[] | readonly number[];
   min?: number;
@@ -98,8 +100,8 @@ export const commissionerSettingsMatrix: CommissionerSettingDefinition[] = [
     label: "Points Weights",
     kind: "stat-categories",
     appliesTo: ["h2h-points"],
-    defaultValue: ["R", "HR", "RBI", "SB", "W", "SV", "K"],
-    description: "Stat events and weights used to calculate head-to-head points totals.",
+    defaultValue: yahooPointCategories,
+    description: "Yahoo-compatible stat events and weights used to calculate head-to-head points totals.",
     commissionerEditable: true,
     locksAfterDraft: true,
   },

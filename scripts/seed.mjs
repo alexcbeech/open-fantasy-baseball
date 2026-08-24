@@ -207,7 +207,7 @@ async function main() {
       await client.query(
         `insert into league_stat_category (league_id, category, side, sort_order)
          values ($1, $2, 'hitting', $3)
-         on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
+         on conflict (league_id, side, category) do update set sort_order = excluded.sort_order`,
         [leagueId, category, index],
       );
     }
@@ -216,7 +216,7 @@ async function main() {
       await client.query(
         `insert into league_stat_category (league_id, category, side, sort_order)
          values ($1, $2, 'pitching', $3)
-         on conflict (league_id, category) do update set side = excluded.side, sort_order = excluded.sort_order`,
+         on conflict (league_id, side, category) do update set sort_order = excluded.sort_order`,
         [leagueId, category, index],
       );
     }
@@ -304,7 +304,7 @@ async function main() {
         await client.query(
           `insert into player_stat_line (player_id, stat_date, split, stats, source)
            values ($1, '2026-07-01', $2, $3::jsonb, 'seed')
-           on conflict (player_id, stat_date, split, source)
+           on conflict (player_id, stat_date, game_pk, split, source)
            do update set stats = excluded.stats, collected_at = now()`,
           [id, split, JSON.stringify(stats)],
         );
@@ -326,7 +326,7 @@ async function main() {
         await client.query(
           `insert into player_stat_line (player_id, stat_date, game_pk, split, stats, source)
            values ($1, $2::date, $3, 'game', $4::jsonb, 'seed')
-           on conflict (player_id, stat_date, split, source)
+           on conflict (player_id, stat_date, game_pk, split, source)
            do update set game_pk = excluded.game_pk, stats = excluded.stats, collected_at = now()`,
           [id, game.date, Number(`${String(mlbId).slice(-4)}${index + 1}`), JSON.stringify(game.stats)],
         );

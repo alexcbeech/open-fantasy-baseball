@@ -5,7 +5,7 @@ import {
   normalizeHitterFieldingPosition,
   type FieldingUsage,
 } from "../fantasy/position-eligibility-rules";
-import { calculateFantasyPoints } from "../fantasy/scoring";
+import { calculateFantasyPoints, inningsFromIpNotation } from "../fantasy/scoring";
 import { chunk, mapWithConcurrency } from "./batching";
 
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
@@ -29,9 +29,13 @@ type StatMap = Record<string, number | string>;
 const HITTING_MAP: Record<string, string> = {
   gamesPlayed: "G",
   runs: "R",
+  doubles: "2B",
+  triples: "3B",
   homeRuns: "HR",
   rbi: "RBI",
+  baseOnBalls: "BB",
   stolenBases: "SB",
+  hitByPitch: "HBP",
   avg: "AVG",
   hits: "H",
   atBats: "AB",
@@ -46,8 +50,9 @@ const PITCHING_MAP: Record<string, string> = {
   whip: "WHIP",
   inningsPitched: "IP",
   earnedRuns: "ER",
-  baseOnBalls: "BB",
-  hits: "HA",
+  baseOnBalls: "P_BB",
+  hits: "P_H",
+  hitBatsmen: "P_HBP",
 };
 const RATE_KEYS = new Set(["AVG", "ERA", "WHIP"]);
 
@@ -170,6 +175,13 @@ export function mapMlbStat(stat: Record<string, unknown> | undefined, group: "hi
     out[ofbKey] = RATE_KEYS.has(ofbKey) ? String(value) : Number(value);
   }
 
+  if (group === "hitting" && out.H !== undefined) {
+    out["1B"] = Math.max(0, Number(out.H) - Number(out["2B"] ?? 0) - Number(out["3B"] ?? 0) - Number(out.HR ?? 0));
+  }
+  if (group === "pitching" && out.IP !== undefined) {
+    out.O = Math.round(inningsFromIpNotation(out.IP) * 3);
+  }
+
   return out;
 }
 
@@ -256,15 +268,17 @@ type PositionObservationRow = {
 
 /**
  * Multi-row upsert of stat lines. The feed can emit two rows for one conflict
- * key (e.g. both games of a doubleheader share stat_date + split 'game'), and
- * a multi-row insert can't touch a row twice, so dedupe keeping the last
- * occurrence — the same end state the sequential upserts produced.
+ * key. Hitting and pitching blocks for a two-way player share a key, so their
+ * side-namespaced stats are merged into one line. game_pk remains part of the
+ * key so both halves of a doubleheader are retained.
  * Returns the number of rows written.
  */
 async function flushStatLines(client: PoolClient, rows: StatLineRow[]) {
   const rowByKey = new Map<string, StatLineRow>();
   for (const row of rows) {
-    rowByKey.set(`${row.playerId}|${row.statDate}|${row.split}`, row);
+    const key = `${row.playerId}|${row.statDate}|${row.gamePk ?? "aggregate"}|${row.split}`;
+    const existing = rowByKey.get(key);
+    rowByKey.set(key, existing ? { ...existing, stats: { ...existing.stats, ...row.stats } } : row);
   }
   const unique = [...rowByKey.values()];
 
@@ -274,7 +288,7 @@ async function flushStatLines(client: PoolClient, rows: StatLineRow[]) {
        select t.player_id, t.stat_date, t.game_pk, t.split, t.stats, $6
        from unnest($1::uuid[], $2::date[], $3::integer[], $4::text[], $5::jsonb[])
          as t(player_id, stat_date, game_pk, split, stats)
-       on conflict (player_id, stat_date, split, source) do update set
+       on conflict (player_id, stat_date, game_pk, split, source) do update set
          stats = excluded.stats,
          game_pk = excluded.game_pk,
          collected_at = now()`,
@@ -607,7 +621,7 @@ export async function syncPlayerStats(baseUrl = defaultBaseUrl, today = new Date
             const stats = mapMlbStat(split.stat, group);
             if (Object.keys(stats).length) {
               seasonLines.push({ playerId, statDate, gamePk: null, split: "season", stats });
-              seasonFanPoints.set(playerId, calculateFantasyPoints(stats));
+              seasonFanPoints.set(playerId, (seasonFanPoints.get(playerId) ?? 0) + calculateFantasyPoints(stats));
             }
             if (group === "hitting") {
               seasonAppearances.set(
@@ -754,7 +768,7 @@ async function fetchRosteredPlayerStats(
     if (Object.keys(stats).length) {
       rowsSeen += 1;
       statLines.push({ playerId: player.id, statDate, gamePk: null, split: "season", stats });
-      fanPoints = calculateFantasyPoints(stats);
+      fanPoints = (fanPoints ?? 0) + calculateFantasyPoints(stats);
     }
     if (group === "pitching") {
       eligibility.push(...pitcherEligibilityRows(player.id, block.splits?.[0]?.stat, season));
@@ -804,7 +818,7 @@ async function fetchPlayerGameLogRows(
 
   for (const block of gameLog.stats ?? []) {
     const group = blockGroup(block);
-    for (const split of (block.splits ?? []).slice(-12)) {
+    for (const split of block.splits ?? []) {
       if (!split.date) {
         continue;
       }

@@ -139,8 +139,8 @@ describe("buildLiveMatchupUpdate", () => {
       }),
     );
 
-    expect(update.userScore).toBe(15);
-    expect(update.opponentScore).toBe(7);
+    expect(update.userScore).toBeCloseTo(36.9, 5);
+    expect(update.opponentScore).toBeCloseTo(18.8, 5);
     expect(update.categoryScores).toEqual([]);
   });
 });

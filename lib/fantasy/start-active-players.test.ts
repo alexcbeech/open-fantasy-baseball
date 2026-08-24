@@ -28,9 +28,9 @@ function entry(slot: RosterSlot, overrides: PlayerOverrides): LineupPlayer {
   };
 }
 
-// projectedStats producing simple point totals: HR is worth 4 points.
+// projectedStats producing simple point totals: Yahoo HR is worth 10.4 points.
 function proj(points: number): Record<string, number> {
-  return { HR: points / 4 };
+  return { HR: points / 10.4 };
 }
 
 describe("startsToday", () => {

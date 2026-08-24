@@ -237,7 +237,7 @@ export async function syncProjections(
         await client.query(
           `insert into player_stat_line (player_id, stat_date, split, stats, source)
            values ($1, $2, 'projection_ros', $3::jsonb, $4)
-           on conflict (player_id, stat_date, split, source) do update set
+           on conflict (player_id, stat_date, game_pk, split, source) do update set
              stats = excluded.stats,
              collected_at = now()`,
           [projection.playerId, statDate, JSON.stringify(projection.stats), provider.source],

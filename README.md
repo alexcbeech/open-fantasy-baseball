@@ -62,7 +62,12 @@ npm.cmd run sync:schedule
 npm.cmd run sync:bios
 ```
 
-Recompute each active matchup's category battle from the current lineups' real stats (`lib/data/matchup-scoring.ts`). Counting categories sum; rate categories (AVG/ERA/WHIP) are computed from components (H/AB, IP/ER/BB/HA):
+Recompute each active matchup from the current lineups' real stats (`lib/data/matchup-scoring.ts`). Category leagues sum counting categories and rebuild AVG/ERA/WHIP from components (H/AB and IP/ER/P_BB/P_H). Points leagues use Yahoo-compatible, league-persisted weights:
+
+- Batters: 1B 2.6, 2B 5.2, 3B 7.8, HR 10.4, R 1.9, RBI 1.9, BB 2.6, SB 4.2, HBP 2.6.
+- Pitchers: SV 8, W 8, K 3, ER -3, O 1, BB -1.3, H -1.3, HBP -1.3.
+
+Pitching categories that overlap batting names are stored internally as `P_BB`, `P_H`, and `P_HBP`; `O` is derived exactly from MLB innings notation. The stats sync imports complete season game logs so newly added scoring fields and both games of a doubleheader are retained.
 
 ```bash
 npm.cmd run sync:matchups
