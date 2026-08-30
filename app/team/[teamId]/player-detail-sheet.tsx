@@ -52,7 +52,6 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
   // player's team has no game in progress (the route returns live: false).
   useEffect(() => {
     let active = true;
-    setLive(null);
 
     const load = async () => {
       try {
@@ -79,10 +78,6 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
 
   useEffect(() => {
     let active = true;
-    const cached = getCachedPlayerDetail(playerId, teamId);
-    if (!cached) {
-      setState({ kind: "loading", player: null, message: "Loading player..." });
-    }
 
     (async () => {
       try {

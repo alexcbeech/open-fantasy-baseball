@@ -1,5 +1,5 @@
 import { query, withDemoFallback } from "@/lib/db/client";
-import type { LeagueTransactionCategory, LeagueTransactionItem } from "@/lib/fantasy/transaction-types";
+import type { LeagueTransactionItem } from "@/lib/fantasy/transaction-types";
 
 export type FantasyTransactionRow = {
   id: string;

@@ -4,7 +4,7 @@ import { AuthControl } from "@/app/auth-control";
 import { BrandLockup } from "@/app/brand-lockup";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listAdminRunHistory } from "@/lib/data/admin-runs";
-import { listAuditEvents } from "@/lib/data/audit";
+import { listAuditEventPage } from "@/lib/data/audit";
 import { listRecentFeedback } from "@/lib/data/feedback";
 import { nightlyProcessingTasks, getNightlyProcessingWindow } from "@/lib/jobs/nightly-processing";
 import { AdminAuditLog } from "./audit-log";
@@ -45,7 +45,7 @@ export default async function AdminPage() {
   const window = getNightlyProcessingWindow();
   const history = await listAdminRunHistory();
   const feedback = await listRecentFeedback();
-  const auditEvents = await listAuditEvents();
+  const auditPage = await listAuditEventPage();
 
   return (
     <main className="app-shell">
@@ -105,7 +105,7 @@ export default async function AdminPage() {
             <span className="subtle">newest first</span>
           </div>
 
-          <AdminAuditLog initialEvents={auditEvents} />
+          <AdminAuditLog initialEvents={auditPage.events} initialHasMore={auditPage.hasMore} />
         </section>
       </section>
     </main>

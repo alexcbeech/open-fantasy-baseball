@@ -154,7 +154,7 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
   const queuedIds = useMemo(() => new Set((draft?.myQueue ?? []).map((entry) => entry.playerId)), [draft?.myQueue]);
   const myPicks = useMemo(
     () => (draft?.myTeamId ? draft.picks.filter((pick) => pick.teamId === draft.myTeamId) : []),
-    [draft?.picks, draft?.myTeamId],
+    [draft],
   );
   const myNeeds = useMemo(
     () =>

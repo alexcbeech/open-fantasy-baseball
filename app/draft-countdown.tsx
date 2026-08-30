@@ -13,8 +13,8 @@ export function DraftCountdown({ scheduledStartAt }: { scheduledStartAt: string 
     const targetMs = Date.parse(scheduledStartAt);
 
     if (Number.isNaN(targetMs)) {
-      setCountdown(null);
-      return;
+      const resetTimer = window.setTimeout(() => setCountdown(null), 0);
+      return () => window.clearTimeout(resetTimer);
     }
 
     const update = () => {
@@ -28,9 +28,12 @@ export function DraftCountdown({ scheduledStartAt }: { scheduledStartAt: string 
     };
 
     refreshed.current = false;
-    update();
+    const initialTimer = window.setTimeout(update, 0);
     const timer = window.setInterval(update, 1000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [scheduledStartAt, router]);
 
   if (!countdown) {

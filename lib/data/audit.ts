@@ -1,5 +1,5 @@
 import { isDatabaseConfigured, query } from "@/lib/db/client";
-import type { AuditEventRecord, AuditListFilters } from "@/lib/data/audit-schema";
+import type { AuditEventPage, AuditEventRecord, AuditListFilters } from "@/lib/data/audit-schema";
 
 type AuditRow = {
   id: string;
@@ -71,10 +71,10 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
 
 const MAX_PAGE = 200;
 
-/** Newest-first audit page for the admin viewer; `before` cursors older pages. */
-export async function listAuditEvents(filters: AuditListFilters = {}): Promise<AuditEventRecord[]> {
+/** Newest-first audit page with a stable timestamp-plus-id keyset cursor. */
+export async function listAuditEventPage(filters: AuditListFilters = {}): Promise<AuditEventPage> {
   if (!isDatabaseConfigured()) {
-    return [];
+    return { events: [], hasMore: false };
   }
 
   const conditions: string[] = [];
@@ -90,13 +90,18 @@ export async function listAuditEvents(filters: AuditListFilters = {}): Promise<A
     conditions.push(`actor_email ilike $${values.length}`);
   }
 
-  if (filters.before) {
+  if (filters.before && filters.beforeId) {
+    values.push(filters.before);
+    const beforeIndex = values.length;
+    values.push(filters.beforeId);
+    conditions.push(`(occurred_at, id) < ($${beforeIndex}::timestamptz, $${values.length}::uuid)`);
+  } else if (filters.before) {
     values.push(filters.before);
     conditions.push(`occurred_at < $${values.length}`);
   }
 
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), MAX_PAGE);
-  values.push(limit);
+  values.push(limit + 1);
 
   const result = await query<AuditRow>(
     `select id, occurred_at, actor_user_id, actor_email, action, entity_type, entity_id, league_id, team_id, detail, ip, user_agent
@@ -107,7 +112,8 @@ export async function listAuditEvents(filters: AuditListFilters = {}): Promise<A
     values,
   );
 
-  return result.rows.map((row) => ({
+  const hasMore = result.rows.length > limit;
+  const events = result.rows.slice(0, limit).map((row) => ({
     id: row.id,
     occurredAt: new Date(row.occurred_at).toISOString(),
     actorUserId: row.actor_user_id,
@@ -121,4 +127,11 @@ export async function listAuditEvents(filters: AuditListFilters = {}): Promise<A
     ip: row.ip,
     userAgent: row.user_agent,
   }));
+
+  return { events, hasMore };
+}
+
+/** Backward-compatible event-list helper for server callers needing one page. */
+export async function listAuditEvents(filters: AuditListFilters = {}): Promise<AuditEventRecord[]> {
+  return (await listAuditEventPage(filters)).events;
 }

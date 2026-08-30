@@ -21,7 +21,14 @@ export type AuditListFilters = {
   action?: string;
   /** Case-insensitive substring match on the actor email. */
   actorEmail?: string;
-  /** Return events strictly older than this ISO timestamp (cursor). */
+  /** Cursor timestamp; pair with beforeId so equal-timestamp events are not skipped. */
   before?: string;
+  /** Tie-breaker for events sharing the cursor timestamp. */
+  beforeId?: string;
   limit?: number;
+};
+
+export type AuditEventPage = {
+  events: AuditEventRecord[];
+  hasMore: boolean;
 };

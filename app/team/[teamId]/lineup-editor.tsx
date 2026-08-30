@@ -130,12 +130,6 @@ export function LineupEditor({
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveEntry>>({});
 
-  // Resync when the server lineup changes underneath us (e.g. router.refresh()
-  // after an add/drop), so the editor never renders players that left the team.
-  useEffect(() => {
-    setSlotByPlayerId(slotsFromLineup(initialLineup));
-  }, [initialLineup]);
-
   // Live in-game overlay: while games are in progress, poll each rostered
   // player's live line so the row's bold number becomes today's live points and
   // the game line becomes the inning plus the in-game stat line. Players with
@@ -490,6 +484,7 @@ export function LineupEditor({
 
       {detailPlayerId ? (
         <PlayerDetailSheet
+          key={detailPlayerId}
           playerId={detailPlayerId}
           teamId={teamId}
           onClose={() => setDetailPlayerId(null)}
