@@ -3,11 +3,12 @@ import {
   buildPointsWeightMap,
   calculateFantasyPoints,
   inningsFromIpNotation,
+  statsForRosterSlot,
   yahooPointsWeights,
   type PointStatSide,
   type PointsWeightMap,
 } from "@/lib/fantasy/scoring";
-import type { LeagueScoringType } from "@/lib/fantasy/types";
+import type { LeagueScoringType, RosterSlot } from "@/lib/fantasy/types";
 import { ensureSeasonSchedule } from "./season";
 
 type StatMap = Record<string, number | string>;
@@ -79,8 +80,8 @@ export function compareCategory(
 }
 
 export async function activeLineupStats(client: { query: <T>(sql: string, values: unknown[]) => Promise<{ rows: T[] }> }, teamId: string) {
-  const result = await client.query<{ stats: StatMap }>(
-    `select season_stats.stats
+  const result = await client.query<{ stats: StatMap; slot: RosterSlot }>(
+    `select season_stats.stats, le.slot
      from lineup_entry le
      join lateral (
        select stats from player_stat_line psl
@@ -96,7 +97,7 @@ export async function activeLineupStats(client: { query: <T>(sql: string, values
        and le.slot not in ('BN', 'IL', 'NA')`,
     [teamId],
   );
-  return result.rows.map((row) => row.stats);
+  return result.rows.map((row) => statsForRosterSlot(row.stats, row.slot));
 }
 
 /**
@@ -111,7 +112,12 @@ export async function activeLineupStats(client: { query: <T>(sql: string, values
  * game-log stat_date is the ET official date, so bounds convert to ET days.
  */
 export async function periodLineupPlayerStats(
-  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ player_id: string; stats: StatMap }> }> },
+  client: {
+    query: (
+      sql: string,
+      values: unknown[],
+    ) => Promise<{ rows: Array<{ player_id: string; stats: StatMap; slot: RosterSlot }> }>;
+  },
   teamId: string,
   periodStartsAt: Date | string,
   periodEndsAt: Date | string,
@@ -128,7 +134,7 @@ export async function periodLineupPlayerStats(
 ) {
   const excludedDates = [...(options.excludeEtDates ?? []), ...(options.excludeEtDate ? [options.excludeEtDate] : [])];
   const result = await client.query(
-    `select psl.player_id, psl.stats
+    `select psl.player_id, psl.stats, lineup_on_date.slot
      from player_stat_line psl
      join lateral (
        select le.slot
@@ -145,11 +151,16 @@ export async function periodLineupPlayerStats(
        and lineup_on_date.slot not in ('BN', 'IL', 'NA')`,
     [teamId, periodStartsAt, periodEndsAt, excludedDates],
   );
-  return result.rows.map((row) => ({ playerId: row.player_id, stats: row.stats }));
+  return result.rows.map((row) => ({ playerId: row.player_id, stats: statsForRosterSlot(row.stats, row.slot) }));
 }
 
 export async function periodLineupStats(
-  client: { query: (sql: string, values: unknown[]) => Promise<{ rows: Array<{ player_id: string; stats: StatMap }> }> },
+  client: {
+    query: (
+      sql: string,
+      values: unknown[],
+    ) => Promise<{ rows: Array<{ player_id: string; stats: StatMap; slot: RosterSlot }> }>;
+  },
   teamId: string,
   periodStartsAt: Date | string,
   periodEndsAt: Date | string,

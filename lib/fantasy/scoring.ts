@@ -1,4 +1,4 @@
-import type { LeagueScoringType, Player, StatCategory } from "./types";
+import type { LeagueScoringType, Player, RosterSlot } from "./types";
 
 export type PointStatSide = "hitting" | "pitching";
 export type PointsWeightMap = Record<string, number>;
@@ -8,6 +8,28 @@ export type YahooPointCategory = {
   side: PointStatSide;
   weight: number;
 };
+
+const hitterRosterSlots = new Set<RosterSlot>(["C", "1B", "2B", "3B", "SS", "OF", "UTIL"]);
+const pitcherRosterSlots = new Set<RosterSlot>(["SP", "RP", "P"]);
+const hittingStatKeys = new Set(["G", "1B", "2B", "3B", "HR", "R", "RBI", "BB", "SB", "HBP", "AVG", "H", "AB"]);
+const pitchingStatKeys = new Set(["G", "GS", "W", "SV", "K", "ERA", "WHIP", "IP", "ER", "P_BB", "P_H", "P_HBP", "O", "HA"]);
+
+/**
+ * Keep only the side of a two-way player's line that their fantasy lineup
+ * slot is allowed to score. MLB returns hitting and pitching in one daily line
+ * for two-way players, but a hitter slot and a pitcher slot must never receive
+ * both sides of that production.
+ */
+export function statsForRosterSlot(
+  stats: Record<string, number | string>,
+  slot: RosterSlot,
+): Record<string, number | string> {
+  const allowedKeys = hitterRosterSlots.has(slot) ? hittingStatKeys : pitcherRosterSlots.has(slot) ? pitchingStatKeys : null;
+  if (!allowedKeys) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(stats).filter(([key]) => allowedKeys.has(key)));
+}
 
 /** Yahoo's default fantasy-baseball points scoring, in display order. */
 export const yahooPointCategories: YahooPointCategory[] = [

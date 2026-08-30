@@ -4,6 +4,7 @@ import {
   calculateFantasyPoints,
   calculateSimplePoints,
   formatScoringType,
+  statsForRosterSlot,
   yahooPointsWeights,
   readPlayerStat,
 } from "./scoring";
@@ -63,5 +64,29 @@ describe("fantasy scoring helpers", () => {
         { category: "BB", side: "pitching", points_weight: "-1.3" },
       ]),
     ).toEqual({ BB: 2.6, P_BB: -1.3 });
+  });
+
+  it("scores only the side of a two-way player matching their lineup slot", () => {
+    const twoWayLine = {
+      G: 1,
+      R: 2,
+      HR: 1,
+      RBI: 3,
+      BB: 1,
+      H: 2,
+      AB: 4,
+      IP: "6.0",
+      O: 18,
+      GS: 1,
+      W: 1,
+      K: 8,
+      ER: 2,
+      P_BB: 2,
+      P_H: 4,
+    };
+
+    expect(statsForRosterSlot(twoWayLine, "UTIL")).toEqual({ G: 1, R: 2, HR: 1, RBI: 3, BB: 1, H: 2, AB: 4 });
+    expect(statsForRosterSlot(twoWayLine, "SP")).toEqual({ G: 1, IP: "6.0", O: 18, GS: 1, W: 1, K: 8, ER: 2, P_BB: 2, P_H: 4 });
+    expect(statsForRosterSlot(twoWayLine, "BN")).toEqual({});
   });
 });

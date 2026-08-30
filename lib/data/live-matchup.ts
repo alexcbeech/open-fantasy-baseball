@@ -2,11 +2,12 @@ import { query, tryDatabase } from "@/lib/db/client";
 import {
   buildPointsWeightMap,
   calculateFantasyPoints,
+  statsForRosterSlot,
   yahooPointsWeights,
   type PointStatSide,
   type PointsWeightMap,
 } from "@/lib/fantasy/scoring";
-import type { LeagueScoringType, LiveMatchupUpdate, MatchupCategoryResult } from "@/lib/fantasy/types";
+import type { LeagueScoringType, LiveMatchupUpdate, MatchupCategoryResult, RosterSlot } from "@/lib/fantasy/types";
 import {
   compareCategory,
   computeCategoryValue,
@@ -17,7 +18,7 @@ import {
 import { getGameLinesForPlayersOnDate, todayEtDate, type LivePlayerRef } from "./mlb-live";
 
 type StatMap = Record<string, number | string>;
-type ActiveRow = LivePlayerRef;
+type ActiveRow = LivePlayerRef & { slot: RosterSlot };
 
 const notLive: LiveMatchupUpdate = {
   live: false,
@@ -46,8 +47,13 @@ function flipResult(result: MatchupCategoryResult): MatchupCategoryResult {
 
 // Active starters for a team with their MLB identifiers, for live-line lookup.
 async function activeLineupRows(teamId: string, officialDate: string): Promise<ActiveRow[]> {
-  const result = await query<{ id: string; mlb_player_id: number | null; current_mlb_team_id: number | null }>(
-    `select p.id, p.mlb_player_id, p.current_mlb_team_id
+  const result = await query<{
+    id: string;
+    mlb_player_id: number | null;
+    current_mlb_team_id: number | null;
+    slot: RosterSlot;
+  }>(
+    `select p.id, p.mlb_player_id, p.current_mlb_team_id, le.slot
      from lineup_entry le
      join player p on p.id = le.player_id
      where le.team_id = $1
@@ -61,6 +67,7 @@ async function activeLineupRows(teamId: string, officialDate: string): Promise<A
     id: row.id,
     mlb_player_id: row.mlb_player_id ?? 0,
     current_mlb_team_id: row.current_mlb_team_id ?? 0,
+    slot: row.slot,
   }));
 }
 
@@ -294,17 +301,19 @@ export async function computeLiveMatchup(teamId: string): Promise<LiveMatchupUpd
         for (const row of overlay.homeActive) {
           const entry = lines[row.id];
           if (entry) {
-            homeOverlayStats.push(entry.stats);
+            const scoringStats = statsForRosterSlot(entry.stats, row.slot);
+            homeOverlayStats.push(scoringStats);
             overlayPoints[row.id] =
-              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(entry.stats, pointsWeights)) * 10) / 10;
+              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(scoringStats, pointsWeights)) * 10) / 10;
           }
         }
         for (const row of overlay.awayActive) {
           const entry = lines[row.id];
           if (entry) {
-            awayOverlayStats.push(entry.stats);
+            const scoringStats = statsForRosterSlot(entry.stats, row.slot);
+            awayOverlayStats.push(scoringStats);
             overlayPoints[row.id] =
-              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(entry.stats, pointsWeights)) * 10) / 10;
+              Math.round(((overlayPoints[row.id] ?? 0) + calculateFantasyPoints(scoringStats, pointsWeights)) * 10) / 10;
           }
         }
       }
