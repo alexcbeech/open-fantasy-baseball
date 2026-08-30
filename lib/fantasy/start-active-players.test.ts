@@ -146,6 +146,35 @@ describe("planActiveLineup", () => {
     expect(next["big-proj-rp"]).toBe("BN");
   });
 
+  it("seats RP-eligible pitchers ahead of starters who are not scheduled today", () => {
+    // Model the reported Ferminator case with two P seats: today's probable
+    // starter and the RP-eligible Mlodzinski should both beat higher-projected
+    // starters who are not scheduled to take the mound.
+    const twoPitcherSlots: Record<RosterSlot, number> = { ...defaultRosterSlots, SP: 0, RP: 0, P: 2 };
+    const lineup = [
+      entry("BN", {
+        id: "scheduled-starter",
+        positions: ["SP"],
+        probableStarterToday: true,
+        projectedStats: proj(50),
+      }),
+      entry("BN", {
+        id: "carmen-mlodzinski",
+        positions: ["RP"],
+        todaysGameStart: null,
+        projectedStats: proj(25),
+      }),
+      entry("P", { id: "andrew-abbott", positions: ["SP"], projectedStats: proj(400) }),
+      entry("P", { id: "michael-mcgreevy", positions: ["SP"], projectedStats: proj(300) }),
+    ];
+
+    const next = planActiveLineup(lineup, new Set(), twoPitcherSlots);
+    expect(next["scheduled-starter"]).toBe("P");
+    expect(next["carmen-mlodzinski"]).toBe("P");
+    expect(next["andrew-abbott"]).toBe("BN");
+    expect(next["michael-mcgreevy"]).toBe("BN");
+  });
+
   it("seats a bat-only DH in the UTIL slot", () => {
     const lineup = [
       entry("BN", { id: "dh", positions: ["UTIL"], projectedStats: proj(400) }),

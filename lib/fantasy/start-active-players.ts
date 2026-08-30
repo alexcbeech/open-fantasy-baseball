@@ -11,16 +11,47 @@ export { startsToday } from "./daily-projection";
 const dedicatedStartingSlots: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF", "SP", "RP"];
 const flexStartingSlots: RosterSlot[] = ["UTIL", "P"];
 const startingSlots: RosterSlot[] = [...dedicatedStartingSlots, ...flexStartingSlots];
+const pitcherPositions = new Set<RosterSlot>(["SP", "RP", "P"]);
 
 /**
- * Start Active Players priority: players in (or likely in) today's MLB
- * starting lineup first, with today's confirmed probable starters ahead of
- * everyone else in that tier, then higher expected points from TODAY's game
- * (matchup-aware — see projectTodayPoints), then higher rest-of-season
- * projection, then better (numerically lower) ADP, with name as a
- * deterministic final tiebreaker.
+ * Pitchers need an explicit role tier: a non-starting SP must not jump ahead
+ * of a reliever just because their season projection is higher. Hitters share
+ * the middle tier with relievers; their existing active-today ordering still
+ * decides hitter contests, while the unified tier keeps the comparator
+ * transitive when hitter and pitcher rows are interleaved.
+ */
+function lineupPriorityTier(player: Player): number {
+  const pitcherOnly = player.positions.length > 0 && player.positions.every((position) => pitcherPositions.has(position));
+
+  if (!pitcherOnly) {
+    return 1;
+  }
+
+  if (player.probableStarterToday === true && startsToday(player)) {
+    return 0;
+  }
+
+  if (player.positions.includes("RP")) {
+    return 1;
+  }
+
+  return 2;
+}
+
+/**
+ * Start Active Players priority: pitchers use today's probable starters first,
+ * RP-eligible arms second, and non-starting SPs last. Other players in (or
+ * likely in) today's MLB starting lineup come first. Ties use expected points
+ * from TODAY's game (matchup-aware — see projectTodayPoints), then higher
+ * rest-of-season projection, better (numerically lower) ADP, and name.
  */
 function comparePriority(a: Player, b: Player): number {
+  const priorityTierDiff = lineupPriorityTier(a) - lineupPriorityTier(b);
+
+  if (priorityTierDiff !== 0) {
+    return priorityTierDiff;
+  }
+
   const startDiff = Number(startsToday(b)) - Number(startsToday(a));
   if (startDiff !== 0) {
     return startDiff;
