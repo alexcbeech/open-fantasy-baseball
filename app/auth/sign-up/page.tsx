@@ -24,7 +24,7 @@ async function getRedeemableInvite(token: string | undefined) {
 
   const invite = await getLeagueInviteByToken(token);
 
-  if (!invite || invite.acceptedAt || new Date(invite.expiresAt).getTime() <= Date.now()) {
+  if (!invite || invite.acceptedAt || invite.expired) {
     return null;
   }
 

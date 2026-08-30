@@ -56,10 +56,14 @@ export function TradesPanel({ leagueId, viewerTeamId }: TradesPanelProps) {
   }, [leagueId]);
 
   useEffect(() => {
-    refresh();
+    const initialTimer = window.setTimeout(() => void refresh(), 0);
+    const onTradesChanged = () => void refresh();
     // Re-fetch when a sibling component (the propose sheet) creates a trade.
-    window.addEventListener("ofb:trades-changed", refresh);
-    return () => window.removeEventListener("ofb:trades-changed", refresh);
+    window.addEventListener("ofb:trades-changed", onTradesChanged);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.removeEventListener("ofb:trades-changed", onTradesChanged);
+    };
   }, [refresh]);
 
   async function act(tradeId: string, action: "accept" | "decline" | "withdraw" | "vote" | "veto", dropPlayerIds?: string[]) {

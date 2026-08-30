@@ -18,6 +18,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   sync:
@@ -85,3 +86,28 @@ jobs:
         run: |
           echo "::error::MLB teams/rosters/schedule sync failed — the schedule is stale. See the admin panel's Recent Runs for the error."
           exit 1
+
+      - name: Report nightly sync failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_TITLE: "[Operations] Nightly data sync failed"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          issue_number="$(gh issue list --state open --search 'Nightly data sync failed in:title' --json number,title --jq '.[] | select(.title == "[Operations] Nightly data sync failed") | .number' | head -n 1)"
+          if [ -n "$issue_number" ]; then
+            gh issue comment "$issue_number" --body "Another nightly sync failed: $RUN_URL"
+          else
+            gh issue create --title "$ALERT_TITLE" --body "The nightly data sync failed. Review the workflow run and the admin ingestion history: $RUN_URL"
+          fi
+
+      - name: Close recovered nightly sync alert
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          issue_number="$(gh issue list --state open --search 'Nightly data sync failed in:title' --json number,title --jq '.[] | select(.title == "[Operations] Nightly data sync failed") | .number' | head -n 1)"
+          if [ -n "$issue_number" ]; then
+            gh issue close "$issue_number" --comment "Nightly sync recovered successfully: $RUN_URL"
+          fi

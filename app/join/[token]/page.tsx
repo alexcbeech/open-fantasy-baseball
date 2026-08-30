@@ -54,7 +54,7 @@ async function JoinPanel({ token }: { token: string }) {
     );
   }
 
-  if (new Date(invite.expiresAt).getTime() <= Date.now()) {
+  if (invite.expired) {
     return (
       <Notice
         heading="This invite has expired"

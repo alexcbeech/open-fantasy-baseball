@@ -26,17 +26,22 @@ function formatDetail(detail: Record<string, unknown>): string | null {
   return entries.map(([key, value]) => `${key}=${typeof value === "string" ? value : JSON.stringify(value)}`).join("  ");
 }
 
-export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventRecord[] }) {
+export function AdminAuditLog({
+  initialEvents,
+  initialHasMore,
+}: {
+  initialEvents: AuditEventRecord[];
+  initialHasMore: boolean;
+}) {
   const [events, setEvents] = useState(initialEvents);
   const [actionFilter, setActionFilter] = useState("");
   const [actorFilter, setActorFilter] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  // The last page is full until a fetch comes back short.
-  const [maybeMore, setMaybeMore] = useState(initialEvents.length >= PAGE_SIZE);
+  const [maybeMore, setMaybeMore] = useState(initialHasMore);
   const [error, setError] = useState("");
 
-  function queryString(before?: string) {
+  function queryString(before?: AuditEventRecord) {
     const params = new URLSearchParams();
 
     if (actionFilter.trim()) {
@@ -48,26 +53,31 @@ export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventReco
     }
 
     if (before) {
-      params.set("before", before);
+      params.set("before", before.occurredAt);
+      params.set("beforeId", before.id);
     }
 
     params.set("limit", String(PAGE_SIZE));
     return params.toString();
   }
 
-  async function fetchEvents(before?: string): Promise<AuditEventRecord[] | null> {
+  async function fetchEvents(before?: AuditEventRecord): Promise<{ events: AuditEventRecord[]; hasMore: boolean } | null> {
     setError("");
 
     try {
       const response = await fetch(`/api/v1/admin/audit?${queryString(before)}`);
-      const result = (await response.json().catch(() => ({}))) as { error?: string; events?: AuditEventRecord[] };
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        events?: AuditEventRecord[];
+        hasMore?: boolean;
+      };
 
       if (!response.ok || !result.events) {
         setError(result.error ?? "Audit events could not be loaded.");
         return null;
       }
 
-      return result.events;
+      return { events: result.events, hasMore: result.hasMore ?? result.events.length >= PAGE_SIZE };
     } catch {
       setError("Audit events could not be loaded. Check your connection and try again.");
       return null;
@@ -80,8 +90,8 @@ export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventReco
     const fresh = await fetchEvents();
 
     if (fresh) {
-      setEvents(fresh);
-      setMaybeMore(fresh.length >= PAGE_SIZE);
+      setEvents(fresh.events);
+      setMaybeMore(fresh.hasMore);
     }
 
     setIsLoading(false);
@@ -95,11 +105,11 @@ export function AdminAuditLog({ initialEvents }: { initialEvents: AuditEventReco
     }
 
     setIsLoadingMore(true);
-    const older = await fetchEvents(oldest.occurredAt);
+    const older = await fetchEvents(oldest);
 
     if (older) {
-      setEvents((current) => [...current, ...older]);
-      setMaybeMore(older.length >= PAGE_SIZE);
+      setEvents((current) => [...current, ...older.events]);
+      setMaybeMore(older.hasMore);
     }
 
     setIsLoadingMore(false);

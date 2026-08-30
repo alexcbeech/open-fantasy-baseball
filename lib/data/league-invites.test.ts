@@ -212,6 +212,7 @@ describe("isInviteTokenRedeemable (signup gate carve-out)", () => {
       email: "invitee@example.com",
       invited_by_name: "The Commish",
       expires_at: new Date(Date.now() + 86_400_000),
+      expired: false,
       accepted_at: null,
       ...overrides,
     };
@@ -226,7 +227,9 @@ describe("isInviteTokenRedeemable (signup gate carve-out)", () => {
     pooledQuery.mockResolvedValueOnce({ rows: [pendingInviteRow()] });
     expect(await isInviteTokenRedeemable("ofb_join_x", "other@example.com")).toBe(false);
 
-    pooledQuery.mockResolvedValueOnce({ rows: [pendingInviteRow({ expires_at: new Date(Date.now() - 1000) })] });
+    pooledQuery.mockResolvedValueOnce({
+      rows: [pendingInviteRow({ expires_at: new Date(Date.now() - 1000), expired: true })],
+    });
     expect(await isInviteTokenRedeemable("ofb_join_x", "invitee@example.com")).toBe(false);
 
     pooledQuery.mockResolvedValueOnce({ rows: [pendingInviteRow({ accepted_at: new Date() })] });

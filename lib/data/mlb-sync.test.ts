@@ -121,7 +121,8 @@ describe("syncMlbSchedule game-type filtering", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
-    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      void values;
       if (sql.includes("select id from mlb_team")) {
         return { rows: [{ id: 121 }, { id: 143 }] };
       }
@@ -170,7 +171,8 @@ describe("syncMlbSchedule game-type filtering", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
-    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      void values;
       if (sql.includes("select id from mlb_team")) {
         return { rows: [{ id: 121 }, { id: 143 }] };
       }
@@ -207,7 +209,8 @@ describe("syncMlbSchedule game-type filtering", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => schedulePayload }),
     );
-    const query = vi.fn(async (sql: string, _values?: unknown[]) => {
+    const query = vi.fn(async (sql: string, values?: unknown[]) => {
+      void values;
       if (sql.includes("select id from mlb_team")) {
         return { rows: [{ id: 121 }, { id: 143 }] };
       }

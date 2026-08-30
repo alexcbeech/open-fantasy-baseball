@@ -41,6 +41,7 @@ export type PendingLeagueInvite = {
   email: string;
   invitedByName: string;
   expiresAt: string;
+  expired: boolean;
   acceptedAt: string | null;
 };
 
@@ -202,10 +203,11 @@ export async function getLeagueInviteByToken(token: string): Promise<PendingLeag
     email: string;
     invited_by_name: string;
     expires_at: Date | string;
+    expired: boolean;
     accepted_at: Date | string | null;
   }>(
     `select i.id, i.league_id, l.name as league_name, i.email, u.display_name as invited_by_name,
-            i.expires_at, i.accepted_at
+            i.expires_at, i.expires_at <= now() as expired, i.accepted_at
      from league_invite i
      join league l on l.id = i.league_id
      join app_user u on u.id = i.invited_by_user_id
@@ -226,6 +228,7 @@ export async function getLeagueInviteByToken(token: string): Promise<PendingLeag
     email: row.email,
     invitedByName: row.invited_by_name,
     expiresAt: iso(row.expires_at),
+    expired: row.expired,
     acceptedAt: row.accepted_at ? iso(row.accepted_at) : null,
   };
 }
@@ -234,7 +237,7 @@ export async function getLeagueInviteByToken(token: string): Promise<PendingLeag
 export async function isInviteTokenRedeemable(token: string, email?: string): Promise<boolean> {
   const invite = await getLeagueInviteByToken(token);
 
-  if (!invite || invite.acceptedAt || new Date(invite.expiresAt).getTime() <= Date.now()) {
+  if (!invite || invite.acceptedAt || invite.expired) {
     return false;
   }
 

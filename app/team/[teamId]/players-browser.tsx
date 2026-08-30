@@ -72,11 +72,6 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, { state: string | null; points: number }>>({});
 
-  // Resync with the server list after a router.refresh() (e.g. post add/drop).
-  useEffect(() => {
-    setPlayerList(players);
-  }, [players]);
-
   // Overlay live in-game points/inning on any listed player whose game is in
   // progress; bounded by the number of live games, so it is cheap to poll.
   useEffect(() => {
@@ -303,6 +298,7 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
 
       {detailPlayerId ? (
         <PlayerDetailSheet
+          key={detailPlayerId}
           playerId={detailPlayerId}
           teamId={teamId}
           onClose={() => setDetailPlayerId(null)}

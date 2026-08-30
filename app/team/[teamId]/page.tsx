@@ -231,10 +231,12 @@ function TeamTab({
   // Recent news renders as a small icon on each affected player's row (the
   // detail sheet carries the full story), replacing the old Player Watch button.
   const newsByPlayerId = Object.fromEntries(watchItems.map((item) => [item.id, item.headline]));
+  const lineupVersion = lineup.map((entry) => `${entry.player.id}:${entry.slot}`).join("|");
 
   return (
     <div className="team-tab">
       <LineupEditor
+        key={lineupVersion}
         teamId={teamId}
         initialLineup={lineup}
         lockMode={lockMode}
@@ -262,7 +264,8 @@ function MatchupEmptyState({ teamName }: { teamName: string }) {
 }
 
 function PlayersTab({ teamId, players }: { teamId: string; players: Player[] }) {
-  return <PlayersBrowser teamId={teamId} players={players} />;
+  const rosterVersion = players.map((player) => `${player.id}:${player.availability}:${player.status}`).join("|");
+  return <PlayersBrowser key={rosterVersion} teamId={teamId} players={players} />;
 }
 
 function LeagueTab({

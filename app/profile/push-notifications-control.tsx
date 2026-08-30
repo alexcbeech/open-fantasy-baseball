@@ -64,16 +64,31 @@ export function PushNotificationsControl() {
   }, []);
 
   useEffect(() => {
-    if (!isPushSupported()) {
-      setSupported(false);
-      return;
-    }
+    let active = true;
 
-    setPermission(Notification.permission);
-    navigator.serviceWorker.register(SERVICE_WORKER_URL).catch(() => {
-      setBanner({ kind: "error", message: "The notification service worker could not be registered." });
-    });
-    void refresh();
+    const initialize = async () => {
+      // Defer client capability state until after the effect has subscribed.
+      await Promise.resolve();
+      if (!active) return;
+
+      if (!isPushSupported()) {
+        setSupported(false);
+        return;
+      }
+
+      setPermission(Notification.permission);
+      navigator.serviceWorker.register(SERVICE_WORKER_URL).catch(() => {
+        if (active) {
+          setBanner({ kind: "error", message: "The notification service worker could not be registered." });
+        }
+      });
+      await refresh();
+    };
+
+    void initialize();
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   async function enable() {
