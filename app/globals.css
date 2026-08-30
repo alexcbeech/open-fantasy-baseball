@@ -1504,10 +1504,16 @@ button.row {
    configured single-day scoring columns across the full row. */
 .lineup-category-group-label {
   align-items: stretch;
+  background: var(--surface);
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr);
   justify-content: stretch;
+  margin-inline: -14px;
+  padding-inline: 14px;
+  position: sticky;
+  top: 48px;
+  z-index: 2;
 }
 
 .lineup-category-heads,
