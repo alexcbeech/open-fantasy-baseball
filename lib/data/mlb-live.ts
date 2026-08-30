@@ -1,6 +1,6 @@
 import { query, tryDatabase } from "@/lib/db/client";
-import { calculateFantasyPoints } from "@/lib/fantasy/scoring";
-import type { LivePlayerStatus } from "@/lib/fantasy/types";
+import { calculateFantasyPoints, statsForRosterSlot } from "@/lib/fantasy/scoring";
+import type { LivePlayerStatus, RosterSlot } from "@/lib/fantasy/types";
 import { mapMlbStat } from "./mlb-stats-sync";
 
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
@@ -211,6 +211,7 @@ export async function getLivePlayerStatus(playerId: string, baseUrl = defaultBas
 export type LiveLineupEntry = { state: string | null; stats: Record<string, number | string>; points: number };
 
 export type LivePlayerRef = { id: string; mlb_player_id: number; current_mlb_team_id: number };
+type LiveLineupRef = LivePlayerRef & { slot: RosterSlot };
 
 /**
  * Live lines for an arbitrary set of players, keyed by player id. Fetches the
@@ -427,8 +428,8 @@ export async function getAllLiveLines(baseUrl = defaultBaseUrl, now = new Date()
 export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseUrl, now = new Date()): Promise<Record<string, LiveLineupEntry>> {
   return tryDatabase(
     async () => {
-      const players = await query<LivePlayerRef>(
-        `select p.id, p.mlb_player_id, p.current_mlb_team_id
+      const players = await query<LiveLineupRef>(
+        `select p.id, p.mlb_player_id, p.current_mlb_team_id, le.slot
          from lineup_entry le
          join player p on p.id = le.player_id
          where le.team_id = $1
@@ -441,7 +442,17 @@ export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseU
            and p.current_mlb_team_id is not null`,
         [teamId],
       );
-      return getLiveLinesForPlayers(players.rows, baseUrl, now);
+      const lines = await getLiveLinesForPlayers(players.rows, baseUrl, now);
+      return Object.fromEntries(
+        players.rows.flatMap((player) => {
+          const entry = lines[player.id];
+          if (!entry) {
+            return [];
+          }
+          const stats = statsForRosterSlot(entry.stats, player.slot);
+          return [[player.id, { ...entry, stats, points: livePoints(stats) }]];
+        }),
+      );
     },
     () => ({}),
   );
