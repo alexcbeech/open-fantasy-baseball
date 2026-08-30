@@ -1,42 +1,39 @@
-# Dependency Audit And Upgrade Plan
+# Dependency Security Audit
 
-Last reviewed: 2026-07-02 (`npm audit`, 5 moderate, 0 high/critical).
+Last reviewed: 2026-08-30 (`npm audit`, 0 vulnerabilities).
 
-All current advisories are in **transitive** dependencies. `npm audit fix --force`
-is **not** an acceptable remedy: its only offered path downgrades `next` to
-`9.3.3`, which would break the entire app. The plan below tracks the upstream
-fixes instead.
+## Current Status
 
-## Findings
+- `npm audit` reports 0 info, low, moderate, high, or critical advisories
+  across the current lockfile.
+- GitHub Dependabot reports no open vulnerability alerts, and automated
+  security updates are enabled.
+- GitHub secret scanning and push protection are enabled with no open alerts.
+- CodeQL reports no open findings.
+- CI checks production dependencies at `high` severity and verifies package
+  registry signatures on every push and pull request.
 
-### 1. `postcss` < 8.5.10 — XSS via unescaped `</style>` in CSS stringify output
-- Advisory: GHSA-qx2v-qp2m-jg93 (moderate).
-- Path: `next@15.5.19` → bundled `postcss`.
-- Exposure in OFB: **low / not runtime-exploitable.** PostCSS runs at build time
-  over first-party stylesheets (`app/globals.css`); OFB never stringifies
-  untrusted CSS. The advisory requires processing attacker-controlled CSS.
-- Plan: bump `next` within the 15.x line as soon as a patch ships that vendors
-  `postcss >= 8.5.10`. Re-run `npm audit` after each Next upgrade.
+## Resolved Findings
 
-### 2. `better-auth` < 1.6.2 — OAuth callback accepts mismatched `state` without PKCE
-- Advisory: GHSA-wxw3-q3m9-c3jr (moderate).
-- Path: `@neondatabase/auth@0.4.2-beta` → `better-auth@1.4.18` (also via
-  `@neondatabase/auth-ui`).
-- Exposure in OFB: **low today.** OFB currently uses Neon Auth email/password
-  sign-in; the vulnerable cookie-backed-state-without-PKCE OAuth callback path is
-  not yet wired (social login is still pending — see TODO "OIDC/OAuth2 login with
-  PKCE"). The risk becomes real once a social/OAuth provider is enabled, so this
-  must be resolved before that work ships.
-- Plan: upgrade `@neondatabase/auth` when a release that depends on
-  `better-auth >= 1.6.2` is published (the package is a pinned beta today). When
-  wiring OAuth, ensure PKCE is enabled so the mismatched-state path is never
-  exercised.
+The July 2026 review tracked five moderate transitive advisories:
 
-## Notes
+1. `postcss < 8.5.10`, previously bundled through Next.js 15, was resolved by
+   the Next.js 16 upgrade. The app now uses Next.js 16.3.3.
+2. `better-auth < 1.6.2`, previously pulled through
+   `@neondatabase/auth@0.4.2-beta`, was resolved by the Neon Auth 0.5 beta
+   upgrade. The installed dependency tree now uses `better-auth@1.6.23`.
 
-- `web-push` (added for push notifications) introduced **no** advisories.
-- `.npmrc` sets `legacy-peer-deps=true` because `@neondatabase/auth@0.4.2-beta`
-  declares a `next >= 16` peer while the app runs Next 15. Revisit once the SDK
-  leaves beta and relaxes/updates that peer range.
-- CI runs `npm ci` on every push/PR; add a periodic `npm audit` review to the
-  cadence (or a scheduled workflow) once the app approaches production.
+No forced downgrade or audit override was needed.
+
+## Remaining Maintenance Notes
+
+- `@neondatabase/auth@0.5.0-beta` transitively installs deprecated
+  `@react-email/*` packages through `@neondatabase/auth-ui` and
+  `@daveyplate/better-auth-ui`. They have no current security advisories, but
+  the chain should be rechecked when Neon Auth publishes its next release.
+- Social/OIDC login is not enabled yet. When implemented, require OAuth state
+  validation and PKCE and add callback-path integration tests before release.
+- The project and CI require Node.js 24. Local development should use the same
+  major version so installs, native dependencies, and builds match CI.
+- Re-run this review after Next.js or Neon Auth upgrades and at least monthly
+  while the application is under active development.
