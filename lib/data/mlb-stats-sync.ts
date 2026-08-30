@@ -198,9 +198,10 @@ const PITCHER_ROLE_APPEARANCE_THRESHOLD = 3;
  * Derive fantasy starter/reliever eligibility from a pitcher's season usage.
  * The MLB roster feed only labels pitchers "P", so SP/RP roster slots would be
  * unfillable without this. Starters and relievers each qualify once they clear
- * the appearance threshold, so a swingman earns both; a small early-season
- * sample falls back to the role the pitcher has been used in most. An empty
- * result (no appearances yet) is left to the slot-eligibility backfill.
+ * the appearance threshold, so a swingman earns both. Smaller samples return
+ * no derived role: actual MLB pitchers and probable starters are handled by
+ * the roster-based slot-eligibility backfill, while position-player mop-up
+ * appearances must not create fantasy pitching eligibility.
  */
 export function derivePitcherEligibility(gamesStarted: number, gamesPlayed: number): Array<"SP" | "RP"> {
   const starts = Number.isFinite(gamesStarted) ? Math.max(0, Math.trunc(gamesStarted)) : 0;
@@ -217,10 +218,6 @@ export function derivePitcherEligibility(gamesStarted: number, gamesPlayed: numb
 
   if (reliefAppearances >= PITCHER_ROLE_APPEARANCE_THRESHOLD) {
     positions.push("RP");
-  }
-
-  if (positions.length === 0 && games > 0) {
-    positions.push(starts >= reliefAppearances ? "SP" : "RP");
   }
 
   return positions;
