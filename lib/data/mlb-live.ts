@@ -349,6 +349,13 @@ export type TodayLines = {
   liveGameInProgress: boolean;
 };
 
+export type LineupDayStatus = {
+  /** Entries for games that are in progress right now. */
+  live: Record<string, LiveLineupEntry>;
+  /** Entries for every in-progress or completed game on today's MLB slate. */
+  today: Record<string, LiveLineupEntry>;
+};
+
 function mergeGameStats(lines: Array<Record<string, number | string>>) {
   const merged: Record<string, number | string> = {};
   let pitchingOuts = 0;
@@ -489,6 +496,16 @@ export async function getAllLiveLines(baseUrl = defaultBaseUrl, now = new Date()
  * players whose game is in progress appear in the map.
  */
 export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseUrl, now = new Date()): Promise<Record<string, LiveLineupEntry>> {
+  return (await getLineupDayStatus(teamId, baseUrl, now)).live;
+}
+
+/**
+ * Current-day stat lines for a team's roster, alongside the live-only subset.
+ * Category roster views need completed games to remain visible after the final
+ * out, while points views and lineup locking still need to distinguish games
+ * that are actively in progress.
+ */
+export async function getLineupDayStatus(teamId: string, baseUrl = defaultBaseUrl, now = new Date()): Promise<LineupDayStatus> {
   return tryDatabase(
     async () => {
       const players = await query<LiveLineupRef>(
@@ -505,10 +522,10 @@ export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseU
            and p.current_mlb_team_id is not null`,
         [teamId],
       );
-      const lines = await getLiveLinesForPlayers(players.rows, baseUrl, now);
-      return Object.fromEntries(
+      const lines = await getTodayLinesForPlayers(players.rows, baseUrl, now);
+      const today = Object.fromEntries(
         players.rows.flatMap((player) => {
-          const entry = lines[player.id];
+          const entry = lines.lines[player.id];
           if (!entry) {
             return [];
           }
@@ -516,8 +533,10 @@ export async function getLiveLineupStatus(teamId: string, baseUrl = defaultBaseU
           return [[player.id, { ...entry, stats, points: livePoints(stats) }]];
         }),
       );
+      const live = Object.fromEntries(Object.entries(today).filter(([, entry]) => entry.state !== "Final"));
+      return { live, today };
     },
-    () => ({}),
+    () => ({ live: {}, today: {} }),
   );
 }
 
@@ -526,8 +545,12 @@ export async function getTeamDailyPlayerStatus(
   teamId: string,
   baseUrl = defaultBaseUrl,
   now = new Date(),
-): Promise<{ live: Record<string, LiveLineupEntry>; lineups: Record<string, PostedLineupStatus> }> {
-  const none = { live: {}, lineups: {} };
+): Promise<{
+  live: Record<string, LiveLineupEntry>;
+  today: Record<string, LiveLineupEntry>;
+  lineups: Record<string, PostedLineupStatus>;
+}> {
+  const none = { live: {}, today: {}, lineups: {} };
   return tryDatabase(
     async () => {
       const players = await query<LiveLineupRef>(
@@ -544,13 +567,13 @@ export async function getTeamDailyPlayerStatus(
            and p.current_mlb_team_id is not null`,
         [teamId],
       );
-      const [rawLive, lineups] = await Promise.all([
-        getLiveLinesForPlayers(players.rows, baseUrl, now),
+      const [todayLines, lineups] = await Promise.all([
+        getTodayLinesForPlayers(players.rows, baseUrl, now),
         getPostedLineupStatusesForPlayers(players.rows, baseUrl, now),
       ]);
-      const live = Object.fromEntries(
+      const today = Object.fromEntries(
         players.rows.flatMap((player) => {
-          const entry = rawLive[player.id];
+          const entry = todayLines.lines[player.id];
           if (!entry) {
             return [];
           }
@@ -558,7 +581,8 @@ export async function getTeamDailyPlayerStatus(
           return [[player.id, { ...entry, stats, points: livePoints(stats) }]];
         }),
       );
-      return { live, lineups };
+      const live = Object.fromEntries(Object.entries(today).filter(([, entry]) => entry.state !== "Final"));
+      return { live, today, lineups };
     },
     () => none,
   );

@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { isBatter, projectTodayPoints } from "@/lib/fantasy/daily-projection";
+import {
+  formatLineupCategoryValue,
+  lineupCategoryColumns,
+  playerStatSide,
+  type LineupStatSide,
+} from "@/lib/fantasy/lineup-category-stats";
 import { liveLineSummary } from "@/lib/fantasy/player-view";
 import {
   findLineupLockIssues,
@@ -13,7 +19,14 @@ import {
   validateLineup,
 } from "@/lib/fantasy/roster-validation";
 import { planActiveLineup } from "@/lib/fantasy/start-active-players";
-import type { LineupLockMode, LineupPlayer, PostedLineupStatus, RosterSlot } from "@/lib/fantasy/types";
+import type {
+  LeagueScoringType,
+  LineupLockMode,
+  LineupPlayer,
+  PostedLineupStatus,
+  RosterSlot,
+  StatCategory,
+} from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { LocalGameLine } from "./local-game-line";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
@@ -26,6 +39,9 @@ import { ProbableStarterCheck } from "./probable-starter-check";
 type LineupEditorProps = {
   teamId: string;
   initialLineup: LineupPlayer[];
+  scoringType?: LeagueScoringType;
+  hitterCategories?: StatCategory[];
+  pitcherCategories?: StatCategory[];
   /** League lock mode: daily per-player locks or whole-lineup first-game. */
   lockMode?: LineupLockMode;
   rosterSlots?: Record<RosterSlot, number>;
@@ -34,6 +50,8 @@ type LineupEditorProps = {
 };
 
 type LiveEntry = { state: string | null; points: number; stats?: Record<string, number | string> };
+
+type DisplayLineupGroup = LineupGroup & { statSide?: LineupStatSide };
 
 export type SlotRow = { key: string; slot: RosterSlot; entry: LineupPlayer | null };
 export type LineupGroup = { label: string; rows: SlotRow[] };
@@ -93,6 +111,23 @@ function slotsFromLineup(lineup: LineupPlayer[]): Record<string, RosterSlot> {
   return Object.fromEntries(lineup.map((entry) => [entry.player.id, entry.slot])) as Record<string, RosterSlot>;
 }
 
+function categoryDisplayGroups(groups: LineupGroup[]): DisplayLineupGroup[] {
+  return groups.flatMap((group) => {
+    if (group.label === "Batters") return [{ ...group, statSide: "hitting" as const }];
+    if (group.label === "Pitchers") return [{ ...group, statSide: "pitching" as const }];
+
+    const hitting = group.rows.filter((row) => !row.entry || playerStatSide(row.entry.player) === "hitting");
+    const pitching = group.rows.filter((row) => row.entry && playerStatSide(row.entry.player) === "pitching");
+    if (!hitting.length || !pitching.length) {
+      return [{ ...group, rows: hitting.length ? hitting : pitching, statSide: hitting.length ? "hitting" : "pitching" }];
+    }
+    return [
+      { ...group, label: `${group.label} · Batters`, rows: hitting, statSide: "hitting" as const },
+      { ...group, label: `${group.label} · Pitchers`, rows: pitching, statSide: "pitching" as const },
+    ];
+  });
+}
+
 /**
  * Small inline indicator for a player carrying recent news. The row itself
  * opens the player detail (where the full story lives), so this is a signal,
@@ -117,6 +152,9 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
 export function LineupEditor({
   teamId,
   initialLineup,
+  scoringType = "h2h-points",
+  hitterCategories = ["R", "HR", "RBI", "SB", "AVG"],
+  pitcherCategories = ["W", "SV", "K", "ERA", "WHIP"],
   lockMode = "daily",
   rosterSlots = defaultRosterSlots,
   newsByPlayerId,
@@ -130,6 +168,7 @@ export function LineupEditor({
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveEntry>>({});
   const [postedLineups, setPostedLineups] = useState<Record<string, PostedLineupStatus>>({});
+  const [today, setToday] = useState<Record<string, LiveEntry>>({});
 
   // Live in-game overlay: while games are in progress, poll each rostered
   // player's live line so the row's bold number becomes today's live points and
@@ -144,10 +183,14 @@ export function LineupEditor({
       }
       const result = (await response.json()) as {
         live?: Record<string, LiveEntry>;
+        today?: Record<string, LiveEntry>;
         lineups?: Record<string, PostedLineupStatus>;
       };
       if (result.live) {
         setLive(result.live);
+      }
+      if (result.today) {
+        setToday(result.today);
       }
       if (result.lineups) {
         setPostedLineups(result.lineups);
@@ -193,6 +236,11 @@ export function LineupEditor({
   );
 
   const groups = useMemo(() => buildLineupGroups(currentLineup, rosterSlots), [currentLineup, rosterSlots]);
+  const categoryMode = scoringType !== "h2h-points";
+  const displayGroups = useMemo<DisplayLineupGroup[]>(
+    () => (categoryMode ? categoryDisplayGroups(groups) : groups),
+    [categoryMode, groups],
+  );
 
   // In first-game mode the whole lineup locks at the day's earliest first
   // pitch; otherwise a player locks when their own game starts. The live
@@ -384,24 +432,42 @@ export function LineupEditor({
           </div>
         ) : null}
         <div className="lineup-list">
-          {groups.map((group) => (
-            <div className="lineup-group" key={group.label}>
-              <div className="lineup-group-label">
-                <span>{group.label}</span>
-                <span className="lineup-col-heads" aria-hidden="true">
-                  <span>Week</span>
-                  <span>Proj today</span>
-                </span>
-              </div>
-              {group.rows.map((row) =>
-                row.entry ? (
-                  (() => {
+          {displayGroups.map((group) => {
+            const statSide = group.statSide;
+            const categoryColumns = statSide
+              ? lineupCategoryColumns(statSide, statSide === "hitting" ? hitterCategories : pitcherCategories)
+              : [];
+            return (
+              <div className="lineup-group" key={group.label}>
+                <div className={categoryMode ? "lineup-group-label lineup-category-group-label" : "lineup-group-label"}>
+                  <span>{group.label}</span>
+                  {categoryMode ? (
+                    <span
+                      className="lineup-category-heads"
+                      style={{ gridTemplateColumns: `repeat(${categoryColumns.length}, minmax(0, 1fr))` }}
+                      aria-hidden="true"
+                    >
+                      {categoryColumns.map((category) => (
+                        <span key={category}>{category}</span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="lineup-col-heads" aria-hidden="true">
+                      <span>Week</span>
+                      <span>Proj today</span>
+                    </span>
+                  )}
+                </div>
+                {group.rows.map((row) =>
+                  row.entry ? (
+                    (() => {
                     const entry = row.entry;
                     const player = entry.player;
                     // Expected points from today's game (platoon-aware), the
                     // number that matters when setting today's lineup.
                     const todayPts = Math.round(projectTodayPoints(player) * 10) / 10;
                     const liveEntry = live[player.id];
+                    const todayEntry = today[player.id];
                     const locked = isEntryLocked(entry);
                     // Stored matchup totals are refreshed after completed days.
                     // Fold in an active game's points so the weekly number stays
@@ -412,7 +478,14 @@ export function LineupEditor({
                     const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
 
                     return (
-                      <div className="row editable-row lineup-slot-row" key={row.key}>
+                      <div
+                        className={
+                          categoryMode
+                            ? "row editable-row lineup-slot-row lineup-category-row"
+                            : "row editable-row lineup-slot-row"
+                        }
+                        key={row.key}
+                      >
                         <button
                           className={locked ? "pos-badge-button is-locked" : "pos-badge-button"}
                           type="button"
@@ -461,44 +534,77 @@ export function LineupEditor({
                           />
                           {liveStatLine ? <span className="player-live-line">{liveStatLine}</span> : null}
                         </button>
-                        <button
-                          className="player-points"
-                          type="button"
-                          onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
-                          onFocus={() => prefetchPlayerDetail(player.id, teamId)}
-                          onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
-                          onClick={() => setDetailPlayerId(player.id)}
-                          aria-label={
-                            `${player.name}: ${weeklyPts} fantasy points this week, ${todayPts} projected today`
-                          }
-                        >
-                          <span className={liveEntry ? "points-live is-live" : "points-live"}>{weeklyPts}</span>
-                          <span className="points-proj">{todayPts}</span>
-                        </button>
+                        {categoryMode && statSide ? (
+                          <button
+                            className="lineup-category-values"
+                            style={{ gridTemplateColumns: `repeat(${categoryColumns.length}, minmax(0, 1fr))` }}
+                            type="button"
+                            onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
+                            onFocus={() => prefetchPlayerDetail(player.id, teamId)}
+                            onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
+                            onClick={() => setDetailPlayerId(player.id)}
+                            aria-label={`${player.name} today: ${categoryColumns
+                              .map(
+                                (category) =>
+                                  `${category} ${formatLineupCategoryValue({
+                                    category,
+                                    hasTodayLine: Boolean(todayEntry),
+                                    side: statSide,
+                                    stats: todayEntry?.stats ?? {},
+                                  })}`,
+                              )
+                              .join(", ")}`}
+                          >
+                            {categoryColumns.map((category) => (
+                              <span className={liveEntry ? "is-live" : undefined} key={category}>
+                                {formatLineupCategoryValue({
+                                  category,
+                                  hasTodayLine: Boolean(todayEntry),
+                                  side: statSide,
+                                  stats: todayEntry?.stats ?? {},
+                                })}
+                              </span>
+                            ))}
+                          </button>
+                        ) : (
+                          <button
+                            className="player-points"
+                            type="button"
+                            onMouseEnter={() => prefetchPlayerDetail(player.id, teamId)}
+                            onFocus={() => prefetchPlayerDetail(player.id, teamId)}
+                            onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
+                            onClick={() => setDetailPlayerId(player.id)}
+                            aria-label={`${player.name}: ${weeklyPts} fantasy points this week, ${todayPts} projected today`}
+                          >
+                            <span className={liveEntry ? "points-live is-live" : "points-live"}>{weeklyPts}</span>
+                            <span className="points-proj">{todayPts}</span>
+                          </button>
+                        )}
                       </div>
                     );
-                  })()
-                ) : (
-                  <button
-                    className="row editable-row lineup-empty-row"
-                    type="button"
-                    key={row.key}
-                    onClick={() => setFillingSlot(row.slot)}
-                    aria-label={`Fill the empty ${row.slot} slot`}
-                  >
-                    <PositionBadge slot={row.slot} />
-                    <span className="player-main">
-                      <span className="player-name empty">Empty</span>
-                      <span className="player-meta">Tap to add a player</span>
-                    </span>
-                    <span className="move-indicator" aria-hidden="true">
-                      +
-                    </span>
-                  </button>
-                ),
-              )}
-            </div>
-          ))}
+                    })()
+                  ) : (
+                    <button
+                      className="row editable-row lineup-empty-row"
+                      type="button"
+                      key={row.key}
+                      onClick={() => setFillingSlot(row.slot)}
+                      aria-label={`Fill the empty ${row.slot} slot`}
+                    >
+                      <PositionBadge slot={row.slot} />
+                      <span className="player-main">
+                        <span className="player-name empty">Empty</span>
+                        <span className="player-meta">Tap to add a player</span>
+                      </span>
+                      <span className="move-indicator" aria-hidden="true">
+                        +
+                      </span>
+                    </button>
+                  ),
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 

@@ -26,7 +26,17 @@ import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import { measureServerOperation } from "@/lib/observability/server-performance";
-import type { LeagueOverview, LineupLockMode, LineupPlayer, MatchupDetails, Player, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
+import type {
+  LeagueOverview,
+  LeagueScoringType,
+  LineupLockMode,
+  LineupPlayer,
+  MatchupDetails,
+  Player,
+  PlayerWatchItem,
+  RosterSlot,
+  StatCategory,
+} from "@/lib/fantasy/types";
 import type { LeagueTransactionItem } from "@/lib/fantasy/transaction-types";
 
 type TeamPageProps = {
@@ -192,6 +202,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
             teamId={team.id}
             lineup={teamLineup}
             watchItems={watchItems}
+            scoringType={leagueSettings.scoringType}
+            hitterCategories={leagueSettings.hitterCategories}
+            pitcherCategories={leagueSettings.pitcherCategories}
             lockMode={leagueSettings.lineupLockMode}
             rosterSlots={leagueSettings.rosterSlots}
           />
@@ -219,12 +232,18 @@ function TeamTab({
   teamId,
   lineup,
   watchItems,
+  scoringType,
+  hitterCategories,
+  pitcherCategories,
   lockMode,
   rosterSlots,
 }: {
   teamId: string;
   lineup: LineupPlayer[];
   watchItems: PlayerWatchItem[];
+  scoringType: LeagueScoringType;
+  hitterCategories: StatCategory[];
+  pitcherCategories: StatCategory[];
   lockMode: LineupLockMode;
   rosterSlots: Record<RosterSlot, number>;
 }) {
@@ -239,6 +258,9 @@ function TeamTab({
         key={lineupVersion}
         teamId={teamId}
         initialLineup={lineup}
+        scoringType={scoringType}
+        hitterCategories={hitterCategories}
+        pitcherCategories={pitcherCategories}
         lockMode={lockMode}
         rosterSlots={rosterSlots}
         newsByPlayerId={newsByPlayerId}
