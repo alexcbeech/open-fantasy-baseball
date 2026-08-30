@@ -306,13 +306,35 @@ export type LeagueTeamStats = {
   waiverPriority: number | null;
 };
 
+export type LeagueAnnouncement = {
+  id: string;
+  title: string;
+  body: string;
+  isPinned: boolean;
+  authorName: string;
+  publishedAt: string;
+  updatedAt: string;
+};
+
+export type LeagueMilestones = {
+  draftAt: string | null;
+  regularSeasonEndsAt: string | null;
+  playoffsStartAt: string | null;
+  championshipStartsAt: string | null;
+  championshipEndsAt: string | null;
+  tradeDeadlineAt: string | null;
+};
+
 export type LeagueOverview = {
   leagueId: string;
   name: string;
   scoringType: LeagueScoringType;
   seasonYear: number;
   status: string;
+  commissionerName: string;
   settings: LeagueSettings;
+  milestones: LeagueMilestones;
+  announcements: LeagueAnnouncement[];
   standings: LeagueStanding[];
   teamStats: LeagueTeamStats[];
 };

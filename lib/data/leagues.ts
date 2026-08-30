@@ -2,12 +2,19 @@ import { getPool, query, withDemoFallback } from "@/lib/db/client";
 import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { leagueStandings, mockLeagueSettings } from "@/lib/fantasy/mock-data";
 import { buildLeagueSettingsFromInput, type CreateLeagueInput } from "@/lib/fantasy/league-create";
-import { currentSeasonYear, formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
+import {
+  currentSeasonYear,
+  formatRecord,
+  playoffRoundCount,
+  rankStandings,
+  seasonEndBoundary,
+} from "@/lib/fantasy/season-schedule";
 import { yahooPointCategories } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
+import { getLeagueHubDetails } from "./league-hub";
 
 type LeagueSettingsRow = {
   id: string;
@@ -15,6 +22,7 @@ type LeagueSettingsRow = {
   scoring_type?: LeagueSettings["scoringType"];
   season_year?: number;
   status?: string;
+  commissioner_name?: string;
   settings: LeagueSettings;
 };
 
@@ -42,9 +50,11 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
   return withDemoFallback(
     async () => {
       const leagueResult = await query<LeagueSettingsRow>(
-        `select id, name, scoring_type, season_year, status, settings
-         from league
-         where id = $1`,
+        `select l.id, l.name, l.scoring_type, l.season_year, l.status, l.settings,
+           u.display_name as commissioner_name
+         from league l
+         join app_user u on u.id = l.commissioner_user_id
+         where l.id = $1`,
         [leagueId],
       );
       const league = leagueResult.rows[0];
@@ -57,8 +67,9 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
       // (cheap no-op when periods already exist).
       await ensureSeasonSchedule(getPool(), leagueId);
 
-      const teamsResult = await query<LeagueTeamOverviewRow>(
-        `select
+      const [teamsResult, hub] = await Promise.all([
+        query<LeagueTeamOverviewRow>(
+          `select
            ft.id as team_id,
            ft.name as team_name,
            u.display_name as manager_name,
@@ -82,9 +93,11 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
          ) active_matchup on true
          where ft.league_id = $1
          group by ft.id, u.display_name, active_matchup.score
-         order by coalesce(active_matchup.score, 0) desc, ft.waiver_priority nulls last, ft.name`,
-        [leagueId],
-      );
+           order by coalesce(active_matchup.score, 0) desc, ft.waiver_priority nulls last, ft.name`,
+          [leagueId],
+        ),
+        getLeagueHubDetails(leagueId),
+      ]);
 
       const teamStats = teamsResult.rows.map(mapLeagueTeamStats);
       const scoringType = league.scoring_type ?? league.settings.scoringType;
@@ -141,7 +154,10 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
         scoringType: league.scoring_type ?? league.settings.scoringType,
         seasonYear: league.season_year ?? new Date().getFullYear(),
         status: league.status ?? "active",
+        commissionerName: league.commissioner_name ?? "Commissioner",
         settings: { ...league.settings, id: league.id, name: league.name },
+        milestones: hub.milestones,
+        announcements: hub.announcements,
         standings,
         teamStats,
       };
@@ -371,13 +387,39 @@ function mapLeagueTeamStats(row: LeagueTeamOverviewRow): LeagueTeamStats {
 }
 
 function mockLeagueOverview(leagueId: string): LeagueOverview {
+  const seasonYear = currentSeasonYear();
+  const seasonEnd = seasonEndBoundary(seasonYear);
+  const rounds = playoffRoundCount(mockLeagueSettings.playoffTeamCount);
+  const playoffsStart = new Date(seasonEnd.getTime() - rounds * 7 * 24 * 60 * 60 * 1000);
+  const championshipStart = new Date(seasonEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+
   return {
     leagueId,
     name: mockLeagueSettings.name,
     scoringType: mockLeagueSettings.scoringType,
-    seasonYear: 2026,
+    seasonYear,
     status: "active",
+    commissionerName: "Alex",
     settings: mockLeagueSettings,
+    milestones: {
+      draftAt: new Date(Date.UTC(seasonYear, 2, 22, 20)).toISOString(),
+      regularSeasonEndsAt: playoffsStart.toISOString(),
+      playoffsStartAt: playoffsStart.toISOString(),
+      championshipStartsAt: championshipStart.toISOString(),
+      championshipEndsAt: seasonEnd.toISOString(),
+      tradeDeadlineAt: new Date(playoffsStart.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    announcements: [
+      {
+        id: "mock-announcement-1",
+        title: "Playoff push starts now",
+        body: "Check your lineups and review the key dates below as we head into the final weeks of the regular season.",
+        isPinned: true,
+        authorName: "Alex",
+        publishedAt: new Date(Date.UTC(seasonYear, 7, 24, 17)).toISOString(),
+        updatedAt: new Date(Date.UTC(seasonYear, 7, 24, 17)).toISOString(),
+      },
+    ],
     standings: leagueStandings.map((standing, index) => ({
       teamId: `mock-standing-${index + 1}`,
       teamName: standing.team,
