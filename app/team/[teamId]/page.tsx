@@ -10,6 +10,7 @@ import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getTeamAccess, isLeagueCommissioner, isLeagueCreator } from "@/lib/auth/team-access";
 import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
+import { LeagueHub } from "./league-hub";
 import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
@@ -25,6 +26,7 @@ import { TransactionLog } from "./transaction-log";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
+import { hasTradeDeadlinePassed } from "@/lib/fantasy/trade-deadline";
 import { measureServerOperation } from "@/lib/observability/server-performance";
 import type {
   LeagueOverview,
@@ -305,15 +307,29 @@ function LeagueTab({
   canTrade: boolean;
   transactions: LeagueTransactionItem[];
 }) {
+  const tradingOpen = canTrade && !hasTradeDeadlinePassed(overview.milestones.tradeDeadlineAt);
+
   return (
     <div className="content-grid">
+      <LeagueHub
+        leagueId={overview.leagueId}
+        leagueName={overview.name}
+        seasonYear={overview.seasonYear}
+        commissionerName={overview.commissionerName}
+        scoringType={overview.scoringType}
+        settings={overview.settings}
+        milestones={overview.milestones}
+        announcements={overview.announcements}
+        canManage={canManage}
+      />
+
       <section className="panel" aria-labelledby="standings-heading">
         <h2 id="standings-heading">Standings</h2>
         <LeagueStandings
           standings={overview.standings}
           leagueId={overview.leagueId}
           viewerTeamId={viewerTeamId}
-          canTrade={canTrade}
+          canTrade={tradingOpen}
         />
       </section>
 

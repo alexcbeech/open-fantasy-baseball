@@ -21,6 +21,8 @@ import { GET as lineupGet, PATCH as lineupPatch } from "./teams/[teamId]/lineup/
 import { PATCH as teamPatch } from "./teams/[teamId]/route";
 import { POST as actionsPost } from "./teams/[teamId]/players/[playerId]/actions/route";
 import { DELETE as leagueDelete } from "./leagues/[leagueId]/route";
+import { PATCH as leagueInfoPatch } from "./leagues/[leagueId]/info/route";
+import { POST as announcementPost } from "./leagues/[leagueId]/announcements/route";
 
 // These lock the owner-API contract in demo mode (no database): shapes, status
 // codes, and the guards that protect writes. Pin DATABASE_URL off so the run is
@@ -161,6 +163,38 @@ describe("DELETE /leagues/{leagueId} (commissioner:league)", () => {
     const response = await leagueDelete(
       new Request(`${base}/leagues/00000000-0000-4000-8000-000000000001`, { method: "DELETE" }),
       leagueContext("00000000-0000-4000-8000-000000000001"),
+    );
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toMatch(/configured database/i);
+  });
+});
+
+describe("League Hub commissioner writes", () => {
+  const leagueId = "00000000-0000-4000-8000-000000000001";
+
+  it("does not pretend to save a trade deadline without a configured database", async () => {
+    const response = await leagueInfoPatch(
+      new Request(`${base}/leagues/${leagueId}/info`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tradeDeadlineAt: "2026-08-31T19:00:00.000Z" }),
+      }),
+      leagueContext(leagueId),
+    );
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toMatch(/configured database/i);
+  });
+
+  it("does not pretend to publish an announcement without a configured database", async () => {
+    const response = await announcementPost(
+      new Request(`${base}/leagues/${leagueId}/announcements`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Playoffs", body: "Set your lineups.", isPinned: true }),
+      }),
+      leagueContext(leagueId),
     );
 
     expect(response.status).toBe(503);
