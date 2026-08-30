@@ -124,6 +124,14 @@ export type Player = {
    * don't get a confirmed-starter signal, so this only ever flags pitchers.
    */
   probableStarterToday?: boolean | null;
+  /**
+   * Confirmed status in today's posted MLB batting order. Null/undefined means
+   * the club has not posted every applicable lineup yet. This is intentionally
+   * separate from injury status: a healthy player can simply be on the bench.
+   */
+  todaysLineupStatus?: "starting" | "not-starting" | null;
+  /** One-based spot in today's posted batting order when starting. */
+  todaysBattingOrder?: number | null;
   /** Bat side from MLB data: "L", "R", or "S"; null when unknown. */
   bats?: string | null;
   /**
@@ -134,6 +142,12 @@ export type Player = {
   todaysOpposingPitcherThrows?: string | null;
   /** Average draft position (lower = drafted earlier); null when unknown. */
   adp?: number | null;
+};
+
+export type PostedLineupStatus = {
+  status: "starting" | "not-starting";
+  /** One-based batting-order spot for starters; null for a posted-lineup absence. */
+  battingOrder: number | null;
 };
 
 export type PlayerNewsItem = {

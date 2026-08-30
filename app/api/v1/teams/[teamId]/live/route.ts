@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
-import { getLiveLineupStatus } from "@/lib/data/mlb-live";
+import { getTeamDailyPlayerStatus } from "@/lib/data/mlb-live";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,8 @@ export async function GET(request: Request, { params }: RouteContext) {
       return accessDenied;
     }
 
-    const live = await getLiveLineupStatus(teamId);
+    const status = await getTeamDailyPlayerStatus(teamId);
 
-    return NextResponse.json({ live });
+    return NextResponse.json(status);
   });
 }

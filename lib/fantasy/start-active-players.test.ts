@@ -51,6 +51,17 @@ describe("startsToday", () => {
     expect(startsToday(entry("BN", { id: "hurt", positions: ["OF"], status: "injured" }).player)).toBe(false);
     expect(startsToday(entry("BN", { id: "kid", positions: ["OF"], status: "minors" }).player)).toBe(false);
   });
+
+  it("excludes a batter omitted from a fully posted lineup", () => {
+    expect(
+      startsToday(
+        entry("BN", { id: "resting-of", positions: ["OF"], todaysLineupStatus: "not-starting" }).player,
+      ),
+    ).toBe(false);
+    expect(
+      startsToday(entry("BN", { id: "leadoff-of", positions: ["OF"], todaysLineupStatus: "starting" }).player),
+    ).toBe(true);
+  });
 });
 
 describe("planActiveLineup", () => {
@@ -63,6 +74,27 @@ describe("planActiveLineup", () => {
     const next = planActiveLineup(lineup, new Set(), tightSlots);
     expect(next["playing-of"]).toBe("OF");
     expect(next["idle-of"]).toBe("BN");
+  });
+
+  it("starts a confirmed batter over a higher-projected batter omitted from the posted lineup", () => {
+    const lineup = [
+      entry("OF", {
+        id: "resting-star",
+        positions: ["OF"],
+        todaysLineupStatus: "not-starting",
+        projectedStats: proj(400),
+      }),
+      entry("BN", {
+        id: "confirmed-starter",
+        positions: ["OF"],
+        todaysLineupStatus: "starting",
+        projectedStats: proj(100),
+      }),
+    ];
+
+    const next = planActiveLineup(lineup, new Set(), tightSlots);
+    expect(next["confirmed-starter"]).toBe("OF");
+    expect(next["resting-star"]).toBe("BN");
   });
 
   it("breaks ties by projected points, then ADP", () => {
