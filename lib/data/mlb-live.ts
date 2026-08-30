@@ -285,6 +285,30 @@ export type TodayLines = {
   liveGameInProgress: boolean;
 };
 
+function mergeGameStats(lines: Array<Record<string, number | string>>) {
+  const merged: Record<string, number | string> = {};
+  let pitchingOuts = 0;
+
+  for (const line of lines) {
+    for (const [key, value] of Object.entries(line)) {
+      if (key === "IP") {
+        pitchingOuts += Number(line.O ?? 0);
+        continue;
+      }
+      const numeric = typeof value === "number" ? value : Number.parseFloat(value);
+      if (Number.isFinite(numeric)) {
+        merged[key] = Number(merged[key] ?? 0) + numeric;
+      }
+    }
+  }
+
+  if (pitchingOuts > 0) {
+    merged.O = pitchingOuts;
+    merged.IP = Math.floor(pitchingOuts / 3) + (pitchingOuts % 3) / 10;
+  }
+  return merged;
+}
+
 /**
  * Boxscore lines for one MLB official date. Keeping the date explicit lets
  * matchup scoring bridge the ET date rollover until the nightly game-log
@@ -306,7 +330,7 @@ export async function getGameLinesForPlayersOnDate(
     SCHEDULE_TTL_MS,
   );
   const games = schedule?.dates?.[0]?.games ?? [];
-  const gameByTeam = new Map<number, { gamePk: number; live: boolean }>();
+  const gamesByTeam = new Map<number, Array<{ gamePk: number; live: boolean }>>();
   for (const game of games) {
     const state = game.status?.abstractGameState;
     if (state !== "Live" && state !== "Final") {
@@ -315,14 +339,13 @@ export async function getGameLinesForPlayersOnDate(
     const entry = { gamePk: game.gamePk, live: state === "Live" };
     const home = game.teams?.home?.team?.id;
     const away = game.teams?.away?.team?.id;
-    if (home) gameByTeam.set(home, entry);
-    if (away) gameByTeam.set(away, entry);
+    if (home) gamesByTeam.set(home, [...(gamesByTeam.get(home) ?? []), entry]);
+    if (away) gamesByTeam.set(away, [...(gamesByTeam.get(away) ?? []), entry]);
   }
 
   const neededGames = new Map<number, boolean>();
   for (const player of players) {
-    const game = gameByTeam.get(player.current_mlb_team_id);
-    if (game) {
+    for (const game of gamesByTeam.get(player.current_mlb_team_id) ?? []) {
       neededGames.set(game.gamePk, game.live);
     }
   }
@@ -344,16 +367,21 @@ export async function getGameLinesForPlayersOnDate(
   const lines: Record<string, LiveLineupEntry> = {};
   let liveGameInProgress = false;
   for (const player of players) {
-    const game = gameByTeam.get(player.current_mlb_team_id);
-    const data = game ? gameData.get(game.gamePk) : undefined;
-    if (!game || !data) {
+    const playerGames = gamesByTeam.get(player.current_mlb_team_id) ?? [];
+    const playerGameData = playerGames
+      .map((game) => ({ game, data: gameData.get(game.gamePk) }))
+      .filter((entry): entry is { game: { gamePk: number; live: boolean }; data: { box: BoxscoreResponse | null; state: string | null } } =>
+        Boolean(entry.data),
+      );
+    if (!playerGameData.length) {
       continue;
     }
-    if (game.live) {
+    if (playerGameData.some(({ game }) => game.live)) {
       liveGameInProgress = true;
     }
-    const stats = extractLine(data.box, player.mlb_player_id);
-    lines[player.id] = { state: data.state, stats, points: livePoints(stats) };
+    const stats = mergeGameStats(playerGameData.map(({ data }) => extractLine(data.box, player.mlb_player_id)));
+    const state = playerGameData.find(({ game }) => game.live)?.data.state ?? "Final";
+    lines[player.id] = { state, stats, points: livePoints(stats) };
   }
   return { lines, liveGameInProgress };
 }

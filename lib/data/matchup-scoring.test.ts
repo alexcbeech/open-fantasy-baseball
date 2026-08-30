@@ -25,8 +25,8 @@ describe("computeCategoryValue", () => {
 
   it("computes ERA and WHIP from components", () => {
     const stats = [
-      { IP: 50, ER: 20, BB: 15, HA: 40 },
-      { IP: 50, ER: 10, BB: 5, HA: 30 },
+      { IP: 50, ER: 20, P_BB: 15, P_H: 40 },
+      { IP: 50, ER: 10, P_BB: 5, P_H: 30 },
     ];
     // ERA = (30 * 9) / 100 = 2.70; WHIP = (20 + 70) / 100 = 0.90
     expect(computeCategoryValue("ERA", stats)).toBeCloseTo(2.7, 5);
@@ -77,7 +77,7 @@ describe("fantasyPointsByPlayer", () => {
         { playerId: "hitter", stats: { RBI: 2 } },
         { playerId: "pitcher", stats: { IP: 2, K: 3 } },
       ]),
-    ).toEqual({ hitter: 7, pitcher: 9 });
+    ).toEqual({ hitter: 16.1, pitcher: 15 });
   });
 
   it("replaces the persisted matchup player-score snapshot in one batch", async () => {

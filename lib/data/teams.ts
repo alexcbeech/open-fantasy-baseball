@@ -35,12 +35,23 @@ const lineupRowsSql = `
             p.bats,
             todays_game.opposing_pitcher_throws as todays_opposing_pitcher_throws,
             adp.adp,
-            0 as matchup_total
+            coalesce(matchup_score.fantasy_points, 0) as matchup_total
           from lineup_entry le
           join player p on p.id = le.player_id
           left join mlb_team mt on mt.id = p.current_mlb_team_id
           left join player_adp adp on adp.player_id = p.id
           left join player_position_eligibility ppe on ppe.player_id = p.id and ppe.valid_to is null
+          left join lateral (
+            select mps.fantasy_points
+            from matchup_player_score mps
+            join matchup m on m.id = mps.matchup_id
+            join scoring_period sp on sp.id = m.scoring_period_id
+            where mps.team_id = le.team_id
+              and mps.player_id = p.id
+              and m.status = 'active'
+            order by sp.starts_at desc
+            limit 1
+          ) matchup_score on true
           left join lateral (
             select stats from player_stat_line psl where psl.player_id = p.id and split = 'season' order by stat_date desc limit 1
           ) season_stats on true
@@ -98,7 +109,7 @@ const lineupRowsSql = `
           group by le.id, le.slot, p.id, mt.abbreviation, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent, todays_game.first_pitch,
             todays_game.game_count, todays_game.probable_starter, todays_game.opposing_pitcher_throws,
-            team_schedule.remaining_games, adp.adp
+            team_schedule.remaining_games, adp.adp, matchup_score.fantasy_points
           order by le.lineup_date desc, le.id
 `;
 

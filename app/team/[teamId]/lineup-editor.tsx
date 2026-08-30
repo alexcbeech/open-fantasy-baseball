@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
-import { liveLineSummary, rowPoints } from "@/lib/fantasy/player-view";
+import { liveLineSummary } from "@/lib/fantasy/player-view";
 import {
   findLineupLockIssues,
   isLineupFirstGameLocked,
@@ -356,8 +356,8 @@ export function LineupEditor({
               <div className="lineup-group-label">
                 <span>{group.label}</span>
                 <span className="lineup-col-heads" aria-hidden="true">
-                  <span>Pts</span>
-                  <span>Today</span>
+                  <span>Week</span>
+                  <span>Proj today</span>
                 </span>
               </div>
               {group.rows.map((row) =>
@@ -365,13 +365,15 @@ export function LineupEditor({
                   (() => {
                     const entry = row.entry;
                     const player = entry.player;
-                    const { seasonPts } = rowPoints(player);
                     // Expected points from today's game (platoon-aware), the
                     // number that matters when setting today's lineup.
                     const todayPts = Math.round(projectTodayPoints(player) * 10) / 10;
                     const liveEntry = live[player.id];
                     const locked = isEntryLocked(entry);
-                    const boldPts = liveEntry ? liveEntry.points : seasonPts;
+                    // Stored matchup totals are refreshed after completed days.
+                    // Fold in an active game's points so the weekly number stays
+                    // current while today's box score is still live.
+                    const weeklyPts = Math.round((entry.matchupTotal + (liveEntry?.points ?? 0)) * 10) / 10;
                     const injured = player.status === "injured" || player.status === "day-to-day";
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
                     const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
@@ -432,12 +434,10 @@ export function LineupEditor({
                           onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                           onClick={() => setDetailPlayerId(player.id)}
                           aria-label={
-                            liveEntry
-                              ? `${player.name}: ${boldPts} live fantasy points, ${todayPts} projected today`
-                              : `${player.name}: ${seasonPts} season fantasy points, ${todayPts} projected today`
+                            `${player.name}: ${weeklyPts} fantasy points this week, ${todayPts} projected today`
                           }
                         >
-                          <span className={liveEntry ? "points-live is-live" : "points-live"}>{boldPts}</span>
+                          <span className={liveEntry ? "points-live is-live" : "points-live"}>{weeklyPts}</span>
                           <span className="points-proj">{todayPts}</span>
                         </button>
                       </div>

@@ -27,6 +27,30 @@ describe("teams data layer with a configured database", () => {
     expect(lineup).toEqual([]);
   });
 
+  it("loads each player's current weekly matchup points with the lineup", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          slot: "C",
+          id: "player-1",
+          mlb_player_id: null,
+          full_name: "Weekly Catcher",
+          mlb_team: "SEA",
+          status: "active",
+          positions: ["C"],
+          season_stats: {},
+          projected_stats: {},
+          matchup_total: "12.5",
+        },
+      ],
+    });
+
+    const lineup = await getLineupForTeam("00000000-0000-4000-8000-000000000303");
+
+    expect(lineup[0]?.matchupTotal).toBe(12.5);
+    expect(query.mock.calls[0][0]).toMatch(/matchup_score\.fantasy_points/);
+  });
+
   it("returns undefined for a team that does not exist (not a mock team)", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     const team = await getTeamSummary("00000000-0000-4000-8000-0000000000ff");

@@ -1,16 +1,60 @@
 import type { LeagueScoringType, Player, StatCategory } from "./types";
 
-export const pointsWeights: Partial<Record<StatCategory | "H" | "BB" | "IP" | "ER", number>> = {
-  R: 1,
-  HR: 4,
-  RBI: 1,
-  SB: 2,
-  W: 5,
-  SV: 5,
-  K: 1,
-  ER: -1,
-  IP: 3,
+export type PointStatSide = "hitting" | "pitching";
+export type PointsWeightMap = Record<string, number>;
+
+export type YahooPointCategory = {
+  category: string;
+  side: PointStatSide;
+  weight: number;
 };
+
+/** Yahoo's default fantasy-baseball points scoring, in display order. */
+export const yahooPointCategories: YahooPointCategory[] = [
+  { category: "1B", side: "hitting", weight: 2.6 },
+  { category: "2B", side: "hitting", weight: 5.2 },
+  { category: "3B", side: "hitting", weight: 7.8 },
+  { category: "HR", side: "hitting", weight: 10.4 },
+  { category: "R", side: "hitting", weight: 1.9 },
+  { category: "RBI", side: "hitting", weight: 1.9 },
+  { category: "BB", side: "hitting", weight: 2.6 },
+  { category: "SB", side: "hitting", weight: 4.2 },
+  { category: "HBP", side: "hitting", weight: 2.6 },
+  { category: "SV", side: "pitching", weight: 8 },
+  { category: "W", side: "pitching", weight: 8 },
+  { category: "K", side: "pitching", weight: 3 },
+  { category: "ER", side: "pitching", weight: -3 },
+  { category: "O", side: "pitching", weight: 1 },
+  { category: "BB", side: "pitching", weight: -1.3 },
+  { category: "H", side: "pitching", weight: -1.3 },
+  { category: "HBP", side: "pitching", weight: -1.3 },
+];
+
+/**
+ * Pitching stats with Yahoo names that overlap batting stats use internal
+ * P_-prefixed keys in a flat stat line. The league configuration retains the
+ * familiar Yahoo category name plus its hitting/pitching side.
+ */
+export function pointStatKey(side: PointStatSide, category: string) {
+  return side === "pitching" && ["BB", "H", "HBP"].includes(category) ? `P_${category}` : category;
+}
+
+export function buildPointsWeightMap(
+  rows: Array<{ category: string; side: PointStatSide; points_weight: number | string | null }>,
+): PointsWeightMap {
+  return Object.fromEntries(
+    rows
+      .filter((row) => row.points_weight !== null)
+      .map((row) => [pointStatKey(row.side, row.category), Number(row.points_weight)]),
+  );
+}
+
+export const yahooPointsWeights: PointsWeightMap = Object.fromEntries(
+  yahooPointCategories.map((entry) => [pointStatKey(entry.side, entry.category), entry.weight]),
+);
+
+// Backward-compatible export for callers that referenced the old constant.
+export const pointsWeights = yahooPointsWeights;
 
 export function formatScoringType(scoringType: LeagueScoringType) {
   switch (scoringType) {
@@ -46,19 +90,45 @@ export function inningsFromIpNotation(value: number | string | undefined): numbe
   return whole + outs / 3;
 }
 
-/** Fantasy points for an arbitrary stat line using the default points weights. */
-export function calculateFantasyPoints(stats: Record<string, number | string>) {
-  return Object.entries(stats).reduce((total, [category, value]) => {
-    const numeric =
-      category === "IP" ? inningsFromIpNotation(value) : typeof value === "number" ? value : Number.parseFloat(value);
-    const weight = pointsWeights[category as keyof typeof pointsWeights] ?? 0;
+function numericStat(value: number | string | undefined) {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(value ?? "");
+  return Number.isFinite(numeric) ? numeric : 0;
+}
 
-    if (Number.isNaN(numeric)) {
-      return total;
-    }
+function isPitchingLine(stats: Record<string, number | string>) {
+  return ["IP", "O", "ER", "W", "SV", "P_BB", "P_H", "HA", "P_HBP", "ERA", "WHIP", "GS"].some(
+    (key) => stats[key] !== undefined,
+  );
+}
 
-    return total + numeric * weight;
-  }, 0);
+/** Read a scoring stat, including derivations and compatibility with pre-Yahoo lines. */
+function pointStatValue(stats: Record<string, number | string>, key: string) {
+  if (key === "1B" && stats["1B"] === undefined) {
+    return Math.max(0, numericStat(stats.H) - numericStat(stats["2B"]) - numericStat(stats["3B"]) - numericStat(stats.HR));
+  }
+  if (key === "O" && stats.O === undefined) {
+    return Math.round(inningsFromIpNotation(stats.IP) * 3);
+  }
+  if (key === "P_BB" && stats.P_BB === undefined && isPitchingLine(stats)) {
+    return numericStat(stats.BB);
+  }
+  if (key === "P_H" && stats.P_H === undefined) {
+    return numericStat(stats.HA);
+  }
+  // Before pitching walks were namespaced, BB on a pitching line meant walks
+  // allowed and must not also receive the positive batter-walk weight.
+  if (key === "BB" && stats.P_BB === undefined && isPitchingLine(stats)) {
+    return 0;
+  }
+  return numericStat(stats[key]);
+}
+
+/** Fantasy points for an arbitrary stat line using league or Yahoo-default weights. */
+export function calculateFantasyPoints(
+  stats: Record<string, number | string>,
+  weights: PointsWeightMap = yahooPointsWeights,
+) {
+  return Object.entries(weights).reduce((total, [key, weight]) => total + pointStatValue(stats, key) * weight, 0);
 }
 
 export function calculateSimplePoints(player: Player) {
