@@ -40,8 +40,9 @@ function lineupPriorityTier(player: Player): number {
 
 /**
  * Start Active Players priority: pitchers use today's probable starters first,
- * RP-eligible arms second, and non-starting SPs last. Other players in (or
- * likely in) today's MLB starting lineup come first. Ties use expected points
+ * RP-eligible arms second, and non-starting SPs last. Batters confirmed in (or
+ * still eligible for) today's MLB starting lineup come before players omitted
+ * from a posted lineup. Ties use expected points
  * from TODAY's game (matchup-aware — see projectTodayPoints), then higher
  * rest-of-season projection, better (numerically lower) ADP, and name.
  */

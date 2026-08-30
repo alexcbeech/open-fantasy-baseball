@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
-import { projectTodayPoints } from "@/lib/fantasy/daily-projection";
+import { isBatter, projectTodayPoints } from "@/lib/fantasy/daily-projection";
 import {
   formatLineupCategoryValue,
   lineupCategoryColumns,
@@ -19,7 +19,14 @@ import {
   validateLineup,
 } from "@/lib/fantasy/roster-validation";
 import { planActiveLineup } from "@/lib/fantasy/start-active-players";
-import type { LeagueScoringType, LineupLockMode, LineupPlayer, RosterSlot, StatCategory } from "@/lib/fantasy/types";
+import type {
+  LeagueScoringType,
+  LineupLockMode,
+  LineupPlayer,
+  PostedLineupStatus,
+  RosterSlot,
+  StatCategory,
+} from "@/lib/fantasy/types";
 import { FillSlotSheet } from "./fill-slot-sheet";
 import { LocalGameLine } from "./local-game-line";
 import { MovePlayerSheet, type MoveTarget } from "./move-player-sheet";
@@ -160,6 +167,7 @@ export function LineupEditor({
   const [fillingSlot, setFillingSlot] = useState<RosterSlot | null>(null);
   const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveEntry>>({});
+  const [postedLineups, setPostedLineups] = useState<Record<string, PostedLineupStatus>>({});
   const [today, setToday] = useState<Record<string, LiveEntry>>({});
 
   // Live in-game overlay: while games are in progress, poll each rostered
@@ -167,24 +175,38 @@ export function LineupEditor({
   // the game line becomes the inning plus the in-game stat line. Players with
   // no game in progress are absent from the map and keep their season/next-game
   // display.
+  const loadDailyStatus = useCallback(async (): Promise<Record<string, PostedLineupStatus> | null> => {
+    try {
+      const response = await fetch(`/api/v1/teams/${teamId}/live`);
+      if (!response.ok) {
+        return null;
+      }
+      const result = (await response.json()) as {
+        live?: Record<string, LiveEntry>;
+        today?: Record<string, LiveEntry>;
+        lineups?: Record<string, PostedLineupStatus>;
+      };
+      if (result.live) {
+        setLive(result.live);
+      }
+      if (result.today) {
+        setToday(result.today);
+      }
+      if (result.lineups) {
+        setPostedLineups(result.lineups);
+      }
+      return result.lineups ?? null;
+    } catch {
+      // Keep the last known maps on a transient failure.
+      return null;
+    }
+  }, [teamId]);
+
   useEffect(() => {
     let active = true;
     const load = async () => {
-      try {
-        const response = await fetch(`/api/v1/teams/${teamId}/live`);
-        if (!response.ok) {
-          return;
-        }
-        const result = (await response.json()) as {
-          live?: Record<string, LiveEntry>;
-          today?: Record<string, LiveEntry>;
-        };
-        if (active && result.live) {
-          setLive(result.live);
-          setToday(result.today ?? result.live);
-        }
-      } catch {
-        // Keep the last known live map on a transient failure.
+      if (active) {
+        await loadDailyStatus();
       }
     };
 
@@ -194,14 +216,23 @@ export function LineupEditor({
       active = false;
       clearInterval(timer);
     };
-  }, [teamId]);
+  }, [loadDailyStatus]);
 
   const currentLineup = useMemo<LineupPlayer[]>(
     () =>
       initialLineup
         .filter((entry) => slotByPlayerId[entry.player.id] !== undefined)
-        .map((entry) => ({ ...entry, slot: slotByPlayerId[entry.player.id] })),
-    [initialLineup, slotByPlayerId],
+        .map((entry) => {
+          const posted = postedLineups[entry.player.id];
+          return {
+            ...entry,
+            slot: slotByPlayerId[entry.player.id],
+            player: posted
+              ? { ...entry.player, todaysLineupStatus: posted.status, todaysBattingOrder: posted.battingOrder }
+              : entry.player,
+          };
+        }),
+    [initialLineup, postedLineups, slotByPlayerId],
   );
 
   const groups = useMemo(() => buildLineupGroups(currentLineup, rosterSlots), [currentLineup, rosterSlots]);
@@ -345,8 +376,23 @@ export function LineupEditor({
    * IL/NA players stay put; the result goes through the same validate/commit
    * path as a manual move.
    */
-  function startActivePlayers() {
-    const next = planActiveLineup(currentLineup, lockedPlayerIds);
+  async function startActivePlayers() {
+    // Refresh at click time because MLB clubs often post lineups only shortly
+    // before first pitch. The endpoint is cached for 15 seconds, so this stays
+    // responsive without optimizing from a stale page-load snapshot.
+    const refreshed = await loadDailyStatus();
+    const lineupForPlan = refreshed
+      ? currentLineup.map((entry) => {
+          const posted = refreshed[entry.player.id];
+          return posted
+            ? {
+                ...entry,
+                player: { ...entry.player, todaysLineupStatus: posted.status, todaysBattingOrder: posted.battingOrder },
+              }
+            : entry;
+        })
+      : currentLineup;
+    const next = planActiveLineup(lineupForPlan, lockedPlayerIds, rosterSlots);
     const moved = currentLineup.filter((entry) => next[entry.player.id] !== entry.slot).length;
 
     if (!moved) {
@@ -483,6 +529,8 @@ export function LineupEditor({
                             status={player.status}
                             statusDetail={player.statusDetail}
                             liveText={liveEntry?.state}
+                            lineupStatus={isBatter(player) ? player.todaysLineupStatus : null}
+                            battingOrder={player.todaysBattingOrder}
                           />
                           {liveStatLine ? <span className="player-live-line">{liveStatLine}</span> : null}
                         </button>

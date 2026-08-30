@@ -7,6 +7,10 @@ const batterPositions: RosterSlot[] = ["C", "1B", "2B", "3B", "SS", "OF"];
 const DEFAULT_ROTATION_SIZE = 5;
 const DAY_TO_DAY_AVAILABILITY = 0.6;
 
+export function isBatter(player: Pick<Player, "positions">): boolean {
+  return player.positions.some((position) => batterPositions.includes(position) || position === "UTIL");
+}
+
 function positiveStat(stats: Record<string, number | string>, key: string): number | null {
   const value = Number(stats[key]);
   return Number.isFinite(value) && value > 0 ? value : null;
@@ -25,6 +29,12 @@ export function startsToday(player: Player): boolean {
   }
 
   if (player.status === "injured" || player.status === "minors") {
+    return false;
+  }
+
+  // Once every applicable MLB lineup is posted, a healthy batter left out of
+  // all of them falls behind confirmed starters and still-unknown hitters.
+  if (isBatter(player) && player.todaysLineupStatus === "not-starting") {
     return false;
   }
 

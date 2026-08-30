@@ -1,6 +1,6 @@
 import { query, tryDatabase } from "@/lib/db/client";
 import { calculateFantasyPoints, statsForRosterSlot } from "@/lib/fantasy/scoring";
-import type { LivePlayerStatus, RosterSlot } from "@/lib/fantasy/types";
+import type { LivePlayerStatus, PostedLineupStatus, RosterSlot } from "@/lib/fantasy/types";
 import { mapMlbStat } from "./mlb-stats-sync";
 
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
@@ -17,6 +17,10 @@ type ScheduleGame = {
   teams?: {
     home?: { team?: { id?: number } };
     away?: { team?: { id?: number } };
+  };
+  lineups?: {
+    homePlayers?: Array<{ id?: number }>;
+    awayPlayers?: Array<{ id?: number }>;
   };
 };
 type ScheduleResponse = { dates?: Array<{ games?: ScheduleGame[] }> };
@@ -51,6 +55,7 @@ async function fetchJson<T>(path: string, baseUrl: string): Promise<T | null> {
 // longer TTL (game states change slowly); boxscore/linescore stay fresher.
 export const SCHEDULE_TTL_MS = 60_000;
 export const GAME_TTL_MS = 15_000;
+export const LINEUP_TTL_MS = 15_000;
 
 type CacheEntry = { value: unknown; expires: number };
 const responseCache = new Map<string, CacheEntry>();
@@ -212,6 +217,64 @@ export type LiveLineupEntry = { state: string | null; stats: Record<string, numb
 
 export type LivePlayerRef = { id: string; mlb_player_id: number; current_mlb_team_id: number };
 type LiveLineupRef = LivePlayerRef & { slot: RosterSlot };
+
+/**
+ * Confirmed batting-order status for today's MLB official date. The hydrated
+ * schedule returns each club's nine starters in order, so this costs one
+ * request regardless of roster size. A missing lineup remains unknown. For a
+ * doubleheader, an omission is only confirmed after every lineup is posted.
+ */
+export async function getPostedLineupStatusesForPlayers(
+  players: LivePlayerRef[],
+  baseUrl = defaultBaseUrl,
+  now = new Date(),
+): Promise<Record<string, PostedLineupStatus>> {
+  if (!players.length) {
+    return {};
+  }
+
+  const schedule = await cachedFetchJson<ScheduleResponse>(
+    `/schedule?sportId=1&date=${todayIso(now)}&hydrate=lineups`,
+    baseUrl,
+    LINEUP_TTL_MS,
+  );
+  const games = schedule?.dates?.[0]?.games ?? [];
+  const result: Record<string, PostedLineupStatus> = {};
+
+  for (const player of players) {
+    const teamGames = games.filter((game) => {
+      const home = game.teams?.home?.team?.id;
+      const away = game.teams?.away?.team?.id;
+      return home === player.current_mlb_team_id || away === player.current_mlb_team_id;
+    });
+    if (!teamGames.length) {
+      continue;
+    }
+
+    let postedCount = 0;
+    let battingOrder: number | null = null;
+    for (const game of teamGames) {
+      const isHome = game.teams?.home?.team?.id === player.current_mlb_team_id;
+      const lineup = isHome ? game.lineups?.homePlayers : game.lineups?.awayPlayers;
+      if (!lineup?.length) {
+        continue;
+      }
+      postedCount += 1;
+      const index = lineup.findIndex((starter) => starter.id === player.mlb_player_id);
+      if (index >= 0 && battingOrder === null) {
+        battingOrder = index + 1;
+      }
+    }
+
+    if (battingOrder !== null) {
+      result[player.id] = { status: "starting", battingOrder };
+    } else if (postedCount === teamGames.length) {
+      result[player.id] = { status: "not-starting", battingOrder: null };
+    }
+  }
+
+  return result;
+}
 
 /**
  * Live lines for an arbitrary set of players, keyed by player id. Fetches the
@@ -474,5 +537,53 @@ export async function getLineupDayStatus(teamId: string, baseUrl = defaultBaseUr
       return { live, today };
     },
     () => ({ live: {}, today: {} }),
+  );
+}
+
+/** Live boxscore lines and posted batting-order status for one fantasy team. */
+export async function getTeamDailyPlayerStatus(
+  teamId: string,
+  baseUrl = defaultBaseUrl,
+  now = new Date(),
+): Promise<{
+  live: Record<string, LiveLineupEntry>;
+  today: Record<string, LiveLineupEntry>;
+  lineups: Record<string, PostedLineupStatus>;
+}> {
+  const none = { live: {}, today: {}, lineups: {} };
+  return tryDatabase(
+    async () => {
+      const players = await query<LiveLineupRef>(
+        `select p.id, p.mlb_player_id, p.current_mlb_team_id, le.slot
+         from lineup_entry le
+         join player p on p.id = le.player_id
+         where le.team_id = $1
+           and le.lineup_date = (
+             select max(lineup_date)
+             from lineup_entry
+             where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+           )
+           and p.mlb_player_id is not null
+           and p.current_mlb_team_id is not null`,
+        [teamId],
+      );
+      const [todayLines, lineups] = await Promise.all([
+        getTodayLinesForPlayers(players.rows, baseUrl, now),
+        getPostedLineupStatusesForPlayers(players.rows, baseUrl, now),
+      ]);
+      const today = Object.fromEntries(
+        players.rows.flatMap((player) => {
+          const entry = todayLines.lines[player.id];
+          if (!entry) {
+            return [];
+          }
+          const stats = statsForRosterSlot(entry.stats, player.slot);
+          return [[player.id, { ...entry, stats, points: livePoints(stats) }]];
+        }),
+      );
+      const live = Object.fromEntries(Object.entries(today).filter(([, entry]) => entry.state !== "Final"));
+      return { live, today, lineups };
+    },
+    () => none,
   );
 }

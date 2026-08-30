@@ -1364,6 +1364,45 @@ button.row {
   font-weight: 700;
 }
 
+.player-game.has-lineup-status {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+
+.player-game-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Confirmed MLB batting order: a filled green order number, or the outlined
+   red X used when the club has posted its lineup without the batter. */
+.lineup-status-badge {
+  align-items: center;
+  border-radius: 999px;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 900;
+  height: 17px;
+  justify-content: center;
+  line-height: 1;
+  width: 17px;
+}
+
+.lineup-status-badge.is-starting {
+  background: var(--win);
+  color: white;
+}
+
+.lineup-status-badge.is-out {
+  border: 2px solid var(--loss);
+  color: var(--loss);
+  font-size: 15px;
+}
+
 /* Live in-game row treatment: a pulsing dot on the inning line and a
    highlighted live-points number that replaces the season total. */
 .player-game.is-live {

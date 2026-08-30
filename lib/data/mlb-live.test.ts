@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateFantasyPoints } from "@/lib/fantasy/scoring";
-import { __clearLiveCache, extractLine, getGameLinesForPlayersOnDate } from "./mlb-live";
+import {
+  __clearLiveCache,
+  extractLine,
+  getGameLinesForPlayersOnDate,
+  getPostedLineupStatusesForPlayers,
+} from "./mlb-live";
 
 beforeEach(() => {
   __clearLiveCache();
@@ -145,5 +150,81 @@ describe("getGameLinesForPlayersOnDate", () => {
 
     expect(result.lines["player-100"].stats).toMatchObject({ R: 2, HR: 2, RBI: 4, H: 4, AB: 8, "1B": 2 });
     expect(result.lines["player-100"].points).toBe(37.4);
+  });
+});
+
+describe("getPostedLineupStatusesForPlayers", () => {
+  it("maps batting-order spots and marks omitted players after the lineup is posted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            dates: [
+              {
+                games: [
+                  {
+                    gamePk: 123,
+                    teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                    lineups: {
+                      homePlayers: [{ id: 101 }, { id: 100 }],
+                      awayPlayers: [{ id: 200 }],
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    const result = await getPostedLineupStatusesForPlayers(
+      [
+        { id: "batting-second", mlb_player_id: 100, current_mlb_team_id: 10 },
+        { id: "on-bench", mlb_player_id: 999, current_mlb_team_id: 10 },
+      ],
+      "https://stats.test/api/v1",
+      new Date("2026-08-30T18:00:00.000Z"),
+    );
+
+    expect(result["batting-second"]).toEqual({ status: "starting", battingOrder: 2 });
+    expect(result["on-bench"]).toEqual({ status: "not-starting", battingOrder: null });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain("hydrate=lineups");
+  });
+
+  it("keeps an omitted doubleheader player unknown until every lineup is posted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            dates: [
+              {
+                games: [
+                  {
+                    gamePk: 123,
+                    teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                    lineups: { homePlayers: [{ id: 101 }], awayPlayers: [{ id: 200 }] },
+                  },
+                  {
+                    gamePk: 124,
+                    teams: { home: { team: { id: 10 } }, away: { team: { id: 20 } } },
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    const result = await getPostedLineupStatusesForPlayers(
+      [{ id: "doubleheader-bat", mlb_player_id: 999, current_mlb_team_id: 10 }],
+      "https://stats.test/api/v1",
+      new Date("2026-08-30T18:00:00.000Z"),
+    );
+
+    expect(result["doubleheader-bat"]).toBeUndefined();
   });
 });
