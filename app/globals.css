@@ -1500,13 +1500,67 @@ button.row {
   opacity: 0.85;
 }
 
+/* Category leagues mirror a scorecard: identity on the first line, then the
+   configured single-day scoring columns across the full row. */
+.lineup-category-group-label {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+}
+
+.lineup-category-heads,
+.lineup-category-values {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+}
+
+.lineup-category-heads {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  margin-inline: -14px;
+  padding: 8px 14px;
+  width: calc(100% + 28px);
+}
+
+.lineup-category-heads span,
+.lineup-category-values span {
+  min-width: 0;
+  text-align: center;
+}
+
+.lineup-category-row {
+  grid-template-rows: auto auto;
+  padding-bottom: 10px;
+}
+
+.lineup-category-values {
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  grid-column: 1 / -1;
+  padding: 6px 0 0;
+}
+
+.lineup-category-values .is-live {
+  color: var(--brand-strong);
+}
+
 @media (hover: hover) {
   .pos-badge-button:hover {
     box-shadow: 0 0 0 2px var(--brand);
   }
 
   .player-info-button:hover .player-name,
-  .player-points:hover .points-live {
+  .player-points:hover .points-live,
+  .lineup-category-values:hover span {
     color: var(--brand-strong);
   }
 }
