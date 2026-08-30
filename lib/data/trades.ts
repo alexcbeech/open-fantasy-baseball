@@ -9,6 +9,7 @@ import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import { isSlotEligibleForPlayer } from "@/lib/fantasy/roster-validation";
 import { nextWaiverProcessingTime } from "@/lib/fantasy/waivers";
 import { tradeIssues, votesNeededToReject, type TradeRosterPlayer } from "@/lib/fantasy/trade-evaluation";
+import { hasTradeDeadlinePassed } from "@/lib/fantasy/trade-deadline";
 import type { TradePlayerSummary, TradeStatus, TradeSummary } from "@/lib/fantasy/trade-types";
 import type { LeagueSettings, RosterSlot } from "@/lib/fantasy/types";
 
@@ -41,6 +42,7 @@ type LeagueContext = {
   leagueId: string;
   settings: LeagueSettings;
   teamCount: number;
+  tradeDeadlineAt: Date | null;
 };
 
 type ViewerTeamRow = {
@@ -79,8 +81,9 @@ async function isCommissioner(client: PoolClient, leagueId: string, identity: Ap
 }
 
 async function getLeagueContext(client: PoolClient, leagueId: string): Promise<LeagueContext> {
-  const result = await client.query<{ settings: LeagueSettings; team_count: string | number }>(
-    `select l.settings, (select count(*) from fantasy_team ft where ft.league_id = l.id) as team_count
+  const result = await client.query<{ settings: LeagueSettings; team_count: string | number; trade_deadline_at: Date | null }>(
+    `select l.settings, l.trade_deadline_at,
+       (select count(*) from fantasy_team ft where ft.league_id = l.id) as team_count
      from league l
      where l.id = $1`,
     [leagueId],
@@ -95,6 +98,7 @@ async function getLeagueContext(client: PoolClient, leagueId: string): Promise<L
     leagueId,
     settings: { ...defaultLeagueSettings, ...row.settings },
     teamCount: Number(row.team_count),
+    tradeDeadlineAt: row.trade_deadline_at,
   };
 }
 
@@ -452,6 +456,10 @@ export type ProposeTradeInput = {
 
 export async function proposeTrade(leagueId: string, input: ProposeTradeInput, identity: ApiIdentity): Promise<TradeSummary> {
   return withTradeTransaction(leagueId, identity, async (client, context) => {
+    if (hasTradeDeadlinePassed(context.tradeDeadlineAt)) {
+      throw new TradeError("The league trade deadline has passed.", 409);
+    }
+
     const myTeams = await viewerTeams(client, leagueId, identity);
 
     if (!myTeams.some((team) => team.team_id === input.fromTeamId)) {
@@ -553,6 +561,10 @@ export async function respondToTrade(
         trade.id,
       ]);
       return trade.id;
+    }
+
+    if (hasTradeDeadlinePassed(context.tradeDeadlineAt)) {
+      throw new TradeError("The league trade deadline has passed, so this offer can no longer be accepted.", 409);
     }
 
     const withDrops: TradeRow = { ...trade, to_drop_player_ids: input.toDropPlayerIds ?? [] };

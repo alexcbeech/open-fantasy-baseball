@@ -698,10 +698,88 @@ export const openApiDocument = {
         },
       },
     },
+    "/leagues/{leagueId}/info": {
+      patch: {
+        tags: ["Leagues"],
+        summary: "Set the league trade deadline",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "commissioner:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["tradeDeadlineAt"],
+          properties: { tradeDeadlineAt: { type: ["string", "null"], format: "date-time" } },
+        }),
+        responses: {
+          "200": { description: "Trade deadline saved." },
+          "403": { description: "Commissioner access required.", content: errorContent() },
+          "503": { description: "League information requires a configured database.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/announcements": {
+      get: {
+        tags: ["Leagues"],
+        summary: "List active league announcements",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "read:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        responses: { "200": { description: "Pinned and recent announcements." } },
+      },
+      post: {
+        tags: ["Leagues"],
+        summary: "Publish a league announcement",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "commissioner:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["title", "body"],
+          properties: {
+            title: { type: "string", minLength: 1, maxLength: 120 },
+            body: { type: "string", minLength: 1, maxLength: 2000 },
+            isPinned: { type: "boolean", default: false },
+          },
+        }),
+        responses: {
+          "201": { description: "Announcement published." },
+          "403": { description: "Commissioner access required.", content: errorContent() },
+        },
+      },
+    },
+    "/leagues/{leagueId}/announcements/{announcementId}": {
+      patch: {
+        tags: ["Leagues"],
+        summary: "Pin or unpin a league announcement",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "commissioner:league",
+        parameters: [
+          pathParameter("leagueId", "League id."),
+          pathParameter("announcementId", "Announcement id."),
+        ],
+        requestBody: jsonBody({
+          type: "object",
+          required: ["isPinned"],
+          properties: { isPinned: { type: "boolean" } },
+        }),
+        responses: { "200": { description: "Announcement updated." } },
+      },
+      delete: {
+        tags: ["Leagues"],
+        summary: "Archive a league announcement",
+        security: bearerSecurity,
+        "x-ofb-required-scope": "commissioner:league",
+        parameters: [
+          pathParameter("leagueId", "League id."),
+          pathParameter("announcementId", "Announcement id."),
+        ],
+        responses: { "204": { description: "Announcement archived." } },
+      },
+    },
     "/leagues/{leagueId}/overview": {
       get: {
         tags: ["Leagues"],
-        summary: "Read league standings, team stats, and settings",
+        summary: "Read League Hub dates, announcements, standings, team stats, and settings",
         security: bearerSecurity,
         "x-ofb-required-scope": "read:league",
         parameters: [pathParameter("leagueId", "League id.")],

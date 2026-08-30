@@ -3068,6 +3068,244 @@ p.player-meta,
   text-transform: uppercase;
 }
 
+/* League Hub: a full-width orientation layer above the operational feeds. */
+.league-hub {
+  display: grid;
+  gap: 16px;
+  grid-column: 1 / -1;
+  overflow: hidden;
+}
+
+.league-hub-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.league-hub-header h2 {
+  font-size: clamp(22px, 4vw, 30px);
+  margin: 2px 0 4px;
+}
+
+.league-hub-header p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.league-hub-kicker {
+  color: var(--brand);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.league-announcement {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+}
+
+.league-announcement.featured {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 12%, var(--surface)), var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 52%, var(--line));
+}
+
+.league-announcement h3,
+.league-announcement p {
+  margin: 0;
+}
+
+.league-announcement p {
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.league-announcement small,
+.league-announcement-heading time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.league-announcement-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.league-announcement-heading h3 {
+  min-width: 0;
+}
+
+.league-announcement-heading time {
+  flex: 0 0 auto;
+}
+
+.league-announcement-empty {
+  background: var(--surface-strong);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 14px;
+}
+
+.league-date-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.league-date-card {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 4px;
+  min-height: 98px;
+  padding: 11px 12px;
+}
+
+.league-date-card > span,
+.league-basics span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.league-date-card strong {
+  font-size: 15px;
+}
+
+.league-date-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.league-basics {
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.league-basics > div {
+  border-right: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.league-basics > div:first-child {
+  padding-left: 0;
+}
+
+.league-basics > div:last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+
+.league-basics strong {
+  font-size: 13px;
+}
+
+.league-announcement-history summary {
+  color: var(--brand);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.league-announcement-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.league-hub-tools {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.league-hub-tools > h3 {
+  margin: 0;
+}
+
+.league-deadline-editor {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.league-announcement-editor {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+}
+
+.league-announcement-editor textarea {
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.league-announcement-manage-list {
+  border-top: 1px solid var(--line);
+  display: grid;
+  padding-top: 8px;
+}
+
+.league-announcement-manage-row {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.league-announcement-manage-row:last-child {
+  border-bottom: 0;
+}
+
+.league-announcement-manage-row > div:first-child {
+  display: grid;
+  min-width: 0;
+}
+
+.league-announcement-manage-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.league-announcement-manage-row > div:last-child {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.league-announcement-manage-row .secondary-button {
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
 /* Commissioner league-settings editor. */
 .settings-editor {
   display: grid;
@@ -3681,6 +3919,44 @@ button.row {
 
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .league-hub-header,
+  .league-announcement-heading,
+  .league-announcement-manage-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .league-basics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .league-basics > div,
+  .league-basics > div:first-child,
+  .league-basics > div:last-child {
+    border-bottom: 1px solid var(--line);
+    padding: 10px;
+  }
+
+  .league-basics > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .league-basics > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  .league-deadline-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .league-announcement-manage-row > div:last-child {
+    width: 100%;
+  }
+
+  .league-announcement-manage-row .secondary-button {
+    flex: 1;
   }
 
   .searchbar {

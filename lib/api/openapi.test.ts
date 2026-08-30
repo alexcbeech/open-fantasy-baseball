@@ -16,6 +16,9 @@ describe("openApiDocument", () => {
     expect(openApiDocument.paths["/players"].get["x-ofb-required-scope"]).toBe("read:league");
     expect(openApiDocument.paths["/teams/{teamId}/lineup"].patch["x-ofb-required-scope"]).toBe("write:lineup");
     expect(openApiDocument.paths["/profile/preferences"].get["x-ofb-required-scope"]).toBe("read:profile");
+    expect(openApiDocument.paths["/leagues/{leagueId}/announcements"].post["x-ofb-required-scope"]).toBe(
+      "commissioner:league",
+    );
   });
 
   it("only documents real OAuth scopes on scoped routes", () => {
