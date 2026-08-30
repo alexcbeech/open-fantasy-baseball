@@ -213,11 +213,13 @@ describe("derivePitcherEligibility", () => {
     expect(derivePitcherEligibility(26, 40)).toEqual(["SP", "RP"]);
   });
 
-  it("falls back to the dominant role on a small sample", () => {
-    // Two starts, one relief appearance: neither clears the threshold.
-    expect(derivePitcherEligibility(2, 3)).toEqual(["SP"]);
-    // One start, two relief appearances.
-    expect(derivePitcherEligibility(1, 3)).toEqual(["RP"]);
+  it("does not grant a role before its appearance threshold", () => {
+    expect(derivePitcherEligibility(2, 3)).toEqual([]);
+    expect(derivePitcherEligibility(1, 3)).toEqual([]);
+  });
+
+  it("does not grant RP for a position player's one-off mop-up appearance", () => {
+    expect(derivePitcherEligibility(0, 1)).toEqual([]);
   });
 
   it("returns nothing for a pitcher with no appearances yet", () => {
@@ -226,8 +228,9 @@ describe("derivePitcherEligibility", () => {
 
   it("coerces missing or non-finite inputs to zero", () => {
     expect(derivePitcherEligibility(Number.NaN, Number.NaN)).toEqual([]);
-    // A start with a missing games count still counts as one appearance.
-    expect(derivePitcherEligibility(1, Number.NaN)).toEqual(["SP"]);
+    // A start with a missing games count is recognized, but one start is below
+    // the eligibility threshold.
+    expect(derivePitcherEligibility(1, Number.NaN)).toEqual([]);
   });
 
   it("never returns RP when games played is fewer than starts (bad data)", () => {
