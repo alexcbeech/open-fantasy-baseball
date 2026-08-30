@@ -101,9 +101,11 @@ describe("fantasyPointsByPlayer", () => {
 
 describe("periodLineupPlayerStats", () => {
   it("scores a game line only from the active lineup effective on that game date", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [{ player_id: "active-player", stats: { HR: 1 } }] });
+    const query = vi.fn().mockResolvedValue({
+      rows: [{ player_id: "active-player", slot: "SP", stats: { HR: 1, R: 1, IP: 6, K: 8 } }],
+    });
 
-    await periodLineupPlayerStats(
+    const result = await periodLineupPlayerStats(
       { query },
       "team-1",
       "2026-08-17T04:00:00.000Z",
@@ -114,5 +116,7 @@ describe("periodLineupPlayerStats", () => {
     expect(sql).toContain("le.lineup_date <= psl.stat_date");
     expect(sql).toContain("order by le.lineup_date desc");
     expect(sql).toContain("lineup_on_date.slot not in ('BN', 'IL', 'NA')");
+    expect(sql).toContain("lineup_on_date.slot");
+    expect(result).toEqual([{ playerId: "active-player", stats: { IP: 6, K: 8 } }]);
   });
 });
