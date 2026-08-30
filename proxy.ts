@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
-import { isPublicPagePath } from "@/lib/auth/public-paths";
+import { isPublicAssetPath, isPublicPagePath } from "@/lib/auth/public-paths";
 
 // Some pages intentionally render without a signed-in session even when Neon
 // Auth is configured. Invite pages must preserve the token while offering the
@@ -46,7 +46,12 @@ export async function proxy(request: NextRequest) {
   // legal -- and the Neon Auth request middleware forwards the incoming method
   // and body to its upstream get-session check, so a POST makes that check fail
   // and bounces a signed-in action to the login page.
-  if (runNeonAuthProxy && request.method === "GET" && !request.nextUrl.pathname.startsWith("/api")) {
+  if (
+    runNeonAuthProxy &&
+    request.method === "GET" &&
+    !request.nextUrl.pathname.startsWith("/api") &&
+    !isPublicAssetPath(request.nextUrl.pathname)
+  ) {
     const authResponse = await runNeonAuthProxy(request);
     const isLoginRedirect = authResponse.headers.has("location");
 
@@ -59,10 +64,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next's build assets and the files served straight out of /public
-  // (the brand marks, the service worker). Without excluding these, the Neon
-  // Auth request middleware intercepts them for signed-out visitors and returns
-  // the login page HTML instead of the asset -- which broke the logo on the very
-  // pages (sign-in, sign-up) where the visitor is always signed out.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand/|sw.js).*)"],
+  // Skip Next's build assets, install metadata, and files served straight out
+  // of /public. Without excluding these, Neon Auth returns login-page HTML to
+  // signed-out visitors instead of the requested manifest/icon/offline asset,
+  // causing browsers to install OFB as a plain bookmark rather than a PWA.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|brand/|icons/|manifest\\.webmanifest|offline\\.html|offline\\.css|sw\\.js).*)",
+  ],
 };

@@ -16,9 +16,15 @@ test.describe("progressive web app", () => {
       short_name: "OFB",
       display: "standalone",
       start_url: "/",
+      launch_handler: { client_mode: "navigate-existing" },
     });
 
-    for (const icon of ["icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"]) {
+    for (const icon of [
+      "icon-192.png",
+      "icon-512.png",
+      "icon-maskable-v2-192.png",
+      "icon-maskable-v2-512.png",
+    ]) {
       const iconResponse = await request.get(`/icons/${icon}`);
       expect(iconResponse.ok(), icon).toBeTruthy();
       expect(iconResponse.headers()["content-type"], icon).toContain("image/png");
@@ -35,6 +41,9 @@ test.describe("progressive web app", () => {
     const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
     expect(scope).toBe("http://localhost:3100/");
+
+    const cacheNames = await page.evaluate(() => caches.keys());
+    expect(cacheNames).toContain("ofb-offline-v2");
 
     const offlineHtml = await page.evaluate(async () => {
       const response = await caches.match("/offline.html");
