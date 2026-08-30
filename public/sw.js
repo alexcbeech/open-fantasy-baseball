@@ -1,7 +1,7 @@
 /* Open Fantasy Baseball service worker: offline navigation fallback and Web Push. */
 
 const CACHE_PREFIX = "ofb-";
-const CACHE_NAME = `${CACHE_PREFIX}offline-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}offline-v2`;
 const OFFLINE_URL = "/offline.html";
 const OFFLINE_ASSETS = [OFFLINE_URL, "/offline.css", "/brand/ofb-tile.svg", "/icons/icon-192.png"];
 
