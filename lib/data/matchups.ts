@@ -82,10 +82,14 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
         matchup.scoring_type === "h2h-points"
           ? Promise.resolve({ rows: [] as CategoryScoreRow[] })
           : query<CategoryScoreRow>(
-              `select category, home_value, away_value, home_result
-               from matchup_category_score
-               where matchup_id = $1
-               order by category`,
+              `select score.category, score.home_value, score.away_value, score.home_result
+               from matchup_category_score score
+               join matchup m on m.id = score.matchup_id
+               join league_stat_category category
+                 on category.league_id = m.league_id
+                and category.category = score.category
+               where score.matchup_id = $1
+               order by category.side, category.sort_order`,
               [matchup.matchup_id],
             ),
         getLineupForTeam(teamId),
