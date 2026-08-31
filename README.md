@@ -2,23 +2,27 @@
 
 Open Fantasy Baseball (OFB) is a mobile-first fantasy baseball app influenced by the day-to-day usability of Yahoo Fantasy Sports: fast team switching, lineup management, matchup scoring, deep player search, commissioner controls, and configurable notifications.
 
-## Initial Stack
+## Current Stack
 
 - Next.js, React, and TypeScript for the web/PWA app.
 - Versioned API routes under `/api/v1`.
-- PostgreSQL planned for durable league, roster, scoring, and audit data.
-- Redis planned for queues, cache, live-score fanout, and rate limiting.
-- Neon Auth planned for user auth; scoped owner API tokens stay in OFB's database.
-- Provider adapters planned for stats, rosters, projections, and player news.
+- PostgreSQL for durable league, roster, scoring, job, and audit data.
+- A PostgreSQL-backed durable job queue; Redis remains available for future shared caching and high-volume fanout.
+- Neon Auth for user authentication; scoped owner API tokens stay in OFB's database.
+- Provider adapters for MLB stats, rosters, projections, and player news.
 
 ## Local Development
 
+Install Node.js 24, then install the exact locked dependency tree and start the development server:
+
 ```bash
-npm.cmd install
-npm.cmd run dev
+npm ci
+npm run dev
 ```
 
-PowerShell may block `npm`; on Windows, `npm.cmd` avoids the script execution policy issue.
+The app runs with bundled mock data when no database is configured. To use local or managed services, copy `.env.example` to `.env.local` and fill in only the values you need. PowerShell installations that block the `npm.ps1` shim can use `npm.cmd` in place of `npm`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and required checks.
 
 ## Database And Data Sync
 
@@ -33,33 +37,33 @@ docker compose up -d
 Apply migrations and seed development data:
 
 ```bash
-npm.cmd run db:setup
+npm run db:setup
 ```
 
 Sync MLB teams, active rosters, 40-man rosters, schedules, and probable starters from the MLB Stats API:
 
 ```bash
-npm.cmd run sync:mlb
+npm run sync:mlb
 ```
 
 Ingest real player stats from the MLB Stats API — season stats for every known player plus game logs and trailing 7/14/30-day splits for rostered players (`lib/data/mlb-stats-sync.ts`):
 
 ```bash
-npm.cmd run sync:stats
+npm run sync:stats
 ```
 
 Refresh derived rest-of-season projections and synthesized player news. Both are provider-adapter based (`lib/data/projections-sync.ts`, `lib/data/player-news-sync.ts`): the default providers derive data from stats and schedule OFB already ingests, and a real projections/news feed can be dropped in by implementing the same interface. Each run records an `ingestion_run` row for freshness and source attribution.
 
 ```bash
-npm.cmd run sync:projections
-npm.cmd run sync:news
+npm run sync:projections
+npm run sync:news
 ```
 
 Populate the schedule/probable starters and player bios (jersey numbers) on their own:
 
 ```bash
-npm.cmd run sync:schedule
-npm.cmd run sync:bios
+npm run sync:schedule
+npm run sync:bios
 ```
 
 Recompute each active matchup from the current lineups' real stats (`lib/data/matchup-scoring.ts`). Category leagues sum counting categories and rebuild AVG/ERA/WHIP from components (H/AB and IP/ER/P_BB/P_H). Points leagues use Yahoo-compatible, league-persisted weights:
@@ -70,27 +74,27 @@ Recompute each active matchup from the current lineups' real stats (`lib/data/ma
 Pitching categories that overlap batting names are stored internally as `P_BB`, `P_H`, and `P_HBP`; `O` is derived exactly from MLB innings notation. The stats sync imports complete season game logs so newly added scoring fields and both games of a doubleheader are retained.
 
 ```bash
-npm.cmd run sync:matchups
+npm run sync:matchups
 ```
 
 Pull draft-market ADP (average draft position) from ESPN's public fantasy API, ID-matched to OFB players via the smartfantasybaseball player id map with a name-match fallback. If the external feed is unreachable, ranks are derived from season fan points instead, so the draft board always has an order:
 
 ```bash
-npm.cmd run sync:adp
+npm run sync:adp
 ```
 
 Recommended sync order for real data: `sync:mlb` (teams, rosters) → `sync:schedule` → `sync:bios` → `sync:stats` (real stats) → `sync:projections` (derives from real stats) → `sync:news` → `sync:matchups` → `sync:adp`.
 
-`npm.cmd run seed:opponent` drafts a real lineup onto the seeded opponent team so the demo matchup has two full rosters to score.
+`npm run seed:opponent` drafts a real lineup onto the seeded opponent team so the demo matchup has two full rosters to score.
 
 The app uses Postgres automatically when `DATABASE_URL` is set. Without `DATABASE_URL`, it falls back to the bundled mock data so the UI remains usable.
 
 ## Background Jobs
 
-Domain processing — waiver resolution today, with scoring/matchup/notification recomputes to follow — runs through a durable Postgres-backed job queue (`job_queue` table, migration `0007`). There is no always-on worker: jobs are claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so the queue is safe to drain from ephemeral CI runners (or many runners at once) with no extra infrastructure. This is deliberately separate from the data *syncs* above, which stay plain cron steps (ingestion, with their own `ingestion_run` audit); the queue owns *processing*.
+Domain processing — waiver resolution, matchup recomputation and finalization, and notification delivery — runs through a durable Postgres-backed job queue (`job_queue` table, migration `0007`). There is no always-on worker: jobs are claimed with `SELECT … FOR UPDATE SKIP LOCKED`, so the queue is safe to drain from ephemeral CI runners (or many runners at once) with no extra infrastructure. This is deliberately separate from the data *syncs* above, which stay plain cron steps (ingestion, with their own `ingestion_run` audit); the queue owns *processing*.
 
 ```bash
-npm.cmd run jobs:run
+npm run jobs:run
 ```
 
 `jobs:run` (`scripts/run-jobs.ts`) enqueues the day's recurring jobs with per-day dedup keys and `priority` ordering, then drains the queue: it reclaims any jobs a crashed runner left `running`, then claims and runs each due job. A handler that throws is retried with exponential backoff (30s, 60s, 120s… capped at an hour) up to `max_attempts`, after which the job is marked `dead` with its `last_error`. Handlers must be idempotent, since a retry re-runs the whole job. The recurring jobs, in run order:
@@ -162,13 +166,13 @@ In production, the service worker is registered for every page. It intentionally
 Unit tests (Vitest) cover scoring, roster legality, league settings, waiver priority/FAAB, ingestion adapters, and API helpers:
 
 ```bash
-npm.cmd test
+npm test
 ```
 
 Playwright smoke tests exercise the mobile landing, team tabs, player search, and commissioner settings. They run the app in demo/mock mode (blank `DATABASE_URL`/Neon Auth env), so they need no database or sign-in:
 
 ```bash
-npm.cmd run test:e2e
+npm run test:e2e
 ```
 
 ## Current Shape

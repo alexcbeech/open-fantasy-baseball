@@ -8,14 +8,23 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Git workflow
+# Repository workflow
 
-For every task that changes repository files:
-
-- Create and work on a dedicated branch before making changes. Use the `feature/` prefix unless the user specifies another branch name.
 - Never commit or push changes directly to `main`.
-- Commit the completed work to the dedicated branch and push that branch to the remote.
-- Create a pull request targeting `main`. Work is not considered complete until the pull request has been created and its URL has been reported to the user.
-- If the task begins with uncommitted changes on `main`, create the dedicated branch immediately so those changes are carried onto it before continuing.
+- Before changing files, create a descriptive topic branch. Maintainer branches generally use the `feature/` prefix; contributors working from forks may use their own convention.
+- Preserve unrelated work already present in the working tree.
+- Push a branch or create a pull request only when the requested delivery includes GitHub and the available credentials are authorized for the target repository. Otherwise, leave the work in a reviewable local commit and report the branch and commit.
+- Read-only investigation and advisory tasks do not require a branch or pull request.
 
-Read-only investigation and advisory tasks that do not change repository files do not require a branch or pull request.
+# Verification
+
+- Use Node.js 24 and install the locked dependency tree with `npm ci` on a fresh checkout.
+- Before handoff, run `npm run lint`, `npm run typecheck`, `npm test`, and `npm run build` for code changes.
+- Run `npm run test:e2e` for changes to user flows, routing, authentication, or PWA behavior.
+- Add or update focused tests when behavior changes. Report any skipped check and why it was not applicable or could not run.
+
+# Data and security
+
+- Never commit `.env.local`, credentials, access tokens, production data, or command output containing secrets. Use `.env.example` for placeholder configuration only.
+- Add schema changes as a new numbered file under `db/migrations/`; do not rewrite migrations that may already have been applied.
+- Keep API authorization, rate limiting, and audit behavior covered when changing protected routes or mutations.

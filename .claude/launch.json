@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "npm.cmd",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "dev-admin-db",
-      "runtimeExecutable": "npm.cmd",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true,
@@ -23,7 +23,7 @@
     },
     {
       "name": "dev-demo",
-      "runtimeExecutable": "npm.cmd",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "env": {
