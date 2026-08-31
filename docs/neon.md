@@ -27,20 +27,20 @@ The app strips `sslmode` before creating the Node Postgres pool and enables SSL 
 ## 3. Run Migrations And Seed Data
 
 ```bash
-npm.cmd run db:migrate
-npm.cmd run db:seed
+npm run db:migrate
+npm run db:seed
 ```
 
 ## 4. Sync MLB Teams And Rosters
 
 ```bash
-npm.cmd run sync:mlb
+npm run sync:mlb
 ```
 
 ## 5. Run The App
 
 ```bash
-npm.cmd run dev
+npm run dev
 ```
 
 When `DATABASE_URL` is present, OFB reads from Neon. Without it, OFB falls back to local mock data.

@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible problem in Open Fantasy Baseball.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: Before filing, search existing issues. Report security vulnerabilities privately through SECURITY.md.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that reproduces the issue.
+      placeholder: |
+        1. Go to ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected area
+      options:
+        - Team and lineup management
+        - Matchups and scoring
+        - Draft room
+        - League administration
+        - Authentication and profile
+        - Notifications and PWA
+        - API or data sync
+        - Development tooling
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser, device, and environment
+      placeholder: Chrome 140 on Android 16; production
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, logs with sensitive values removed, or related issue links.

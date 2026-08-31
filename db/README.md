@@ -18,11 +18,11 @@ The league `settings` JSONB column stores the full versioned settings payload. T
 
 ```bash
 docker compose up -d
-npm.cmd run db:migrate
-npm.cmd run db:seed
-npm.cmd run sync:mlb
+npm run db:migrate
+npm run db:seed
+npm run sync:mlb
 ```
 
 `sync:mlb` pulls MLB teams, active rosters, 40-man rosters, schedules, and probable starters from `MLB_STATS_API_BASE_URL`, then writes `mlb_team`, `mlb_game`, `player`, `player_position_eligibility`, and `ingestion_run` records.
 
-`sync:stats` also records MLB fielding totals for the current and previous two seasons. Hitters gain a position after 5 starts or 10 appearances (LF/CF/RF combine as OF), and a normal sync never removes eligibility. During November-February, run `npm.cmd run eligibility:offseason -- <upcoming-season>` after the final MLB roster and stats syncs to close positions that have not qualified for two seasons. Current MLB roster positions and players with fewer than 20 games in the latest completed season are protected.
+`sync:stats` also records MLB fielding totals for the current and previous two seasons. Hitters gain a position after 5 starts or 10 appearances (LF/CF/RF combine as OF), and a normal sync never removes eligibility. During November-February, run `npm run eligibility:offseason -- <upcoming-season>` after the final MLB roster and stats syncs to close positions that have not qualified for two seasons. Current MLB roster positions and players with fewer than 20 games in the latest completed season are protected.
