@@ -43,3 +43,7 @@ Also run `npm run test:e2e` for changes to user flows, routing, authentication, 
 - Link the issue being addressed when one exists.
 
 Contributors without permission to push to the upstream repository can open a pull request from a fork.
+
+## Licensing
+
+Unless stated otherwise, contributions submitted to Open Fantasy Baseball are licensed under the [Apache License 2.0](LICENSE). Only submit work that you have the right to contribute, and preserve applicable third-party attribution and license notices.

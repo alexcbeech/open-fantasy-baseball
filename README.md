@@ -186,3 +186,9 @@ npm run test:e2e
 - `lib/notifications/` contains the Web Push (VAPID) send helper.
 - `lib/jobs/` contains the nightly processing checklist.
 - `TODO.md` is the working implementation backlog.
+
+## License
+
+Open Fantasy Baseball is licensed under the [Apache License 2.0](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for material incorporated from other projects.
+
+The software license does not grant rights to third-party trademarks or data referenced by the project.
