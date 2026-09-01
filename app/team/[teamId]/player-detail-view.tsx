@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { liveLineSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
+import { liveLineSummary, playerOverviewSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
 
@@ -18,8 +18,7 @@ export type PlayerDetailStatusBanner = { kind: "good" | "bad"; message: string }
 
 type DetailTab = "overview" | "gamelog" | "stats";
 
-const primaryStats = ["R", "HR", "RBI", "SB", "AVG", "W", "SV", "K", "ERA", "WHIP"];
-const pitcherPositions = ["SP", "RP", "P"];
+const primaryStats = ["R", "HR", "RBI", "SB", "AVG", "OBP", "SLG", "OPS", "W", "SV", "K", "ERA", "WHIP"];
 
 const healthBadges: Record<Player["status"], { label: string; className: string }> = {
   active: { label: "Healthy", className: "health-active" },
@@ -30,45 +29,6 @@ const healthBadges: Record<Player["status"], { label: string; className: string 
 
 function availabilityLabel(availability: Player["availability"]) {
   return availability === "rostered" ? "Rostered" : "Free agent";
-}
-
-function hasStat(stats: Record<string, number | string>, key: string) {
-  const value = stats[key];
-  return value !== undefined && value !== null && value !== "";
-}
-
-/**
- * A plain-language season line built from whatever season stats the player has,
- * branching on hitter vs. pitcher — the OFB take on Yahoo's overview blurb.
- */
-function seasonSummary(player: PlayerDetail): string | null {
-  const stats = player.seasonStats ?? {};
-  const isPitcher = hasStat(stats, "ERA") || hasStat(stats, "WHIP") || player.positions.some((position) => pitcherPositions.includes(position));
-
-  if (isPitcher) {
-    const rates: string[] = [];
-    if (hasStat(stats, "ERA")) rates.push(`a ${stats.ERA} ERA`);
-    if (hasStat(stats, "WHIP")) rates.push(`a ${stats.WHIP} WHIP`);
-
-    const counting: string[] = [];
-    if (hasStat(stats, "W")) counting.push(`${stats.W} ${Number(stats.W) === 1 ? "win" : "wins"}`);
-    if (hasStat(stats, "SV")) counting.push(`${stats.SV} ${Number(stats.SV) === 1 ? "save" : "saves"}`);
-    if (hasStat(stats, "K")) counting.push(`${stats.K} strikeouts`);
-
-    if (!rates.length && !counting.length) return null;
-    const lead = rates.length ? `has ${rates.join(" and ")}` : "has";
-    return `${player.name} ${lead}${counting.length ? ` with ${counting.join(", ")}` : ""} this season.`;
-  }
-
-  const counting: string[] = [];
-  if (hasStat(stats, "HR")) counting.push(`${stats.HR} HR`);
-  if (hasStat(stats, "RBI")) counting.push(`${stats.RBI} RBI`);
-  if (hasStat(stats, "R")) counting.push(`${stats.R} R`);
-  if (hasStat(stats, "SB")) counting.push(`${stats.SB} SB`);
-
-  const lead = hasStat(stats, "AVG") ? `is hitting ${stats.AVG}` : "is producing";
-  if (lead === "is producing" && !counting.length) return null;
-  return `${player.name} ${lead}${counting.length ? ` with ${counting.join(", ")}` : ""} this season.`;
 }
 
 /**
@@ -104,7 +64,7 @@ export function PlayerDetailView({
   const [dropPlayerId, setDropPlayerId] = useState("");
   const tabbed = variant === "card";
   const health = { ...healthBadges[player.status], label: playerStatusLabel(player) };
-  const summary = seasonSummary(player);
+  const summary = playerOverviewSummary(player);
   const isLive = Boolean(liveStatus?.live);
   // A full roster makes adds and claims add-plus-drop transactions.
   const dropRequired =

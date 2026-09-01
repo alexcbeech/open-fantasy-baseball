@@ -37,6 +37,9 @@ const HITTING_MAP: Record<string, string> = {
   stolenBases: "SB",
   hitByPitch: "HBP",
   avg: "AVG",
+  obp: "OBP",
+  slg: "SLG",
+  ops: "OPS",
   hits: "H",
   atBats: "AB",
 };
@@ -54,7 +57,7 @@ const PITCHING_MAP: Record<string, string> = {
   hits: "P_H",
   hitBatsmen: "P_HBP",
 };
-const RATE_KEYS = new Set(["AVG", "ERA", "WHIP"]);
+const RATE_KEYS = new Set(["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]);
 
 const recentSplits: Array<{ split: string; days: number }> = [
   { split: "last_7", days: 6 },
@@ -820,9 +823,9 @@ async function fetchPlayerGameLogRows(
         continue;
       }
       const stats = mapMlbStat(split.stat, group);
-      // The feed's game-log AVG/ERA/WHIP are season-to-date, not per-game, so
+      // The feed's game-log rate stats are season-to-date, not per-game, so
       // drop them; the per-game counting stats and H/AB, IP/ER, etc. are real.
-      for (const rateKey of ["AVG", "ERA", "WHIP"]) {
+      for (const rateKey of ["AVG", "OBP", "SLG", "OPS", "ERA", "WHIP"]) {
         delete stats[rateKey];
       }
       if (Object.keys(stats).length) {
