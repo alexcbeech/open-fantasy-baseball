@@ -1,5 +1,5 @@
 import { calculateFantasyPoints } from "./scoring";
-import type { Player, PlayerNextGame } from "./types";
+import type { Player, PlayerDetail, PlayerNextGame } from "./types";
 
 export const statusLabels: Record<Player["status"], string> = {
   active: "Active",
@@ -27,12 +27,116 @@ export function rowPoints(player: Player) {
 
 const hitterStatOrder = ["AVG", "HR", "R", "RBI", "SB", "H", "AB"];
 const pitcherStatOrder = ["ERA", "WHIP", "W", "SV", "K", "IP"];
+const hitterPositions = new Set(["C", "1B", "2B", "3B", "SS", "OF", "UTIL"]);
+const pitcherPositions = new Set(["SP", "RP", "P"]);
+
+function hasStat(stats: Record<string, number | string>, key: string) {
+  const value = stats[key];
+  return value !== undefined && value !== null && value !== "";
+}
+
+function isPitcher(player: Pick<Player, "positions" | "seasonStats">): boolean {
+  const hasHitterPosition = player.positions.some((position) => hitterPositions.has(position));
+  const hasPitcherPosition = player.positions.some((position) => pitcherPositions.has(position));
+
+  // Eligibility is more reliable than the shape of the combined MLB stat
+  // payload. A position player may have a tiny mop-up pitching line, while a
+  // two-way player should still receive the more useful hitter overview.
+  if (hasHitterPosition) return false;
+  if (hasPitcherPosition) return true;
+
+  // Defensive fallback for incomplete eligibility data.
+  return ["IP", "GS", "ERA", "WHIP"].some((key) => hasStat(player.seasonStats, key));
+}
+
+function playerSurname(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv"]);
+  const last = parts.at(-1)?.replace(/[.,]/g, "").toLowerCase();
+  if (parts.length > 1 && last && suffixes.has(last)) {
+    return parts.at(-2)?.replace(/,$/, "") ?? name;
+  }
+  return parts.at(-1) ?? name;
+}
+
+function countWord(value: number): string {
+  const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+  return Number.isInteger(value) && value >= 0 && value < words.length ? words[value] : String(value);
+}
+
+function naturalList(parts: string[]): string {
+  if (parts.length < 2) return parts[0] ?? "";
+  if (parts.length === 2) return parts.join(" and ");
+  return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
+}
+
+function hitterCountingLine(stats: Record<string, number | string>): string[] {
+  const definitions = [
+    { key: "HR", singular: "home run", plural: "home runs" },
+    { key: "RBI", singular: "RBI", plural: "RBI" },
+    { key: "R", singular: "run", plural: "runs" },
+    { key: "SB", singular: "stolen base", plural: "stolen bases" },
+  ];
+
+  return definitions.flatMap(({ key, singular, plural }) => {
+    if (!hasStat(stats, key) || Number(stats[key]) <= 0) return [];
+    const value = Number(stats[key]);
+    return [`${countWord(value)} ${value === 1 ? singular : plural}`];
+  });
+}
+
+function hitterRateLine(stats: Record<string, number | string>): string | null {
+  if (!hasStat(stats, "AVG")) return null;
+  if (hasStat(stats, "OBP") && hasStat(stats, "SLG")) {
+    return `${stats.AVG}/${stats.OBP}/${stats.SLG}`;
+  }
+  return String(stats.AVG);
+}
+
+function hitterSummary(name: string, stats: Record<string, number | string>, period: string): string | null {
+  const rate = hitterRateLine(stats);
+  const counting = hitterCountingLine(stats);
+  if (!rate && !counting.length) return null;
+
+  const subject = playerSurname(name);
+  const production = counting.length ? ` with ${naturalList(counting)}` : "";
+  return `${subject} ${rate ? `is hitting ${rate}` : "has produced"}${production} ${period}.`;
+}
+
+/**
+ * A plain-language player overview modeled after Yahoo's recent-performance
+ * blurb. Position eligibility determines hitter vs. pitcher so a position
+ * player's incidental pitching stats never displace their batting summary.
+ */
+export function playerOverviewSummary(
+  player: Pick<PlayerDetail, "name" | "positions" | "seasonStats" | "statWindows">,
+): string | null {
+  const stats = player.seasonStats ?? {};
+
+  if (!isPitcher(player)) {
+    const recent = player.statWindows.find((window) => window.split === "last_7")?.stats;
+    return (recent && hitterSummary(player.name, recent, "over the last seven days"))
+      || hitterSummary(player.name, stats, "this season");
+  }
+
+  const rates: string[] = [];
+  if (hasStat(stats, "ERA")) rates.push(`a ${stats.ERA} ERA`);
+  if (hasStat(stats, "WHIP")) rates.push(`a ${stats.WHIP} WHIP`);
+
+  const counting: string[] = [];
+  if (hasStat(stats, "W")) counting.push(`${stats.W} ${Number(stats.W) === 1 ? "win" : "wins"}`);
+  if (hasStat(stats, "SV")) counting.push(`${stats.SV} ${Number(stats.SV) === 1 ? "save" : "saves"}`);
+  if (hasStat(stats, "K")) counting.push(`${stats.K} strikeouts`);
+
+  if (!rates.length && !counting.length) return null;
+  const lead = rates.length ? `has ${rates.join(" and ")}` : "has";
+  return `${player.name} ${lead}${counting.length ? ` with ${counting.join(", ")}` : ""} this season.`;
+}
 
 /** A deterministic compact season line for player lists and draft details. */
 export function seasonStatLine(player: Player, limit = 5): string | null {
   const stats = player.seasonStats ?? {};
-  const isPitcher = player.positions.some((position) => position === "SP" || position === "RP" || position === "P");
-  const preferred = isPitcher ? pitcherStatOrder : hitterStatOrder;
+  const preferred = isPitcher(player) ? pitcherStatOrder : hitterStatOrder;
   const orderedKeys = [
     ...preferred.filter((key) => stats[key] !== undefined),
     ...Object.keys(stats).filter((key) => !preferred.includes(key)),
