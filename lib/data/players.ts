@@ -189,6 +189,11 @@ type PlayerValueRow = {
   rostered_teams: string | number;
   total_teams: string | number;
   external_rostered_percent: string | number | null;
+  position_value: {
+    position: string;
+    rankAhead: number;
+    totalRanked: number;
+  } | null;
 };
 
 type PlayerNextGameRow = {
@@ -303,6 +308,28 @@ const getCachedPlayerStaticDetail = unstable_cache(
         `select
            (select count(*) from player x where x.season_fan_points > p.season_fan_points) as rank_ahead,
            (select count(*) from player x where x.season_fan_points is not null) as total_ranked,
+           (
+             select jsonb_build_object(
+               'position', position_value.position,
+               'rankAhead', position_value.rank_ahead,
+               'totalRanked', position_value.total_ranked
+             )
+             from (
+               select target_position.position,
+                 count(distinct peer.id) filter (where peer.season_fan_points > p.season_fan_points) as rank_ahead,
+                 count(distinct peer.id) as total_ranked
+               from player_position_eligibility target_position
+               join player_position_eligibility peer_position
+                 on peer_position.position = target_position.position and peer_position.valid_to is null
+               join player peer on peer.id = peer_position.player_id and peer.season_fan_points is not null
+               where target_position.player_id = p.id and target_position.valid_to is null
+                 and p.season_fan_points is not null
+               group by target_position.position
+             ) position_value
+             order by position_value.rank_ahead::numeric / greatest(position_value.total_ranked, 1),
+               position_value.position
+             limit 1
+           ) as position_value,
            (select count(distinct re.team_id) from roster_entry re where re.player_id = p.id and re.dropped_at is null) as rostered_teams,
            (select count(*) from fantasy_team) as total_teams,
            (select rostered_percent from player_adp where player_id = p.id) as external_rostered_percent
@@ -320,7 +347,7 @@ const getCachedPlayerStaticDetail = unstable_cache(
       value: value.rows[0] ?? null,
     };
   },
-  ["player-static-detail-v1"],
+  ["player-static-detail-v2"],
   { revalidate: 300, tags: ["player-static-detail"] },
 );
 
@@ -501,6 +528,7 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
       const fanPoints =
         playerRow.season_fan_points != null ? Math.round(Number(playerRow.season_fan_points) * 10) / 10 : null;
       const valueRow = staticDetail.value;
+      const positionValue = valueRow?.position_value;
       const totalTeams = valueRow ? Number(valueRow.total_teams) : 0;
       // Prefer real-world ownership from the ADP feed; fall back to this app's
       // own team ownership only when a player isn't in the external set.
@@ -519,6 +547,9 @@ export async function getPlayerDetail(playerId: string, teamId?: string): Promis
           rank: fanPoints != null && valueRow ? Number(valueRow.rank_ahead) + 1 : null,
           totalRanked: valueRow ? Number(valueRow.total_ranked) : 0,
           rosteredPercent: externalRosteredPercent ?? internalRosteredPercent,
+          ratingPosition: positionValue?.position ?? null,
+          positionRank: positionValue ? Number(positionValue.rankAhead) + 1 : null,
+          positionTotalRanked: positionValue ? Number(positionValue.totalRanked) : 0,
         },
         nextGame: nextGameRow
           ? {
@@ -574,6 +605,9 @@ function mockPlayerDetail(playerId: string): PlayerDetail | null {
       rank: null,
       totalRanked: 0,
       rosteredPercent: null,
+      ratingPosition: null,
+      positionRank: null,
+      positionTotalRanked: 0,
     },
     nextGame: null,
     news: [

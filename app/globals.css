@@ -2325,7 +2325,20 @@ button.row {
   color: var(--accent);
   font-size: 18px;
   letter-spacing: 2px;
+}
+
+.star-rating-block {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin-top: 10px;
+}
+
+.star-rating-context {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .star-rating .star {

@@ -210,6 +210,10 @@ export type PlayerValueMetrics = {
   rank: number | null;
   totalRanked: number;
   rosteredPercent: number | null;
+  /** Best percentile rank among the player's active eligible positions. */
+  ratingPosition: string | null;
+  positionRank: number | null;
+  positionTotalRanked: number;
 };
 
 export type PlayerDetail = Player & {

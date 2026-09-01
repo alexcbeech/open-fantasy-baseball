@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { playerRecentForm, playerStarRating, type PlayerStarRating } from "@/lib/fantasy/player-rating";
 import { liveLineSummary, playerOverviewSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
@@ -306,22 +307,31 @@ function PlayerValueRow({ value }: { value: PlayerValueMetrics }) {
   );
 }
 
-function starRating(value: PlayerValueMetrics): number | null {
-  if (value.rank == null || value.totalRanked <= 0) {
-    return null;
-  }
-  const percentile = 1 - (value.rank - 1) / value.totalRanked;
-  return Math.min(5, Math.max(1, Math.ceil(percentile * 5)));
-}
+function StarRating({ rating }: { rating: PlayerStarRating }) {
+  const rankLabel = rating.position
+    ? `${rating.position} rank ${rating.rank} of ${rating.totalRanked}`
+    : `Overall rank ${rating.rank} of ${rating.totalRanked}`;
+  const formLabel = rating.recentForm == null
+    ? null
+    : rating.recentForm >= 0.65
+      ? "Hot last 7 days"
+      : rating.recentForm <= 0.35
+        ? "Cold last 7 days"
+        : "Steady last 7 days";
+  const ratingLabel = `${rating.stars} of 5 stars. ${rankLabel}${rating.rosteredPercent != null ? `; ${rating.rosteredPercent}% rostered` : ""}${formLabel ? `; ${formLabel}` : ""}.`;
 
-function StarRating({ stars }: { stars: number }) {
   return (
-    <div className="star-rating" aria-label={`${stars} of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} className={n <= stars ? "star filled" : "star"} aria-hidden="true">
-          {n <= stars ? "★" : "☆"}
-        </span>
-      ))}
+    <div className="star-rating-block" aria-label={ratingLabel}>
+      <div className="star-rating" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span key={n} className={n <= rating.stars ? "star filled" : "star"}>
+            {n <= rating.stars ? "★" : "☆"}
+          </span>
+        ))}
+      </div>
+      <span className="star-rating-context">
+        {rankLabel}{formLabel ? ` · ${formLabel}` : ""}
+      </span>
     </div>
   );
 }
@@ -365,7 +375,7 @@ function PlayerOverview({
   summary: string | null;
   liveStatus?: LivePlayerStatus | null;
 }) {
-  const stars = starRating(player.value);
+  const rating = playerStarRating(player.value, playerRecentForm(player));
 
   return (
     <section aria-labelledby="player-overview-heading">
@@ -389,7 +399,7 @@ function PlayerOverview({
         </div>
       ) : null}
 
-      {stars != null ? <StarRating stars={stars} /> : null}
+      {rating ? <StarRating rating={rating} /> : null}
 
       {summary ? <p className="detail-summary">{summary}</p> : null}
 
