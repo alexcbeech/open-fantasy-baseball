@@ -124,6 +124,15 @@ test.describe("player search", () => {
     await expect(page.getByText("Freddie Freeman")).toHaveCount(0);
   });
 
+  test("finds accented player names with an unaccented query", async ({ page }) => {
+    await page.goto("/team/team-1?tab=players");
+
+    const search = page.getByPlaceholder("Search all players");
+    await search.fill("Andres Munoz");
+
+    await expect(page.getByText("Andrés Muñoz")).toBeVisible();
+  });
+
   test("opens the shared player detail popup from a player row", async ({ page }) => {
     await page.goto("/team/team-1?tab=players");
 

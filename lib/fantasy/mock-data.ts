@@ -94,7 +94,7 @@ export const players: Player[] = [
   },
   {
     id: "player-4",
-    name: "Andres Munoz",
+    name: "Andrés Muñoz",
     mlbPlayerId: 662253,
     mlbTeam: "SEA",
     positions: ["RP", "P"],

@@ -13,6 +13,7 @@ import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { playerStatusLabel, rowPoints, seasonStatLine } from "@/lib/fantasy/player-view";
 import { positionGroupClass, positionGroupLegend } from "@/lib/fantasy/position-color";
 import type { RosterSlot } from "@/lib/fantasy/types";
+import { normalizeSearchText } from "@/lib/search";
 import { PickSheet } from "./pick-sheet";
 import { SetupPanel } from "./setup-panel";
 
@@ -166,12 +167,12 @@ export function DraftRoom({ lobby, initialDraft, initialPlayers }: DraftRoomProp
   );
 
   const filteredPlayers = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = normalizeSearchText(query.trim());
     const matched = players.filter((player) => {
       if (position !== "ALL" && !player.positions.includes(position)) {
         return false;
       }
-      return normalized ? player.name.toLowerCase().includes(normalized) : true;
+      return normalized ? normalizeSearchText(player.name).includes(normalized) : true;
     });
 
     // ADP keeps the server's rank order (best-available first); the points

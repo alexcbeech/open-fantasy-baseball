@@ -18,6 +18,7 @@ import { defaultLeagueSettings } from "@/lib/fantasy/defaults";
 import type { DraftType, LeagueSettings, RosterSlot } from "@/lib/fantasy/types";
 import { getPool, isDatabaseConfigured, query, tryDatabase, withDemoFallback } from "@/lib/db/client";
 import { enqueue } from "@/lib/jobs/queue";
+import { normalizeSearchText } from "@/lib/search";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 import { reconcileSetupDraftOrder } from "./draft-order";
 import { drainNotifications } from "./notifications";
@@ -1321,7 +1322,7 @@ export async function listDraftPlayers(
 
         if (options.query) {
           values.push(`%${options.query}%`);
-          filterSql += ` and p.full_name ilike $${values.length}`;
+          filterSql += ` and unaccent(p.full_name) ilike unaccent($${values.length})`;
         }
 
         const limit = Math.min(Math.max(options.limit ?? 200, 1), 500);
@@ -1375,7 +1376,9 @@ export async function listDraftPlayers(
     () => {
       const players = mockDraftPlayers();
       return players.filter((player) => {
-        const matchesQuery = options.query ? player.name.toLowerCase().includes(options.query.toLowerCase()) : true;
+        const matchesQuery = options.query
+          ? normalizeSearchText(player.name).includes(normalizeSearchText(options.query))
+          : true;
         const matchesPosition = options.position ? player.positions.includes(options.position) : true;
         return matchesQuery && matchesPosition;
       });

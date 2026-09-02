@@ -52,4 +52,14 @@ describe("listPlayers league pool", () => {
     expect(playerSql).toContain("g.official_date");
     expect(playerSql).toContain("America/New_York");
   });
+
+  it("uses accent-insensitive matching for player-name queries", async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] });
+
+    await listPlayers({ query: "Hector Rodriguez" });
+
+    const [playerSql, values] = dbQuery.mock.calls[0] as [string, unknown[]];
+    expect(playerSql).toContain("unaccent(p.full_name) ilike unaccent($1)");
+    expect(values).toEqual(["%Hector Rodriguez%"]);
+  });
 });
