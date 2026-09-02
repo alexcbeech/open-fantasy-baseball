@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { rowPoints } from "@/lib/fantasy/player-view";
 import type { Player, RosterSlot } from "@/lib/fantasy/types";
+import { normalizeSearchText } from "@/lib/search";
 import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 import { LocalGameLine } from "./local-game-line";
@@ -102,7 +103,7 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
   const sortColumn = columns.find((column) => column.key === sortKey) ?? columns[4];
 
   const filteredPlayers = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const normalizedQuery = normalizeSearchText(query.trim());
     const matches = playerList.filter((player) => {
       if (position !== "ALL" && !player.positions.includes(position)) {
         return false;
@@ -116,10 +117,9 @@ export function PlayersBrowser({ teamId, players }: PlayersBrowserProps) {
       if (!normalizedQuery) {
         return true;
       }
-      return [player.name, player.mlbTeam, player.availability, player.status, ...player.positions]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery);
+      return normalizeSearchText(
+        [player.name, player.mlbTeam, player.availability, player.status, ...player.positions].join(" "),
+      ).includes(normalizedQuery);
     });
 
     const direction = sortDir === "asc" ? 1 : -1;

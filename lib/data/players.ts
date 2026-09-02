@@ -6,6 +6,7 @@ import { countsTowardOrdinaryRoster, positionSetsAfterAdd } from "@/lib/fantasy/
 import { players as mockPlayers } from "@/lib/fantasy/mock-data";
 import { calculateSimplePoints } from "@/lib/fantasy/scoring";
 import type { Player, PlayerDetail, PlayerGameLog, PlayerNewsItem, PlayerStatWindow, PlayerWatchItem, RosterSlot } from "@/lib/fantasy/types";
+import { normalizeSearchText } from "@/lib/search";
 import { mapPlayer, type DbPlayerRow } from "./mappers";
 import { dynamicPoolFilterConditionSql } from "./player-pool";
 
@@ -61,7 +62,7 @@ export async function listPlayers(
 
       if (options.query) {
         values.push(`%${options.query}%`);
-        filters.push(`p.full_name ilike $${values.length}`);
+        filters.push(`unaccent(p.full_name) ilike unaccent($${values.length})`);
       }
 
       // Rosters are per-league: scope "rostered" to the viewer's league when
@@ -168,7 +169,9 @@ export async function listPlayers(
     },
     () =>
       mockPlayers.filter((player) => {
-        const matchesQuery = options.query ? player.name.toLowerCase().includes(options.query.toLowerCase()) : true;
+        const matchesQuery = options.query
+          ? normalizeSearchText(player.name).includes(normalizeSearchText(options.query))
+          : true;
         const matchesAvailability = options.availability ? player.availability === options.availability : true;
         return matchesQuery && matchesAvailability;
       }),
