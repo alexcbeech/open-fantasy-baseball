@@ -526,6 +526,7 @@ export function LineupEditor({
                           <LocalGameLine
                             className={gameClass}
                             nextGame={player.nextGame}
+                            todaysGameStart={player.todaysGameStart}
                             status={player.status}
                             statusDetail={player.statusDetail}
                             liveText={liveEntry?.state}
