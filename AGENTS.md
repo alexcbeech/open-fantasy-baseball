@@ -11,9 +11,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # Repository workflow
 
 - Never commit or push changes directly to `main`.
-- Before changing files, create a descriptive topic branch. Maintainer branches generally use the `feature/` prefix; contributors working from forks may use their own convention.
+- Before changing files, sync local `main` from `origin/main`, then create a descriptive topic branch from that updated branch. Maintainer branches generally use the `feature/` prefix; contributors working from forks may use their own convention.
 - Preserve unrelated work already present in the working tree.
-- Push a branch or create a pull request only when the requested delivery includes GitHub and the available credentials are authorized for the target repository. Otherwise, leave the work in a reviewable local commit and report the branch and commit.
+- Deliver every repository change through a pull request when GitHub credentials are authorized: implement and verify on the topic branch, commit, push, open a pull request, and wait for CI to finish.
+- Report the pull request as ready only after required CI checks pass. If a check fails, diagnose and fix it on the same topic branch, then wait for the new checks.
+- Never merge a pull request without explicit user approval after the pull request is ready. After an approved merge, sync local `main` and delete the merged topic branch locally and remotely.
+- If GitHub credentials are unavailable, leave the work in a reviewable local commit and report the branch, commit, verification results, and credential blocker instead of bypassing the pull-request workflow.
 - Read-only investigation and advisory tasks do not require a branch or pull request.
 
 # Verification
