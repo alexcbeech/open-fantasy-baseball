@@ -143,6 +143,7 @@ export function TeamLineupSheet({ teamId, teamName, onClose, onProposeTrade }: T
                         <LocalGameLine
                           className={injured ? "player-game injury" : "player-game"}
                           nextGame={player.nextGame}
+                          todaysGameStart={player.todaysGameStart}
                           status={player.status}
                           statusDetail={player.statusDetail}
                         />

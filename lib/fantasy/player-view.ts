@@ -176,17 +176,23 @@ export function liveLineSummary(stats: Record<string, number | string>): string 
 }
 
 /**
- * The row's game-context line: the player's next game ("Fri 1:05 PM @ CHC"),
- * or a status note when they're not active or have no upcoming game.
+ * The row's game-context line: today's game ("Fri 1:05 PM @ CHC"), or a
+ * status note when they're unavailable or their MLB team is off today.
+ * `undefined` preserves the next-game fallback for callers without daily
+ * schedule context; an explicit `null` means the player has no game today.
  */
 export function formatGameLine(
   nextGame: PlayerNextGame | null | undefined,
   status: Player["status"],
   statusDetail?: string | null,
   timeZone?: string,
+  todaysGameStart?: string | null,
 ) {
   if (status !== "active") {
     return statusDetail || statusLabels[status];
+  }
+  if (todaysGameStart === null) {
+    return "No Game";
   }
   if (nextGame) {
     const when = new Date(nextGame.date).toLocaleString("en-US", {
@@ -198,5 +204,5 @@ export function formatGameLine(
     const versus = nextGame.homeAway === "home" ? "vs" : "@";
     return `${when} ${versus} ${nextGame.opponent ?? "TBD"}`;
   }
-  return "No game";
+  return "No Game";
 }

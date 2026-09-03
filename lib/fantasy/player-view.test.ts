@@ -85,4 +85,10 @@ describe("player status labels", () => {
 
     expect(formatGameLine(nextGame, "active", null, "UTC")).toBe("Sat 2:10 AM @ LAD");
   });
+
+  it("shows No Game when an active player's team is off today", () => {
+    const nextGame = { date: "2026-08-16T18:20:00.000Z", opponent: "CHC", homeAway: "away" as const, venue: null };
+
+    expect(formatGameLine(nextGame, "active", null, "UTC", null)).toBe("No Game");
+  });
 });
