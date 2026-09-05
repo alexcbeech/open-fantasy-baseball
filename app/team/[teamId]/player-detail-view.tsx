@@ -1,5 +1,7 @@
 "use client";
 
+import { mergePlayerGameLog } from "@/lib/fantasy/game-log";
+
 import { useState } from "react";
 import { playerRecentForm, playerStarRating, type PlayerStarRating } from "@/lib/fantasy/player-rating";
 import { liveLineSummary, playerOverviewSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
@@ -279,7 +281,7 @@ export function PlayerDetailView({
         <PlayerOverview player={player} health={health.label} summary={summary} liveStatus={liveStatus} />
       ) : null}
       {!tabbed || tab === "stats" ? <PlayerStatWindows windows={player.statWindows} fallbackPlayer={player} /> : null}
-      {!tabbed || tab === "gamelog" ? <PlayerGameLogRows games={player.gameLog} /> : null}
+      {!tabbed || tab === "gamelog" ? <PlayerGameLogRows games={mergePlayerGameLog(player.gameLog, liveStatus?.todayGames)} /> : null}
     </>
   );
 }

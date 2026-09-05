@@ -1,6 +1,6 @@
 import { query, tryDatabase } from "@/lib/db/client";
 import { calculateFantasyPoints, statsForRosterSlot } from "@/lib/fantasy/scoring";
-import type { LivePlayerStatus, PostedLineupStatus, RosterSlot } from "@/lib/fantasy/types";
+import type { LivePlayerStatus, PlayerGameLog, PostedLineupStatus, RosterSlot } from "@/lib/fantasy/types";
 import { mapMlbStat } from "./mlb-stats-sync";
 
 const defaultBaseUrl = process.env.MLB_STATS_API_BASE_URL ?? "https://statsapi.mlb.com/api/v1";
@@ -123,6 +123,24 @@ export function todayEtDate(now: Date = new Date()) {
 
 const todayIso = todayEtDate;
 
+/** Keep each game separate so doubleheaders don't become a single game-log row. */
+export async function getPlayerTodayGames(mlbPlayerId: number, mlbTeamId: number, baseUrl = defaultBaseUrl, now = new Date()): Promise<PlayerGameLog[]> {
+  const date = todayIso(now);
+  const schedule = await cachedFetchJson<ScheduleResponse>(
+    `/schedule?sportId=1&teamId=${mlbTeamId}&date=${date}`, baseUrl, SCHEDULE_TTL_MS,
+  );
+  const games = (schedule?.dates?.[0]?.games ?? []).filter((game) =>
+    game.status?.abstractGameState === "Live" || game.status?.abstractGameState === "Final",
+  );
+  const rows = await Promise.all(games.map(async (game): Promise<PlayerGameLog | null> => {
+    const box = await cachedFetchJson<BoxscoreResponse>(`/game/${game.gamePk}/boxscore`, baseUrl, GAME_TTL_MS);
+    const stats = extractLine(box, mlbPlayerId);
+    if (!Object.keys(stats).length) return null;
+    return { id: `mlb-today-${game.gamePk}`, gamePk: game.gamePk, date: `${date}T00:00:00.000Z`, stats };
+  }));
+  return rows.filter((row): row is PlayerGameLog => row !== null);
+}
+
 /** The gamePk of the team's in-progress game today, or null if none is live. */
 async function findLiveGamePk(baseUrl: string, mlbTeamId: number, now: Date): Promise<number | null> {
   const schedule = await cachedFetchJson<ScheduleResponse>(
@@ -176,8 +194,9 @@ async function fetchGameState(baseUrl: string, gamePk: number): Promise<string |
  * On-demand live status for a single player: looks up their MLB id and team,
  * finds the team's in-progress game (if any) from the live MLB schedule, and
  * pulls their current boxscore line and live fantasy points. Returns a not-live
- * result whenever there is no game in progress, no database, or the MLB API is
- * unreachable, so callers can poll this cheaply while a detail view is open.
+ * flag when no game is in progress, but still includes today's completed
+ * boxscores for the game log. No database or unavailable MLB data returns an
+ * empty status, so callers can retain imported history.
  */
 export async function getLivePlayerStatus(playerId: string, baseUrl = defaultBaseUrl, now = new Date()): Promise<LivePlayerStatus> {
   return tryDatabase(
@@ -191,9 +210,12 @@ export async function getLivePlayerStatus(playerId: string, baseUrl = defaultBas
         return notLive;
       }
 
-      const gamePk = await findLiveGamePk(baseUrl, row.current_mlb_team_id, now);
+      const [gamePk, todayGames] = await Promise.all([
+        findLiveGamePk(baseUrl, row.current_mlb_team_id, now),
+        getPlayerTodayGames(row.mlb_player_id, row.current_mlb_team_id, baseUrl, now),
+      ]);
       if (!gamePk) {
-        return notLive;
+        return { ...notLive, todayGames };
       }
 
       const [stats, state] = await Promise.all([
@@ -203,6 +225,7 @@ export async function getLivePlayerStatus(playerId: string, baseUrl = defaultBas
 
       return {
         live: true,
+        todayGames,
         state,
         stats,
         points: livePoints(stats),

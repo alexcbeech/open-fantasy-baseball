@@ -4,6 +4,7 @@ import {
   __clearLiveCache,
   extractLine,
   getGameLinesForPlayersOnDate,
+  getPlayerTodayGames,
   getPostedLineupStatusesForPlayers,
 } from "./mlb-live";
 
@@ -43,6 +44,34 @@ const boxscore = {
     },
   },
 };
+
+describe("getPlayerTodayGames", () => {
+  it("includes final and live games separately using the ET official date", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify(String(input).includes("/schedule?")
+        ? { dates: [{ games: [
+          { gamePk: 1, status: { abstractGameState: "Final" } },
+          { gamePk: 2, status: { abstractGameState: "Live" } },
+          { gamePk: 3, status: { abstractGameState: "Preview" } },
+        ] }] } : boxscore));
+    }));
+    const rows = await getPlayerTodayGames(100, 10, "https://stats.test/api/v1", new Date("2026-09-06T02:00:00Z"));
+    expect(rows.map((row) => row.gamePk)).toEqual([1, 2]);
+    expect(rows[0]).toMatchObject({ date: "2026-09-05T00:00:00.000Z", stats: { H: 2, AB: 4, HR: 1 } });
+    expect(urls[0]).toContain("date=2026-09-05");
+    expect(urls.some((url) => url.includes("/game/3/"))).toBe(false);
+  });
+  it("does not fabricate zero-stat games for missing players or failed boxscores", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(String(input).includes("/schedule?")
+      ? { dates: [{ games: [{ gamePk: 1, status: { abstractGameState: "Final" } }] }] } : boxscore))));
+    expect(await getPlayerTodayGames(999, 10, "https://stats.test/api/v1")).toEqual([]);
+    __clearLiveCache();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Unavailable", { status: 503 })));
+    expect(await getPlayerTodayGames(100, 10, "https://stats.test/api/v1")).toEqual([]);
+  });
+});
 
 describe("extractLine", () => {
   it("maps a home hitter line and drops the partial-game AVG", () => {
