@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
-import { ensureTodayLineupSnapshot } from "./lineup-snapshots";
+import { ensureFutureLineupSnapshot, ensureTodayLineupSnapshot } from "./lineup-snapshots";
 
 describe("ensureTodayLineupSnapshot", () => {
+  it("copies a future lineup only into the selected date and its scoring period", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [{ id: "future-period" }] }).mockResolvedValueOnce({ rows: [] });
+    expect(await ensureFutureLineupSnapshot({ query } as never, "team", "league", "2026-09-10"))
+      .toEqual({ lineupDate: "2026-09-10", scoringPeriodId: "future-period" });
+    expect(query.mock.calls[0][0]).toContain("ends_at at time zone");
+    expect(query.mock.calls[1][1]).toEqual(["team", "future-period", "2026-09-10"]);
+    expect(query.mock.calls[1][0]).toContain("lineup_date <= $3::date");
+  });
+  it("does not write outside a scheduled scoring period", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    expect(await ensureFutureLineupSnapshot({ query } as never, "team", "league", "2027-01-01")).toBeNull();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
   it("copies the latest effective lineup into an immutable ET-dated snapshot", async () => {
     const query = vi
       .fn()

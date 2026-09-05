@@ -21,6 +21,7 @@ vi.mock("@/lib/db/client", () => ({
 }));
 
 import { LineupSaveError, saveLineupSlots } from "./teams";
+import { lineupToday, shiftLineupDate } from "@/lib/fantasy/lineup-date";
 
 type LineupRow = {
   slot: string;
@@ -55,6 +56,7 @@ function makeClient(lineupRows: LineupRow[], rosterSlots?: Record<string, number
     if (sql.includes("from scoring_period")) {
       return { rows: [{ id: "scoring-period-1" }] };
     }
+    if (sql.includes("schema_migration")) return { rows: [{ present: 1 }] };
     return { rows: [] };
   });
 
@@ -70,6 +72,18 @@ beforeEach(() => {
 });
 
 describe("saveLineupSlots atomic re-validation", () => {
+  it("rejects past dates before any database write", async () => {
+    await expect(saveLineupSlots("team", [], "2000-01-01")).rejects.toThrow("Past lineups are locked");
+    expect(currentClient.query).not.toHaveBeenCalled();
+  });
+  it("does not apply today's game locks to a future lineup and writes the requested date", async () => {
+    currentClient = makeClient([lineupRow({ id: "catcher", slot: "C", todays_game_start: "2000-01-01T00:00:00Z" })]);
+    const date = shiftLineupDate(lineupToday(), 2);
+    await saveLineupSlots("team", [{ playerId: "catcher", slot: "BN" }], date);
+    const writes = currentClient.query.mock.calls.filter(([sql]) => String(sql).includes("values ($1, $2, $3, $4, $5)"));
+    expect(writes[0][1]).toEqual(["team", "catcher", "scoring-period-1", date, "BN"]);
+    expect(sqlCalls()).toContain("commit");
+  });
   it("rejects a save that would overfill a slot and never writes", async () => {
     // C allows one player; both catchers in C overfills it.
     currentClient = makeClient([

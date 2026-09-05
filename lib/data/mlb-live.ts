@@ -539,11 +539,11 @@ export async function getLineupDayStatus(teamId: string, baseUrl = defaultBaseUr
            and le.lineup_date = (
              select max(lineup_date)
              from lineup_entry
-             where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+             where team_id = $1 and lineup_date <= $2::date
            )
            and p.mlb_player_id is not null
            and p.current_mlb_team_id is not null`,
-        [teamId],
+        [teamId, todayIso(now)],
       );
       const lines = await getTodayLinesForPlayers(players.rows, baseUrl, now);
       const today = Object.fromEntries(

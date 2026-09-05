@@ -149,6 +149,7 @@ export const openApiDocument = {
         type: "object",
         required: ["entries"],
         properties: {
+          date: { type: "string", format: "date", description: "ET lineup date; defaults to today. Past dates are read-only." },
           entries: {
             type: "array",
             items: {
@@ -504,7 +505,7 @@ export const openApiDocument = {
         summary: "Read a team lineup",
         security: bearerSecurity,
         "x-ofb-required-scope": "read:team",
-        parameters: [pathParameter("teamId", "Fantasy team id.")],
+        parameters: [pathParameter("teamId", "Fantasy team id."), { name: "date", in: "query", schema: { type: "string", format: "date" }, description: "ET lineup date; defaults to today." }],
         responses: {
           "200": { description: "Team lineup and validation." },
           "404": { description: "Team not found.", content: errorContent() },
@@ -520,7 +521,8 @@ export const openApiDocument = {
         responses: {
           "202": { description: "Lineup accepted." },
           "200": { description: "Lineup validation issues returned." },
-          "400": { description: "Invalid lineup payload.", content: errorContent() },
+          "400": { description: "Invalid lineup payload or date.", content: errorContent() },
+          "409": { description: "Past lineup or game-locked player cannot be changed.", content: errorContent() },
           "404": { description: "Team not found.", content: errorContent() },
         },
       },

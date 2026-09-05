@@ -1,3 +1,5 @@
+import { isLineupDate, lineupToday } from "@/lib/fantasy/lineup-date";
+import { LineupDateNavigation } from "./lineup-date-navigation";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AuthControl } from "@/app/auth-control";
@@ -47,6 +49,7 @@ type TeamPageProps = {
     tab?: string;
     period?: string;
     matchup?: string;
+    date?: string;
   }>;
 };
 
@@ -54,7 +57,10 @@ const tabs = ["Team", "Matchup", "Players", "League"] as const;
 
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
-  const { tab, period, matchup } = await searchParams;
+  const { tab, period, matchup, date } = await searchParams;
+  const today = lineupToday();
+  if (date !== undefined && !isLineupDate(date)) notFound();
+  const lineupDate = date ?? today;
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const authEnabled = isNeonAuthConfigured();
   const currentUser = await getCurrentOfbUser();
@@ -108,7 +114,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     measureServerOperation("team.league-settings", () => getLeagueSettings(team.leagueId)),
     measureServerOperation("team.draft-status", () => getLeagueDraftStatus(team.leagueId)),
     selectedTab === "Team"
-      ? measureServerOperation("team.lineup", () => getLineupForTeam(teamId))
+      ? measureServerOperation("team.lineup", () => getLineupForTeam(teamId, lineupDate))
       : Promise.resolve([]),
     selectedTab === "Players"
       ? measureServerOperation("team.player-pool", () => listPlayers({ leagueId: team.leagueId }))
@@ -197,6 +203,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 
         {selectedTab === "Team" ? (
           <TeamTab
+            lineupDate={lineupDate}
+            today={today}
+            canManage={viewerManagesTeam}
             teamId={team.id}
             lineup={teamLineup}
             watchItems={watchItems}
@@ -227,6 +236,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 }
 
 function TeamTab({
+  lineupDate, today, canManage,
   teamId,
   lineup,
   watchItems,
@@ -236,6 +246,9 @@ function TeamTab({
   lockMode,
   rosterSlots,
 }: {
+  lineupDate: string;
+  today: string;
+  canManage: boolean;
   teamId: string;
   lineup: LineupPlayer[];
   watchItems: PlayerWatchItem[];
@@ -252,8 +265,12 @@ function TeamTab({
 
   return (
     <div className="team-tab">
+      <LineupDateNavigation teamId={teamId} date={lineupDate} today={today} />
       <LineupEditor
-        key={lineupVersion}
+        key={`${lineupDate}:${lineupVersion}`}
+        lineupDate={lineupDate}
+        todayDate={today}
+        readOnly={!canManage || lineupDate < today}
         teamId={teamId}
         initialLineup={lineup}
         scoringType={scoringType}
