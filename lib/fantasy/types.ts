@@ -182,6 +182,8 @@ export type PlayerGameLog = {
 };
 
 export type LivePlayerStatus = {
+  /** Today's per-game boxscores, including completed games awaiting import. */
+  todayGames?: PlayerGameLog[];
   /** True only when the player's team has a game in progress right now. */
   live: boolean;
   /** Inning/state label for a live game, e.g. "Bottom 7th"; null when not live. */

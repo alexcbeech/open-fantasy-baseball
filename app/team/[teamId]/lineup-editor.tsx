@@ -170,11 +170,8 @@ export function LineupEditor({
   const [postedLineups, setPostedLineups] = useState<Record<string, PostedLineupStatus>>({});
   const [today, setToday] = useState<Record<string, LiveEntry>>({});
 
-  // Live in-game overlay: while games are in progress, poll each rostered
-  // player's live line so the row's bold number becomes today's live points and
-  // the game line becomes the inning plus the in-game stat line. Players with
-  // no game in progress are absent from the map and keep their season/next-game
-  // display.
+  // Poll both today's boxscores and the live-only subset. Daily stat lines
+  // remain visible after the final out; only in-progress games get live styling.
   const loadDailyStatus = useCallback(async (): Promise<Record<string, PostedLineupStatus> | null> => {
     try {
       const response = await fetch(`/api/v1/teams/${teamId}/live`);
@@ -475,7 +472,7 @@ export function LineupEditor({
                     const weeklyPts = Math.round((entry.matchupTotal + (liveEntry?.points ?? 0)) * 10) / 10;
                     const injured = player.status === "injured" || player.status === "day-to-day";
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
-                    const liveStatLine = liveEntry?.stats ? liveLineSummary(liveEntry.stats) : null;
+                    const todayStatLine = todayEntry?.stats ? liveLineSummary(todayEntry.stats) : null;
 
                     return (
                       <div
@@ -529,11 +526,11 @@ export function LineupEditor({
                             todaysGameStart={player.todaysGameStart}
                             status={player.status}
                             statusDetail={player.statusDetail}
-                            liveText={liveEntry?.state}
+                            liveText={todayEntry?.state}
                             lineupStatus={isBatter(player) ? player.todaysLineupStatus : null}
                             battingOrder={player.todaysBattingOrder}
                           />
-                          {liveStatLine ? <span className="player-live-line">{liveStatLine}</span> : null}
+                          {todayStatLine ? <span className="player-live-line">{todayStatLine}</span> : null}
                         </button>
                         {categoryMode && statSide ? (
                           <button
