@@ -18,8 +18,12 @@ function orderedStarters(lineup: LineupPlayer[]): LineupPlayer[] {
  * for live recalculation. Category leagues include their category breakdown;
  * every head-to-head league shows each starter's matchup-period points.
  */
-export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
-  const update = useLiveMatchup(teamId);
+export function LiveMatchup({ matchup, teamId, status = "active" }: {
+  matchup: MatchupDetails;
+  teamId: string;
+  status?: "active" | "final" | "scheduled";
+}) {
+  const update = useLiveMatchup(teamId, status === "active");
 
   const isLive = Boolean(update?.live);
   const hasToday = Boolean(update?.hasTodayStats);
@@ -45,25 +49,27 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
           <div className="matchup-hero-scores">
             <div className="matchup-hero-team">
               <span className="score-name">{matchup.userTeam.teamName}</span>
-              <span className="matchup-hero-score">{userScore}</span>
+              <span className="matchup-hero-score">{status === "scheduled" ? "—" : userScore}</span>
             </div>
             <span className="versus">{isLive ? <span className="live-pill">Live</span> : matchup.periodLabel}</span>
             <div className="matchup-hero-team right">
               <span className="score-name">{matchup.opponentTeam.teamName}</span>
-              <span className="matchup-hero-score">{opponentScore}</span>
+              <span className="matchup-hero-score">{status === "scheduled" ? "—" : opponentScore}</span>
             </div>
           </div>
-          <div className="matchup-share" aria-hidden="true">
+          {status !== "scheduled" ? <div className="matchup-share" aria-hidden="true">
             <span className="matchup-share-user" style={{ width: `${userShare}%` }} />
-          </div>
+          </div> : null}
         </div>
 
-        {!isPointsLeague ? (
+        {status === "scheduled" ? <p className="subtle">This matchup has not started yet.</p> : null}
+        {!isPointsLeague && status !== "scheduled" ? (
           <>
             {/* Yahoo-style category totals directly under the score: this week's
                 numbers hug the centered category column, and the leading side's
                 value reads green. The result is spelled out for screen readers. */}
             <h3 id="category-heading">Category Breakdown</h3>
+            {!categoryScores.length ? <p className="subtle">Category totals are not available for this matchup yet.</p> : null}
             <div className="category-table" aria-labelledby="category-heading">
               <div className="category-row category-head" aria-hidden="true">
                 <span>{matchup.userTeam.teamName}</span>
@@ -78,7 +84,7 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
                     {score.opponentValue}
                   </span>
                   <span className="visually-hidden">
-                    {score.result === "tie" ? "tied" : score.result === "win" ? "you lead" : "opponent leads"}
+                    {score.result === "tie" ? "tied" : `${score.result === "win" ? matchup.userTeam.teamName : matchup.opponentTeam.teamName} ${status === "final" ? "wins" : "leads"}`}
                   </span>
                 </div>
               ))}
@@ -87,7 +93,7 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
         ) : null}
       </section>
 
-      <section className="panel" aria-labelledby="compare-heading">
+      {status === "active" ? <section className="panel" aria-labelledby="compare-heading">
         <h3 id="compare-heading">{isPointsLeague ? "Player Matchup Points" : "Starters Head to Head"}</h3>
         <div className="matchup-compare" aria-label="Player matchup points">
           {Array.from({ length: rowCount }).map((_, index) => {
@@ -103,7 +109,25 @@ export function LiveMatchup({ matchup, teamId }: { matchup: MatchupDetails; team
             );
           })}
         </div>
-      </section>
+      </section> : null}
+      {status === "final" ? <section className="panel" aria-labelledby="historical-points-heading">
+        <h3 id="historical-points-heading">Player Matchup Points</h3>
+        <p className="subtle">Player totals for {matchup.periodLabel}.</p>
+        <div className="historical-player-points">
+          {[
+            { team: matchup.userTeam, scores: matchup.userPlayerScores ?? [] },
+            { team: matchup.opponentTeam, scores: matchup.opponentPlayerScores ?? [] },
+          ].map(({ team, scores }) => <div key={team.id}>
+            <h4>{team.teamName}</h4>
+            {scores.length ? <table aria-label={`${team.teamName} player matchup points`}>
+              <thead><tr><th scope="col">Player</th><th scope="col">Points</th></tr></thead>
+              <tbody>{scores.map((score) => <tr key={score.playerId}>
+                <td>{score.playerName}</td><td>{score.points}</td>
+              </tr>)}</tbody>
+            </table> : <p className="subtle">No player totals were saved for this matchup.</p>}
+          </div>)}
+        </div>
+      </section> : null}
     </div>
   );
 }

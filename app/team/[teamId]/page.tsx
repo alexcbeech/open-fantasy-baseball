@@ -18,10 +18,9 @@ import { DeleteLeagueButton } from "./delete-league-button";
 import { TeamNameEditor } from "./team-name-editor";
 import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
-import { getMatchupDetailsForTeam } from "@/lib/data/matchups";
+import { MatchupBrowser } from "./matchup-browser";
 import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { listLeagueTransactions } from "@/lib/data/transactions";
-import { LiveMatchup } from "./live-matchup";
 import { TransactionLog } from "./transaction-log";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
 import { formatDraftTime } from "@/lib/draft/schedule";
@@ -33,7 +32,6 @@ import type {
   LeagueScoringType,
   LineupLockMode,
   LineupPlayer,
-  MatchupDetails,
   Player,
   PlayerWatchItem,
   RosterSlot,
@@ -47,6 +45,8 @@ type TeamPageProps = {
   }>;
   searchParams: Promise<{
     tab?: string;
+    period?: string;
+    matchup?: string;
   }>;
 };
 
@@ -54,7 +54,7 @@ const tabs = ["Team", "Matchup", "Players", "League"] as const;
 
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
-  const { tab } = await searchParams;
+  const { tab, period, matchup } = await searchParams;
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const authEnabled = isNeonAuthConfigured();
   const currentUser = await getCurrentOfbUser();
@@ -100,7 +100,6 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     teamLineup,
     playerPool,
     watchItems,
-    matchupDetails,
     leagueOverview,
     leagueTransactions,
     viewerIsCommissioner,
@@ -117,9 +116,6 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     selectedTab === "Team"
       ? measureServerOperation("team.player-watch", () => getPlayerWatchForTeam(teamId))
       : Promise.resolve([]),
-    selectedTab === "Matchup"
-      ? measureServerOperation("team.matchup", () => getMatchupDetailsForTeam(teamId))
-      : Promise.resolve(null),
     selectedTab === "League"
       ? measureServerOperation("team.league-overview", () => getLeagueOverview(team.leagueId))
       : Promise.resolve(null),
@@ -212,7 +208,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           />
         ) : null}
         {selectedTab === "Matchup" ? (
-          matchupDetails ? <MatchupTab matchup={matchupDetails} teamId={team.id} /> : <MatchupEmptyState teamName={team.teamName} />
+          <MatchupBrowser leagueId={team.leagueId} teamId={team.id} periodId={period} matchupId={matchup} />
         ) : null}
         {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
         {selectedTab === "League" && leagueOverview ? (
@@ -268,22 +264,6 @@ function TeamTab({
         newsByPlayerId={newsByPlayerId}
       />
     </div>
-  );
-}
-
-function MatchupTab({ matchup, teamId }: { matchup: MatchupDetails; teamId: string }) {
-  return <LiveMatchup matchup={matchup} teamId={teamId} />;
-}
-
-function MatchupEmptyState({ teamName }: { teamName: string }) {
-  return (
-    <section className="panel" aria-labelledby="matchup-empty-heading">
-      <h2 id="matchup-empty-heading">No Active Matchup</h2>
-      <div className="empty-state">
-        {teamName} isn&apos;t scheduled in a head-to-head matchup this scoring period. Check back when the next period opens,
-        or open the League tab for current standings.
-      </div>
-    </section>
   );
 }
 

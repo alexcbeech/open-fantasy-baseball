@@ -9,10 +9,11 @@ import type { LiveMatchupUpdate } from "@/lib/fantasy/types";
  * matchup); when `hasTodayStats` is false the caller should keep showing its
  * stored values. Shared by the Matchup tab and every live score row.
  */
-export function useLiveMatchup(teamId: string): LiveMatchupUpdate | null {
+export function useLiveMatchup(teamId: string, enabled = true): LiveMatchupUpdate | null {
   const [update, setUpdate] = useState<LiveMatchupUpdate | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     const load = async () => {
       try {
@@ -35,7 +36,7 @@ export function useLiveMatchup(teamId: string): LiveMatchupUpdate | null {
       active = false;
       clearInterval(timer);
     };
-  }, [teamId]);
+  }, [teamId, enabled]);
 
-  return update;
+  return enabled ? update : null;
 }
