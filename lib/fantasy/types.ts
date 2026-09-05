@@ -262,6 +262,12 @@ export type MatchupCategoryScore = {
   result: MatchupCategoryResult;
 };
 
+export type MatchupPlayerPoints = {
+  playerId: string;
+  playerName: string;
+  points: number;
+};
+
 export type MatchupDetails = {
   matchupId: string;
   periodLabel: string;
@@ -273,6 +279,8 @@ export type MatchupDetails = {
   categoryScores: MatchupCategoryScore[];
   userLineup: LineupPlayer[];
   opponentLineup: LineupPlayer[];
+  userPlayerScores?: MatchupPlayerPoints[];
+  opponentPlayerScores?: MatchupPlayerPoints[];
 };
 
 export type LiveMatchupUpdate = {

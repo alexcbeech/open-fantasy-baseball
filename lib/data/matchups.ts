@@ -4,6 +4,7 @@ import type { LeagueScoringType, MatchupCategoryResult, MatchupCategoryScore, Ma
 import { getLineupForTeam } from "./teams";
 
 type ActiveMatchupRow = {
+  status: "active" | "final" | "scheduled";
   matchup_id: string;
   period_label: string;
   starts_at: Date | string;
@@ -25,6 +26,7 @@ type CategoryScoreRow = {
 };
 
 type PlayerScoreRow = {
+  player_name: string;
   team_id: string;
   player_id: string;
   fantasy_points: string | number;
@@ -49,6 +51,7 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
       const matchupResult = await query<ActiveMatchupRow>(
         `select
            m.id as matchup_id,
+           m.status,
            sp.label as period_label,
            sp.starts_at,
            sp.ends_at,
@@ -92,12 +95,14 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
                order by category.side, category.sort_order`,
               [matchup.matchup_id],
             ),
-        getLineupForTeam(teamId),
-        getLineupForTeam(opponentTeamId),
+        matchup.status === "final" || matchup.status === "scheduled" ? Promise.resolve([]) : getLineupForTeam(teamId),
+        matchup.status === "final" || matchup.status === "scheduled" ? Promise.resolve([]) : getLineupForTeam(opponentTeamId),
         query<PlayerScoreRow>(
-          `select team_id, player_id, fantasy_points
-           from matchup_player_score
-           where matchup_id = $1`,
+          `select score.team_id, score.player_id, score.fantasy_points, p.full_name as player_name
+           from matchup_player_score score
+           join player p on p.id = score.player_id
+           where score.matchup_id = $1
+           order by p.full_name, score.player_id`,
           [matchup.matchup_id],
         ),
       ]);
@@ -126,10 +131,20 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
         categoryScores: categoryResult.rows.map((row) => mapCategoryScore(row, isHome)),
         userLineup: withMatchupTotals(userLineup, userPlayerPoints),
         opponentLineup: withMatchupTotals(opponentLineup, opponentPlayerPoints),
+        userPlayerScores: mapPlayerScores(playerScoreResult.rows, teamId),
+        opponentPlayerScores: mapPlayerScores(playerScoreResult.rows, opponentTeamId),
       };
     },
     async () => mockMatchupDetails(teamId),
   );
+}
+
+function mapPlayerScores(rows: PlayerScoreRow[], teamId: string) {
+  return rows.filter((row) => row.team_id === teamId).map((row) => ({
+    playerId: row.player_id,
+    playerName: row.player_name,
+    points: Number(row.fantasy_points),
+  }));
 }
 
 function withMatchupTotals(lineup: MatchupDetails["userLineup"], points: Record<string, number>) {
@@ -157,6 +172,8 @@ function mockMatchupDetails(teamId: string): MatchupDetails | null {
     categoryScores: mockCategoryScores,
     userLineup: mockLineup,
     opponentLineup: mockLineup.slice().reverse(),
+    userPlayerScores: mockLineup.map((entry) => ({ playerId: entry.player.id, playerName: entry.player.name, points: entry.matchupTotal })),
+    opponentPlayerScores: mockLineup.slice().reverse().map((entry) => ({ playerId: entry.player.id, playerName: entry.player.name, points: entry.matchupTotal })),
   };
 }
 

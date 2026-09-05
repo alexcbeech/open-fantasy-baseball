@@ -4885,6 +4885,31 @@ button.row {
   margin-top: 12px;
 }
 
+.historical-player-points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 20px;
+}
+
+.historical-player-points table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.historical-player-points th,
+.historical-player-points td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.historical-player-points th:last-child,
+.historical-player-points td:last-child {
+  padding-left: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .league-matchup-card {
   display: grid;
   gap: 10px;

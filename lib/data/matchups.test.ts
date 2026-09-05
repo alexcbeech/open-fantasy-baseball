@@ -20,18 +20,43 @@ beforeEach(() => {
 describe("getMatchupDetailsForTeam", () => {
   it("loads a specified historical matchup with away-team scores and category results", async () => {
     query.mockResolvedValueOnce({ rows: [{
-      matchup_id: "past-matchup", period_label: "Week 1", scoring_type: "h2h-categories",
+      matchup_id: "past-matchup", status: "final", period_label: "Week 1", scoring_type: "h2h-categories",
       home_team_id: "home", away_team_id: "away", home_team_name: "Home", away_team_name: "Away",
       home_score: 7, away_score: 3,
     }] }).mockResolvedValueOnce({ rows: [
       { category: "R", home_value: 20, away_value: 10, home_result: "win" },
-    ] }).mockResolvedValueOnce({ rows: [] });
+    ] }).mockResolvedValueOnce({ rows: [
+      { team_id: "away", player_id: "departed-player", player_name: "Former Player", fantasy_points: "18.5" },
+      { team_id: "home", player_id: "negative-player", player_name: "Home Pitcher", fantasy_points: "-2.5" },
+      { team_id: "away", player_id: "zero-player", player_name: "Zero Player", fantasy_points: "0.0" },
+    ] });
     const matchup = await getMatchupDetailsForTeam("away", "past-matchup");
     expect(query.mock.calls[0][1]).toEqual(["away", "past-matchup"]);
     expect(query.mock.calls[0][0]).toContain("m.id = $2");
     expect(query.mock.calls[0][0]).not.toContain("m.status = 'active'");
     expect(matchup).toMatchObject({ userScore: 3, opponentScore: 7,
       categoryScores: [{ category: "R", userValue: 10, opponentValue: 20, result: "loss" }] });
+    expect(matchup?.userPlayerScores).toEqual([
+      { playerId: "departed-player", playerName: "Former Player", points: 18.5 },
+      { playerId: "zero-player", playerName: "Zero Player", points: 0 },
+    ]);
+    expect(matchup?.opponentPlayerScores).toEqual([
+      { playerId: "negative-player", playerName: "Home Pitcher", points: -2.5 },
+    ]);
+    expect(getLineupForTeam).not.toHaveBeenCalled();
+    expect(matchup?.userLineup).toEqual([]);
+  });
+
+  it("keeps historical player totals empty when none were saved instead of using today's roster", async () => {
+    query.mockResolvedValueOnce({ rows: [{
+      matchup_id: "old", status: "final", period_label: "Week 1", scoring_type: "h2h-points",
+      home_team_id: "home", away_team_id: "away", home_team_name: "Home", away_team_name: "Away",
+      home_score: 20, away_score: 10,
+    }] }).mockResolvedValueOnce({ rows: [] });
+    const matchup = await getMatchupDetailsForTeam("home", "old");
+    expect(matchup?.userPlayerScores).toEqual([]);
+    expect(matchup?.opponentPlayerScores).toEqual([]);
+    expect(getLineupForTeam).not.toHaveBeenCalled();
   });
 
   it("groups category scores by hitting and pitching configuration order", async () => {

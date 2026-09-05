@@ -110,6 +110,24 @@ export function LiveMatchup({ matchup, teamId, status = "active" }: {
           })}
         </div>
       </section> : null}
+      {status === "final" ? <section className="panel" aria-labelledby="historical-points-heading">
+        <h3 id="historical-points-heading">Player Matchup Points</h3>
+        <p className="subtle">Player totals for {matchup.periodLabel}.</p>
+        <div className="historical-player-points">
+          {[
+            { team: matchup.userTeam, scores: matchup.userPlayerScores ?? [] },
+            { team: matchup.opponentTeam, scores: matchup.opponentPlayerScores ?? [] },
+          ].map(({ team, scores }) => <div key={team.id}>
+            <h4>{team.teamName}</h4>
+            {scores.length ? <table aria-label={`${team.teamName} player matchup points`}>
+              <thead><tr><th scope="col">Player</th><th scope="col">Points</th></tr></thead>
+              <tbody>{scores.map((score) => <tr key={score.playerId}>
+                <td>{score.playerName}</td><td>{score.points}</td>
+              </tr>)}</tbody>
+            </table> : <p className="subtle">No player totals were saved for this matchup.</p>}
+          </div>)}
+        </div>
+      </section> : null}
     </div>
   );
 }
