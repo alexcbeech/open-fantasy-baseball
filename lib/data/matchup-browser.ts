@@ -11,6 +11,8 @@ export type MatchupPeriod = {
 };
 
 export type LeagueMatchup = {
+  home_logo_url?: string | null;
+  away_logo_url?: string | null;
   id: string;
   home_team_id: string;
   away_team_id: string;
@@ -44,6 +46,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
   const matchups = period ? await withDemoFallback(async () => {
     const result = await query<LeagueMatchup>(
       `select m.id, m.home_team_id, m.away_team_id, home.name as home_name, away.name as away_name,
+              home.logo_url as home_logo_url, away.logo_url as away_logo_url,
               m.home_score, m.away_score, m.status
        from matchup m
        join fantasy_team home on home.id = m.home_team_id

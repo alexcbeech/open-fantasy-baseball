@@ -17,6 +17,9 @@ import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
 import { DeleteLeagueButton } from "./delete-league-button";
+import { ImageUploader } from "@/app/image-uploader";
+import { IdentityImage } from "@/app/identity-image";
+import { isImageStorageConfigured } from "@/lib/images/storage";
 import { TeamNameEditor } from "./team-name-editor";
 import { getLeagueDraftStatus } from "@/lib/data/draft";
 import { getLeagueOverview, getLeagueSettings } from "@/lib/data/leagues";
@@ -147,6 +150,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
       <section className="page">
         <div className="team-hero">
           <div>
+            {viewerManagesTeam ? <ImageUploader key={team.logoUrl} endpoint={`/api/v1/teams/${team.id}/image`} initialUrl={team.logoUrl} name={team.teamName} label="Team logo" enabled={isImageStorageConfigured() && isDatabaseConfigured()} /> : <IdentityImage url={team.logoUrl} name={team.teamName} size="large" />}
             {viewerManagesTeam ? <TeamNameEditor teamId={team.id} initialName={team.teamName} /> : <h1>{team.teamName}</h1>}
             <div className="subtle">
               {formatScoringType(team.scoringType)} - {team.record} - Rank #{team.rank}

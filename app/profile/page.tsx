@@ -6,6 +6,9 @@ import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { listApiTokens } from "@/lib/data/api-tokens";
 import { getProfilePreferences } from "@/lib/data/profile";
 import { ProfilePreferencesForm } from "./profile-preferences-form";
+import { ImageUploader } from "@/app/image-uploader";
+import { isImageStorageConfigured } from "@/lib/images/storage";
+import { isDatabaseConfigured } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,11 @@ export default async function ProfilePage() {
       </header>
 
       <section className="page">
+        <section className="panel" aria-label="Profile picture">
+          <h2>Profile picture</h2>
+          <ImageUploader key={profile.avatarUrl} endpoint="/api/v1/profile/image" initialUrl={profile.avatarUrl}
+            name={profile.displayName} label="Profile picture" enabled={isImageStorageConfigured() && isDatabaseConfigured()} />
+        </section>
         <ProfilePreferencesForm initialProfile={profile} initialApiTokens={apiTokens} />
       </section>
     </main>

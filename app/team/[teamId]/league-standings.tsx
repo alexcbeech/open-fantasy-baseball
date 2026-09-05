@@ -1,5 +1,6 @@
 "use client";
 
+import { IdentityImage } from "@/app/identity-image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LeagueStanding } from "@/lib/fantasy/types";
@@ -43,7 +44,7 @@ export function LeagueStandings({ standings, leagueId, viewerTeamId, canTrade }:
                   onClick={() => setViewing(row)}
                   aria-label={`View ${row.teamName}'s current lineup`}
                 >
-                  <span className="player-name">{row.teamName}</span>
+                  <span className="player-name team-image-name"><IdentityImage url={row.logoUrl} name={row.teamName} />{row.teamName}</span>
                   <span className="player-meta">{row.managerName}</span>
                 </button>
               </td>

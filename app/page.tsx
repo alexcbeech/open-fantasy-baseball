@@ -1,3 +1,4 @@
+import { IdentityImage } from "@/app/identity-image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthControl } from "./auth-control";
@@ -94,7 +95,7 @@ export default async function HomePage() {
               <Link className="team-card" href={`/team/${team.id}`} key={team.id}>
                 <div className="team-card-header">
                   <div>
-                    <div className="team-name">{team.teamName}</div>
+                    <div className="team-name team-image-name"><IdentityImage url={team.logoUrl} name={team.teamName} />{team.teamName}</div>
                     <div className="league-name">
                       {team.leagueName} · {formatScoringType(team.scoringType)}
                     </div>

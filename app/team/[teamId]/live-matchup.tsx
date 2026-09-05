@@ -1,5 +1,6 @@
 "use client";
 
+import { IdentityImage } from "@/app/identity-image";
 import { useLiveMatchup } from "@/app/use-live-matchup";
 import type { LineupPlayer, MatchupDetails, RosterSlot } from "@/lib/fantasy/types";
 
@@ -48,12 +49,12 @@ export function LiveMatchup({ matchup, teamId, status = "active" }: {
         <div className="matchup-hero" aria-label={`${matchup.userTeam.teamName} score against ${matchup.opponentTeam.teamName}`}>
           <div className="matchup-hero-scores">
             <div className="matchup-hero-team">
-              <span className="score-name">{matchup.userTeam.teamName}</span>
+              <span className="score-name team-image-name"><IdentityImage url={matchup.userTeam.logoUrl} name={matchup.userTeam.teamName} />{matchup.userTeam.teamName}</span>
               <span className="matchup-hero-score">{status === "scheduled" ? "—" : userScore}</span>
             </div>
             <span className="versus">{isLive ? <span className="live-pill">Live</span> : matchup.periodLabel}</span>
             <div className="matchup-hero-team right">
-              <span className="score-name">{matchup.opponentTeam.teamName}</span>
+              <span className="score-name team-image-name"><IdentityImage url={matchup.opponentTeam.logoUrl} name={matchup.opponentTeam.teamName} />{matchup.opponentTeam.teamName}</span>
               <span className="matchup-hero-score">{status === "scheduled" ? "—" : opponentScore}</span>
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { IdentityImage } from "@/app/identity-image";
 import Link from "next/link";
 import { getMatchupBrowser } from "@/lib/data/matchup-browser";
 import { LiveMatchup } from "./live-matchup";
@@ -34,8 +35,8 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
             className={`league-matchup-card${selected?.id === matchup.id ? " selected" : ""}`}
             aria-current={selected?.id === matchup.id ? "true" : undefined}>
             <span className="subtle">{statusLabels[matchup.status]}</span>
-            <span className="league-matchup-side"><span>{matchup.home_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.home_score)}</strong></span>
-            <span className="league-matchup-side"><span>{matchup.away_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.away_score)}</strong></span>
+            <span className="league-matchup-side"><span className="team-image-name"><IdentityImage url={matchup.home_logo_url} name={matchup.home_name} />{matchup.home_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.home_score)}</strong></span>
+            <span className="league-matchup-side"><span className="team-image-name"><IdentityImage url={matchup.away_logo_url} name={matchup.away_name} />{matchup.away_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.away_score)}</strong></span>
           </Link>)}
         </div>
         {!matchups.length ? <p className="empty-state">No matchups scheduled for this scoring period.</p> : null}

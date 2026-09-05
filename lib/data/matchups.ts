@@ -4,6 +4,8 @@ import type { LeagueScoringType, MatchupCategoryResult, MatchupCategoryScore, Ma
 import { getLineupForTeam } from "./teams";
 
 type ActiveMatchupRow = {
+  home_logo_url?: string | null;
+  away_logo_url?: string | null;
   status: "active" | "final" | "scheduled";
   matchup_id: string;
   period_label: string;
@@ -58,6 +60,7 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
            l.scoring_type,
            m.home_team_id,
            m.away_team_id,
+           home.logo_url as home_logo_url, away.logo_url as away_logo_url,
            home.name as home_team_name,
            away.name as away_team_name,
            m.home_score,
@@ -120,10 +123,12 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
         userTeam: {
           id: teamId,
           teamName: isHome ? matchup.home_team_name : matchup.away_team_name,
+          logoUrl: (isHome ? matchup.home_logo_url : matchup.away_logo_url) ?? null,
         },
         opponentTeam: {
           id: opponentTeamId,
           teamName: isHome ? matchup.away_team_name : matchup.home_team_name,
+          logoUrl: (isHome ? matchup.away_logo_url : matchup.home_logo_url) ?? null,
         },
         userScore: toNumber(isHome ? matchup.home_score : matchup.away_score),
         opponentScore: toNumber(isHome ? matchup.away_score : matchup.home_score),

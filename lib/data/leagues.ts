@@ -27,6 +27,7 @@ type LeagueSettingsRow = {
 };
 
 type LeagueTeamOverviewRow = {
+  logo_url?: string | null;
   team_id: string;
   team_name: string;
   manager_name: string;
@@ -72,6 +73,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
           `select
            ft.id as team_id,
            ft.name as team_name,
+           ft.logo_url,
            u.display_name as manager_name,
            ft.waiver_priority,
            ft.faab_remaining,
@@ -101,6 +103,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
 
       const teamStats = teamsResult.rows.map(mapLeagueTeamStats);
       const scoringType = league.scoring_type ?? league.settings.scoringType;
+      const logoByTeam = new Map(teamsResult.rows.map((row) => [row.team_id, row.logo_url]));
       const managerByTeam = new Map(teamsResult.rows.map((row) => [row.team_id, row.manager_name]));
 
       let standings: LeagueStanding[];
@@ -112,6 +115,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
           (row): LeagueStanding => ({
             teamId: row.teamId,
             teamName: row.teamName,
+            logoUrl: logoByTeam.get(row.teamId) ?? null,
             managerName: managerByTeam.get(row.teamId) ?? "",
             rank: row.rank,
             record: `${row.points} pts`,
@@ -140,6 +144,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
           (row, index): LeagueStanding => ({
             teamId: row.teamId,
             teamName: row.teamName,
+            logoUrl: logoByTeam.get(row.teamId) ?? null,
             managerName: row.managerName,
             rank: index + 1,
             record: formatRecord(row),

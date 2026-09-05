@@ -4930,3 +4930,18 @@ button.row {
   justify-content: space-between;
   gap: 16px;
 }
+.identity-image { display: inline-flex; width: 28px; height: 28px; flex: 0 0 28px; align-items: center; justify-content: center; border-radius: 8px; overflow: hidden; background: var(--surface-2, #263346); color: var(--text, #eee); font-size: 11px; font-weight: 700; vertical-align: middle; }
+.identity-image img { width: 100%; height: 100%; object-fit: contain; }
+.identity-image--large { width: 64px; height: 64px; flex-basis: 64px; font-size: 22px; border-radius: 14px; }
+.image-uploader { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; max-width: 100%; }
+.image-uploader details { min-width: 0; }
+.image-uploader summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.image-upload-controls { display: grid; gap: 10px; max-width: 360px; }
+.image-upload-controls p { margin: 0; }
+.image-upload-controls input { max-width: 100%; min-width: 0; }
+.image-upload-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.team-image-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+@media (max-width: 640px) {
+  .auth-user--signed-in .auth-name,
+  .auth-user--signed-in .auth-role { display: none; }
+}
