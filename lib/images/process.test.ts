@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
+import { crc32 } from "node:zlib";
 import { MAX_STORED_BYTES, MAX_UPLOAD_BYTES } from "./limits";
 import { prepareImage, readImageBody } from "./process";
 
@@ -31,6 +32,13 @@ describe("small uploaded images", () => {
     const animated = await sharp(frames, { raw: { width: 2, height: 4, channels: 3, pageHeight: 2 } }).webp({ loop: 0, delay: [100, 100] }).toBuffer();
     expect((await sharp(animated).metadata()).pages).toBe(2);
     await expect(prepareImage(animated)).rejects.toMatchObject({ status: 415 });
+    const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toBuffer();
+    const animationControl = Buffer.alloc(20);
+    animationControl.writeUInt32BE(8, 0); animationControl.write("acTL", 4);
+    animationControl.writeUInt32BE(2, 8);
+    animationControl.writeUInt32BE(crc32(animationControl.subarray(4, 16)), 16);
+    const apng = Buffer.concat([png.subarray(0, 33), animationControl, png.subarray(33)]);
+    await expect(prepareImage(apng)).rejects.toMatchObject({ status: 415 });
   });
   it("bounds chunked bodies even if Content-Length lies", async () => {
     const body = new ReadableStream({ start(controller) {

@@ -1,6 +1,20 @@
 import sharp from "sharp";
 import { IMAGE_SIZE, IMAGE_TYPES, ImageUploadError, MAX_IMAGE_PIXELS, MAX_STORED_BYTES, MAX_UPLOAD_BYTES } from "./limits";
 
+// libvips may expose only the first APNG frame. Check its animation-control
+// chunk explicitly instead of treating that frame as an ordinary PNG.
+function isAnimatedPng(input: Buffer) {
+  for (let offset = 8; offset + 12 <= input.length;) {
+    const length = input.readUInt32BE(offset);
+    if (length > input.length - offset - 12) break;
+    const type = input.toString("ascii", offset + 4, offset + 8);
+    if (type === "acTL") return true;
+    if (type === "IDAT" || type === "IEND") break;
+    offset += length + 12;
+  }
+  return false;
+}
+
 /** Bound the actual body, including chunked requests and dishonest Content-Length headers. */
 export async function readImageBody(request: Request): Promise<Buffer> {
   if (!IMAGE_TYPES.includes(request.headers.get("content-type")?.split(";")[0] ?? "")) {
@@ -34,7 +48,8 @@ export async function prepareImage(input: Buffer): Promise<Buffer> {
   try {
     const options = { limitInputPixels: MAX_IMAGE_PIXELS, failOn: "warning" as const };
     const metadata = await sharp(input, options).metadata();
-    if (!["jpeg", "png", "webp"].includes(metadata.format ?? "") || (metadata.pages ?? 1) > 1) {
+    if (!["jpeg", "png", "webp"].includes(metadata.format ?? "") || (metadata.pages ?? 1) > 1
+      || (metadata.format === "png" && isAnimatedPng(input))) {
       throw new ImageUploadError("Choose a still JPG, PNG, or WebP image. Animated images are not supported.", 415);
     }
     // Auto-orient before resizing. Keep the whole logo and transparent background;
