@@ -1,3 +1,4 @@
+import { isLineupDate, lineupToday } from "@/lib/fantasy/lineup-date";
 import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamManager, requireTeamViewer } from "@/lib/auth/team-access";
@@ -40,7 +41,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
-    const lineup = await getLineupForTeam(teamId);
+    const lineupDate = new URL(_request.url).searchParams.get("date") ?? undefined;
+    if (lineupDate !== undefined && !isLineupDate(lineupDate)) return NextResponse.json({ error: "Invalid lineup date" }, { status: 400 });
+    const lineup = await getLineupForTeam(teamId, lineupDate);
     const leagueSettings = await getLeagueSettings(team.leagueId);
 
     return NextResponse.json({
@@ -74,6 +77,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const lockMode = leagueSettings.lineupLockMode ?? "daily";
 
   let body: {
+    date?: string;
     entries?: Array<{
       playerId: string;
       slot: RosterSlot;
@@ -91,7 +95,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Lineup entries are required" }, { status: 400 });
   }
 
-  const currentLineup = await getLineupForTeam(teamId);
+  if (body.date !== undefined && !isLineupDate(body.date)) return NextResponse.json({ error: "Invalid lineup date" }, { status: 400 });
+  const selectedDate = body.date ?? lineupToday();
+  if (selectedDate < lineupToday()) return NextResponse.json({ error: "Past lineups are locked." }, { status: 409 });
+  const currentLineup = await getLineupForTeam(teamId, body.date);
   const proposedSlots = new Map<string, RosterSlot>();
 
   for (const entry of body.entries) {
@@ -117,7 +124,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   // A player whose MLB game has started is locked in place until the next
   // daily rollover (first-game mode locks the whole lineup at the day's first
   // pitch); the API enforces this so it can't be bypassed client-side.
-  const lockIssues = findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
+  const lockIssues = selectedDate > lineupToday() ? [] : findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
   if (!validation.valid || lockIssues.length) {
     return NextResponse.json(
@@ -151,6 +158,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     await saveLineupSlots(
       teamId,
       body.entries.map((entry) => ({ playerId: entry.playerId, slot: entry.slot })),
+      body.date,
     );
   } catch (error) {
     if (error instanceof LineupSaveError) {
@@ -167,7 +175,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     entityId: teamId,
     teamId,
     leagueId: team.leagueId,
-    detail: { entries: body.entries.map((entry) => ({ playerId: entry.playerId, slot: entry.slot })) },
+    detail: { lineupDate: selectedDate, entries: body.entries.map((entry) => ({ playerId: entry.playerId, slot: entry.slot })) },
     request,
   });
 
@@ -199,7 +207,7 @@ export async function POST(request: Request, context: RouteContext) {
         "content-type": "application/json",
         ...(request.headers.get("authorization") ? { authorization: request.headers.get("authorization") ?? "" } : {}),
       },
-      body: JSON.stringify(entries.length ? { entries } : {}),
+      body: JSON.stringify(entries.length ? { entries, date: formData.get("date") ?? undefined } : {}),
     }),
     context,
   );

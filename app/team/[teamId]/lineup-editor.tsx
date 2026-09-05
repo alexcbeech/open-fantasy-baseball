@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { lineupToday } from "@/lib/fantasy/lineup-date";
 import { useRouter } from "next/navigation";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { isBatter, projectTodayPoints } from "@/lib/fantasy/daily-projection";
@@ -37,6 +38,9 @@ import { PositionBadge } from "./position-badge";
 import { ProbableStarterCheck } from "./probable-starter-check";
 
 type LineupEditorProps = {
+  lineupDate?: string;
+  todayDate?: string;
+  readOnly?: boolean;
   teamId: string;
   initialLineup: LineupPlayer[];
   scoringType?: LeagueScoringType;
@@ -150,6 +154,9 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
 }
 
 export function LineupEditor({
+  lineupDate = lineupToday(),
+  todayDate = lineupToday(),
+  readOnly = false,
   teamId,
   initialLineup,
   scoringType = "h2h-points",
@@ -160,6 +167,9 @@ export function LineupEditor({
   newsByPlayerId,
 }: LineupEditorProps) {
   const router = useRouter();
+  const isToday = lineupDate === todayDate;
+  const isFuture = lineupDate > todayDate;
+  const lockedView = readOnly || lineupDate < todayDate;
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -173,8 +183,13 @@ export function LineupEditor({
   // Poll both today's boxscores and the live-only subset. Daily stat lines
   // remain visible after the final out; only in-progress games get live styling.
   const loadDailyStatus = useCallback(async (): Promise<Record<string, PostedLineupStatus> | null> => {
+    if (isToday && lineupDate !== lineupToday()) {
+      router.refresh();
+      return null;
+    }
+    if (isFuture) return null;
     try {
-      const response = await fetch(`/api/v1/teams/${teamId}/live`);
+      const response = await fetch(`/api/v1/teams/${teamId}/live${isToday ? "" : `?date=${lineupDate}`}`);
       if (!response.ok) {
         return null;
       }
@@ -197,7 +212,7 @@ export function LineupEditor({
       // Keep the last known maps on a transient failure.
       return null;
     }
-  }, [teamId]);
+  }, [teamId, lineupDate, isFuture, isToday, router]);
 
   useEffect(() => {
     let active = true;
@@ -208,12 +223,12 @@ export function LineupEditor({
     };
 
     load();
-    const timer = setInterval(load, 30000);
+    const timer = isToday ? setInterval(load, 30000) : undefined;
     return () => {
       active = false;
       clearInterval(timer);
     };
-  }, [loadDailyStatus]);
+  }, [loadDailyStatus, isToday]);
 
   const currentLineup = useMemo<LineupPlayer[]>(
     () =>
@@ -243,12 +258,12 @@ export function LineupEditor({
   // pitch; otherwise a player locks when their own game starts. The live
   // overlay is a backstop either way.
   const wholeLineupLocked = useMemo(
-    () => lockMode === "first-game" && isLineupFirstGameLocked(currentLineup),
-    [lockMode, currentLineup],
+    () => lockedView || (!isFuture && lockMode === "first-game" && isLineupFirstGameLocked(currentLineup)),
+    [lockedView, isFuture, lockMode, currentLineup],
   );
   const isEntryLocked = useCallback(
-    (entry: LineupPlayer) => wholeLineupLocked || isPlayerGameLocked(entry.player) || Boolean(live[entry.player.id]),
-    [live, wholeLineupLocked],
+    (entry: LineupPlayer) => wholeLineupLocked || (!isFuture && (isPlayerGameLocked(entry.player) || Boolean(live[entry.player.id]))),
+    [live, wholeLineupLocked, isFuture],
   );
   const lockedPlayerIds = useMemo(
     () => new Set(currentLineup.filter(isEntryLocked).map((entry) => entry.player.id)),
@@ -281,6 +296,7 @@ export function LineupEditor({
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          date: lineupDate,
           entries: Object.entries(nextSlots).map(([playerId, slot]) => ({ playerId, slot })),
         }),
       });
@@ -293,6 +309,8 @@ export function LineupEditor({
       if (!response.ok || !result.accepted) {
         setSlotByPlayerId(previousSlots);
         setError(result.validation?.issues?.[0]?.message ?? result.error ?? "Lineup change could not be saved.");
+      } else if (response.status === 200) {
+        router.refresh();
       }
     } catch {
       setSlotByPlayerId(previousSlots);
@@ -308,6 +326,7 @@ export function LineupEditor({
    * through the lineup API, rolling back if the server rejects them.
    */
   function commitSlots(nextSlots: Record<string, RosterSlot>) {
+    if (lockedView) return false;
     const nextLineup = initialLineup.map((entry) => ({ ...entry, slot: nextSlots[entry.player.id] }));
     const result = validateLineup(nextLineup, rosterSlots);
 
@@ -316,7 +335,7 @@ export function LineupEditor({
       return false;
     }
 
-    const lockIssues = findLineupLockIssues(currentLineup, nextLineup, new Date(), lockMode);
+    const lockIssues = isFuture ? [] : findLineupLockIssues(currentLineup, nextLineup, new Date(), lockMode);
     // The scheduled-start check misses games the schedule sync hasn't seen;
     // the live overlay is the backstop for anyone already playing.
     const liveLockedMove = nextLineup.find(
@@ -415,7 +434,7 @@ export function LineupEditor({
       <section className="panel" aria-labelledby="lineup-heading">
         <div className="lineup-header">
           <h2 id="lineup-heading">Lineup</h2>
-          <button className="start-active-button" type="button" onClick={startActivePlayers}>
+          <button className="start-active-button" type="button" onClick={startActivePlayers} disabled={lockedView}>
             Start Active Players
           </button>
         </div>
@@ -450,8 +469,8 @@ export function LineupEditor({
                     </span>
                   ) : (
                     <span className="lineup-col-heads" aria-hidden="true">
-                      <span>Week</span>
-                      <span>Proj today</span>
+                      <span>{isToday ? "Week" : "Day"}</span>
+                      <span>{isToday ? "Proj today" : "Projected"}</span>
                     </span>
                   )}
                 </div>
@@ -469,7 +488,7 @@ export function LineupEditor({
                     // Stored matchup totals are refreshed after completed days.
                     // Fold in an active game's points so the weekly number stays
                     // current while today's box score is still live.
-                    const weeklyPts = Math.round((entry.matchupTotal + (liveEntry?.points ?? 0)) * 10) / 10;
+                    const weeklyPts = isToday ? Math.round((entry.matchupTotal + (liveEntry?.points ?? 0)) * 10) / 10 : (todayEntry?.points ?? "—");
                     const injured = player.status === "injured" || player.status === "day-to-day";
                     const gameClass = liveEntry ? "player-game is-live" : injured ? "player-game injury" : "player-game";
                     const todayStatLine = todayEntry?.stats ? liveLineSummary(todayEntry.stats) : null;
@@ -487,13 +506,16 @@ export function LineupEditor({
                           className={locked ? "pos-badge-button is-locked" : "pos-badge-button"}
                           type="button"
                           onClick={() => startMove(entry)}
+                          disabled={lockedView}
                           aria-disabled={locked}
                           aria-label={
-                            locked
+                            lockedView
+                              ? `${player.name}: read-only lineup`
+                              : locked
                               ? `${player.name} is locked in the ${row.slot} slot until the next daily rollover`
                               : `Move ${player.name} out of the ${row.slot} slot`
                           }
-                          title={locked ? "Locked: game started" : undefined}
+                          title={lockedView ? "Read-only lineup" : locked ? "Locked: game started" : undefined}
                         >
                           <PositionBadge slot={row.slot} swap={!locked} />
                           {locked ? (
@@ -541,7 +563,7 @@ export function LineupEditor({
                             onFocus={() => prefetchPlayerDetail(player.id, teamId)}
                             onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                             onClick={() => setDetailPlayerId(player.id)}
-                            aria-label={`${player.name} today: ${categoryColumns
+                            aria-label={`${player.name} ${isToday ? "today" : lineupDate}: ${categoryColumns
                               .map(
                                 (category) =>
                                   `${category} ${formatLineupCategoryValue({
@@ -572,10 +594,10 @@ export function LineupEditor({
                             onFocus={() => prefetchPlayerDetail(player.id, teamId)}
                             onPointerDown={() => prefetchPlayerDetail(player.id, teamId)}
                             onClick={() => setDetailPlayerId(player.id)}
-                            aria-label={`${player.name}: ${weeklyPts} fantasy points this week, ${todayPts} projected today`}
+                            aria-label={`${player.name}: ${weeklyPts} fantasy points ${isToday ? "this week" : "on selected day"}, ${todayPts} projected`}
                           >
                             <span className={liveEntry ? "points-live is-live" : "points-live"}>{weeklyPts}</span>
-                            <span className="points-proj">{todayPts}</span>
+                            <span className="points-proj">{lineupDate < todayDate ? "—" : todayPts}</span>
                           </button>
                         )}
                       </div>
@@ -586,7 +608,8 @@ export function LineupEditor({
                       className="row editable-row lineup-empty-row"
                       type="button"
                       key={row.key}
-                      onClick={() => setFillingSlot(row.slot)}
+                      onClick={() => { if (!lockedView) setFillingSlot(row.slot); }}
+                          disabled={lockedView}
                       aria-label={`Fill the empty ${row.slot} slot`}
                     >
                       <PositionBadge slot={row.slot} />
@@ -632,6 +655,7 @@ export function LineupEditor({
           key={detailPlayerId}
           playerId={detailPlayerId}
           teamId={teamId}
+          readOnly={!isToday || readOnly}
           onClose={() => setDetailPlayerId(null)}
           onRosterChange={() => router.refresh()}
         />

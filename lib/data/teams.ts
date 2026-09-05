@@ -1,10 +1,11 @@
+import { isLineupDate, lineupToday } from "@/lib/fantasy/lineup-date";
 import type { QueryResult, QueryResultRow } from "pg";
 import { getPool, isUniqueViolation, query, withDemoFallback } from "@/lib/db/client";
 import { lineup as mockLineup, teams as mockTeams } from "@/lib/fantasy/mock-data";
 import { findLineupLockIssues, validateLineup } from "@/lib/fantasy/roster-validation";
 import { formatRecord, rankStandings } from "@/lib/fantasy/season-schedule";
 import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types";
-import { ensureTodayLineupSnapshot } from "./lineup-snapshots";
+import { ensureFutureLineupSnapshot, ensureTodayLineupSnapshot } from "./lineup-snapshots";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
 import { rotoStandingsForLeague } from "./roto";
 import { teamRecordsForLeague } from "./season";
@@ -67,7 +68,8 @@ const lineupRowsSql = `
             left join mlb_team home on home.id = g.home_mlb_team_id
             left join mlb_team away on away.id = g.away_mlb_team_id
             where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
-              and g.game_date >= now()
+              and (($2::date is null and g.game_date >= now()) or
+                coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date) = $2::date)
             order by g.game_date asc
             limit 1
           ) next_game on true
@@ -89,7 +91,7 @@ const lineupRowsSql = `
             end
             where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
               and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
-                = (now() at time zone 'America/New_York')::date
+                = coalesce($2::date, (now() at time zone 'America/New_York')::date)
           ) todays_game on true
           left join lateral (
             select count(*) as remaining_games
@@ -97,7 +99,7 @@ const lineupRowsSql = `
             where (g.home_mlb_team_id = p.current_mlb_team_id or g.away_mlb_team_id = p.current_mlb_team_id)
               and coalesce(g.status, 'Preview') <> 'Final'
               and coalesce(g.official_date, (g.game_date at time zone 'America/New_York')::date)
-                >= (now() at time zone 'America/New_York')::date
+                >= coalesce($2::date, (now() at time zone 'America/New_York')::date)
           ) team_schedule on true
           where le.team_id = $1
             and le.lineup_date = (
@@ -287,7 +289,9 @@ export async function updateTeamName(teamId: string, name: string): Promise<stri
  * serializes saves per team with an advisory lock and re-validates the full
  * resulting lineup (legality + game locks) against rows read inside the lock.
  */
-export async function saveLineupSlots(teamId: string, entries: Array<{ playerId: string; slot: RosterSlot }>): Promise<void> {
+export async function saveLineupSlots(teamId: string, entries: Array<{ playerId: string; slot: RosterSlot }>, lineupDate?: string): Promise<void> {
+  if (lineupDate !== undefined && !isLineupDate(lineupDate)) throw new LineupSaveError("Invalid lineup date.", 400);
+  if (lineupDate && lineupDate < lineupToday()) throw new LineupSaveError("Past lineups are locked.", 409);
   const client = await getPool().connect();
 
   try {
@@ -320,7 +324,14 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
     // Re-read the effective lineup inside the lock and validate the whole
     // resulting lineup, so a save that raced the route's pre-check can't
     // persist a duplicate, overfilled, ineligible, or locked-player slot.
-    const currentLineup = await queryLineupRows(client, teamId);
+    const selectedDate = lineupDate ?? lineupToday();
+    if (selectedDate < lineupToday()) throw new LineupSaveError("Past lineups are locked.", 409);
+    const future = selectedDate > lineupToday();
+    if (future) {
+      const migration = await client.query("select 1 from schema_migration where filename = '0031_future_lineup_roster_reset.sql'");
+      if (!migration.rows.length) throw new LineupSaveError("Future lineup scheduling requires the latest database migration.", 503);
+    }
+    const currentLineup = await queryLineupRows(client, teamId, lineupDate);
     const currentById = new Map(currentLineup.map((entry) => [entry.player.id, entry]));
     const proposedSlots = new Map(entries.map((entry) => [entry.playerId, entry.slot]));
 
@@ -336,7 +347,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       matchupTotal: entry.matchupTotal,
     }));
     const validation = validateLineup(proposedLineup, rosterSlots);
-    const lockIssues = findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
+    const lockIssues = future ? [] : findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
     if (lockIssues.length) {
       throw new LineupSaveError(lockIssues[0].message, 409);
@@ -346,10 +357,12 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       throw new LineupSaveError(validation.issues[0]?.message ?? "The lineup is invalid.", 409);
     }
 
-    const snapshot = await ensureTodayLineupSnapshot(client, teamId, leagueId);
+    const snapshot = future
+      ? await ensureFutureLineupSnapshot(client, teamId, leagueId, selectedDate)
+      : await ensureTodayLineupSnapshot(client, teamId, leagueId);
 
     if (!snapshot) {
-      throw new LineupSaveError("No active scoring period is available.");
+      throw new LineupSaveError("No scoring period is available for the selected date.");
     }
 
     for (const entry of entries) {
@@ -365,7 +378,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
     await client.query(
       `insert into fantasy_transaction (league_id, team_id, type, status, payload, processed_at)
        values ($1, $2, 'lineup_change', 'processed', $3::jsonb, now())`,
-      [leagueId, teamId, JSON.stringify({ entries })],
+      [leagueId, teamId, JSON.stringify({ entries, lineupDate: selectedDate })],
     );
 
     await client.query("commit");

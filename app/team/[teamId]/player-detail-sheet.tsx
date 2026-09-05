@@ -29,6 +29,7 @@ function actionSuccessMessage(action: PlayerAction, player: PlayerDetail): strin
 }
 
 type PlayerDetailSheetProps = {
+  readOnly?: boolean;
   playerId: string;
   teamId: string;
   onClose: () => void;
@@ -36,7 +37,7 @@ type PlayerDetailSheetProps = {
   onRosterChange?: (player: PlayerDetail) => void;
 };
 
-export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }: PlayerDetailSheetProps) {
+export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange, readOnly = false }: PlayerDetailSheetProps) {
   const [state, setState] = useState<SheetState>(() => {
     const cached = getCachedPlayerDetail(playerId, teamId);
     return cached
@@ -170,7 +171,7 @@ export function PlayerDetailSheet({ playerId, teamId, onClose, onRosterChange }:
         {player ? (
           <PlayerDetailView
             player={player}
-            actionInFlight={state.kind === "loading"}
+            actionInFlight={readOnly || state.kind === "loading"}
             activeAction={state.kind === "loading" ? state.action : undefined}
             statusBanner={statusBanner}
             onAction={applyAction}

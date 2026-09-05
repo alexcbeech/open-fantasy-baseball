@@ -88,6 +88,16 @@ describe("GET /teams/{teamId}/lineup (read:team)", () => {
 });
 
 describe("PATCH /teams/{teamId}/lineup (write:lineup)", () => {
+  it("rejects past and malformed dates before accepting a lineup change", async () => {
+    for (const [date, status] of [["2000-01-01", 409], ["2026-02-30", 400]]) {
+      const response = await lineupPatch(new Request(`${base}/teams/team-1/lineup`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date, entries: [{ playerId: "player-6", slot: "UTIL" }] }),
+      }), teamContext("team-1"));
+      expect(response.status).toBe(status);
+    }
+  });
+
   it("400s an empty lineup body", async () => {
     const response = await lineupPatch(
       new Request(`${base}/teams/team-1/lineup`, {
