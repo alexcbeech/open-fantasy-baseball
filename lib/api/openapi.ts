@@ -2,6 +2,28 @@ import { oauthScopes, scopeDescriptions } from "@/lib/auth/scopes";
 
 const bearerSecurity = [{ bearerAuth: [] }];
 
+function imageOperations(team = false) {
+  const shared = {
+    tags: [team ? "Teams" : "Profile"], security: [{ bearerAuth: [] }, { neonSession: [] }],
+    "x-ofb-required-scope": team ? "write:team" : "write:profile",
+    ...(team ? { parameters: [{ name: "teamId", in: "path", required: true, schema: { type: "string", format: "uuid" } }] } : {}),
+    responses: {
+      "200": { description: "Saved image URL, or null after removal.", content: { "application/json": { schema: { type: "object", properties: { url: { type: ["string", "null"] } } } } } },
+      "400": { description: "Invalid image or more than 20 million pixels." },
+      "401": { description: "Sign in required." }, "403": { description: "Insufficient permission or cross-origin request." },
+      "413": { description: "Upload exceeds 4 MiB." }, "415": { description: "Unsupported format or animation." },
+      "429": { description: "Too many image changes." }, "503": { description: "Storage unavailable or unconfigured." },
+    },
+  };
+  return {
+    put: { ...shared, summary: team ? "Upload team logo" : "Upload profile picture",
+      description: "Raw JPG, PNG, or WebP up to 4 MiB. Stored as metadata-free WebP, at most 256x256 and 100 KiB. Team logos require manager/commissioner access.",
+      requestBody: { required: true, content: Object.fromEntries(["image/jpeg", "image/png", "image/webp"].map((type) => [type, { schema: { type: "string", format: "binary" } }])) },
+    },
+    delete: { ...shared, summary: team ? "Remove team logo" : "Remove profile picture" },
+  };
+}
+
 export const openApiDocument = {
   openapi: "3.1.0",
   info: {
@@ -182,6 +204,8 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/profile/image": imageOperations(),
+    "/teams/{teamId}/image": imageOperations(true),
     "/health": {
       get: {
         tags: ["System"],

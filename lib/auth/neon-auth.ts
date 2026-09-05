@@ -127,7 +127,7 @@ async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurr
           `insert into app_user (email, display_name, avatar_url)
            values ($1, $2, $3)
            on conflict (email) do update set
-             avatar_url = coalesce(excluded.avatar_url, app_user.avatar_url),
+             avatar_url = case when app_user.avatar_custom then app_user.avatar_url else coalesce(excluded.avatar_url, app_user.avatar_url) end,
              updated_at = now()
            returning id, email, display_name, avatar_url`,
           [authUser.email, displayName, authUser.image],

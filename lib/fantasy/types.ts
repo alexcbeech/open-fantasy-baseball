@@ -72,6 +72,7 @@ export type LeagueSettings = {
 };
 
 export type TeamSummary = {
+  logoUrl?: string | null;
   id: string;
   leagueId: string;
   leagueName: string;
@@ -274,8 +275,8 @@ export type MatchupDetails = {
   matchupId: string;
   periodLabel: string;
   scoringType: LeagueScoringType;
-  userTeam: Pick<TeamSummary, "id" | "teamName">;
-  opponentTeam: Pick<TeamSummary, "id" | "teamName">;
+  userTeam: Pick<TeamSummary, "id" | "teamName" | "logoUrl">;
+  opponentTeam: Pick<TeamSummary, "id" | "teamName" | "logoUrl">;
   userScore: number;
   opponentScore: number;
   categoryScores: MatchupCategoryScore[];
@@ -304,6 +305,7 @@ export type LiveMatchupUpdate = {
 };
 
 export type LeagueStanding = {
+  logoUrl?: string | null;
   teamId: string;
   teamName: string;
   managerName: string;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentOfbUser, getNeonAuth } from "@/lib/auth/neon-auth";
+import { IdentityImage } from "./identity-image";
 
 async function signOutAction() {
   "use server";
@@ -39,7 +40,8 @@ export async function AuthControl({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <form action={signOutAction} className="auth-user">
+    <form action={signOutAction} className="auth-user auth-user--signed-in">
+      <Link href="/profile" aria-label="Profile picture and preferences"><IdentityImage url={user.avatarUrl} name={user.displayName || user.email} /></Link>
       <span className="auth-name">{user.displayName || user.email}</span>
       {roleLabel ? <span className="auth-role">{roleLabel}</span> : null}
       <button className="auth-signout" type="submit">

@@ -1,6 +1,7 @@
 import type { LineupPlayer, Player, PlayerNextGame, TeamSummary } from "@/lib/fantasy/types";
 
 export type DbTeamSummaryRow = {
+  logo_url?: string | null;
   id: string;
   league_id: string;
   league_name: string;
@@ -69,6 +70,7 @@ export function mapTeamSummary(row: DbTeamSummaryRow, standings?: TeamStandingsC
     leagueId: row.league_id,
     leagueName: row.league_name,
     teamName: row.team_name,
+    logoUrl: row.logo_url ?? null,
     managerName: row.manager_name,
     scoringType: row.scoring_type,
     record: standings?.record ?? "0-0",

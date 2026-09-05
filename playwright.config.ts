@@ -37,6 +37,7 @@ export default defineConfig({
       NEON_AUTH_COOKIE_SECRET: "",
       WEB_PUSH_PUBLIC_KEY: "",
       WEB_PUSH_PRIVATE_KEY: "",
+      BLOB_READ_WRITE_TOKEN: "",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   },
