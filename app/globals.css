@@ -4881,6 +4881,10 @@ button.row {
   gap: 12px;
 }
 
+.matchup-picker-content {
+  margin-top: 12px;
+}
+
 .league-matchup-card {
   display: grid;
   gap: 10px;

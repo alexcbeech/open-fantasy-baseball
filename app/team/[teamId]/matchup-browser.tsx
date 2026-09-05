@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getMatchupBrowser } from "@/lib/data/matchup-browser";
 import { LiveMatchup } from "./live-matchup";
+import { MatchupPicker } from "./matchup-picker";
 
 const statusLabels = { active: "In progress", final: "Final", scheduled: "Upcoming" };
 
@@ -12,7 +13,7 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
   const index = periods.findIndex((entry) => entry.id === period?.id);
   return <div className="matchup-tab">
     <section className="panel" aria-labelledby="league-matchups-heading">
-      <h2 id="league-matchups-heading">All Matchups</h2>
+      <h2 id="league-matchups-heading" className="visually-hidden">Matchup schedule</h2>
       {period ? <>
         <form className="matchup-period-controls" action={`/team/${teamId}`}>
           <input type="hidden" name="tab" value="matchup" />
@@ -27,6 +28,7 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
           <span className="subtle">{period.label} · {statusLabels[period.status]}</span>
           {index < periods.length - 1 ? <Link className="secondary-button" href={href(periods[index + 1].id)}>Next →</Link> : <span />}
         </nav>
+        <MatchupPicker count={matchups.length} key={`${period.id}:${selected?.id ?? "none"}`}>
         <div className="league-matchup-list">
           {matchups.map((matchup) => <Link key={matchup.id} href={href(period.id, matchup.id)}
             className={`league-matchup-card${selected?.id === matchup.id ? " selected" : ""}`}
@@ -37,6 +39,7 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
           </Link>)}
         </div>
         {!matchups.length ? <p className="empty-state">No matchups scheduled for this scoring period.</p> : null}
+        </MatchupPicker>
       </> : <p className="empty-state">No scoring periods scheduled yet.</p>}
     </section>
     {details && selected ? <LiveMatchup key={selected.id} matchup={details} teamId={details.userTeam.id} status={selected.status} /> : null}

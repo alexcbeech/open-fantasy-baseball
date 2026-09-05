@@ -2,11 +2,23 @@ import { expect, test } from "@playwright/test";
 
 test("browse league matchups and past/future weeks on mobile", async ({ page }) => {
   await page.goto("/team/team-1?tab=matchup");
-  await expect(page.getByRole("heading", { name: "All Matchups" })).toBeVisible();
+  const allMatchups = page.getByRole("button", { name: /All Matchups/ });
+  await expect(allMatchups).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("link", { name: /Moon Shots/ })).toBeHidden();
+  await expect(page.locator(".matchup-hero")).toBeVisible();
+  await allMatchups.click();
+  await expect(allMatchups).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: /Moon Shots/ })).toBeVisible();
+  await allMatchups.click();
+  await expect(page.getByRole("link", { name: /Moon Shots/ })).toBeHidden();
+  await allMatchups.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByLabel("Scoring period", { exact: true })).toHaveValue("demo-week-13");
   await page.getByRole("link", { name: /Moon Shots/ }).click();
   await expect(page.locator(".matchup-hero")).toContainText("Moon Shots");
   await expect(page.locator(".matchup-hero")).toContainText("Basepath Bandits");
+  await expect(allMatchups).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("link", { name: /Moon Shots/ })).toBeHidden();
 
   await page.getByRole("link", { name: "← Previous" }).click();
   await expect(page.getByLabel("Scoring period", { exact: true })).toHaveValue("demo-week-12");
