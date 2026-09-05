@@ -18,6 +18,22 @@ beforeEach(() => {
 });
 
 describe("getMatchupDetailsForTeam", () => {
+  it("loads a specified historical matchup with away-team scores and category results", async () => {
+    query.mockResolvedValueOnce({ rows: [{
+      matchup_id: "past-matchup", period_label: "Week 1", scoring_type: "h2h-categories",
+      home_team_id: "home", away_team_id: "away", home_team_name: "Home", away_team_name: "Away",
+      home_score: 7, away_score: 3,
+    }] }).mockResolvedValueOnce({ rows: [
+      { category: "R", home_value: 20, away_value: 10, home_result: "win" },
+    ] }).mockResolvedValueOnce({ rows: [] });
+    const matchup = await getMatchupDetailsForTeam("away", "past-matchup");
+    expect(query.mock.calls[0][1]).toEqual(["away", "past-matchup"]);
+    expect(query.mock.calls[0][0]).toContain("m.id = $2");
+    expect(query.mock.calls[0][0]).not.toContain("m.status = 'active'");
+    expect(matchup).toMatchObject({ userScore: 3, opponentScore: 7,
+      categoryScores: [{ category: "R", userValue: 10, opponentValue: 20, result: "loss" }] });
+  });
+
   it("groups category scores by hitting and pitching configuration order", async () => {
     query
       .mockResolvedValueOnce({

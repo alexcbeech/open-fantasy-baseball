@@ -43,7 +43,7 @@ const mockCategoryScores: MatchupCategoryScore[] = [
   { category: "WHIP", userValue: "1.08", opponentValue: "1.13", result: "win" },
 ];
 
-export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupDetails | null> {
+export async function getMatchupDetailsForTeam(teamId: string, matchupId?: string): Promise<MatchupDetails | null> {
   return withDemoFallback(
     async () => {
       const matchupResult = await query<ActiveMatchupRow>(
@@ -65,10 +65,10 @@ export async function getMatchupDetailsForTeam(teamId: string): Promise<MatchupD
          join fantasy_team home on home.id = m.home_team_id
          join fantasy_team away on away.id = m.away_team_id
          where (m.home_team_id = $1 or m.away_team_id = $1)
-           and m.status = 'active'
+           and ${matchupId ? "m.id = $2" : "m.status = 'active'"}
          order by sp.starts_at desc
          limit 1`,
-        [teamId],
+        matchupId ? [teamId, matchupId] : [teamId],
       );
       const matchup = matchupResult.rows[0];
 
