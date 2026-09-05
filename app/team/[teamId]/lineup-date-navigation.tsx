@@ -1,14 +1,14 @@
 import Link from "next/link";
+import { AutoNavigateForm } from "@/app/auto-navigate-form";
 import { shiftLineupDate } from "@/lib/fantasy/lineup-date";
 
 export function LineupDateNavigation({ teamId, date, today }: { teamId: string; date: string; today: string }) {
   const href = (day: string) => `/team/${teamId}?date=${day}`;
   return <section className="panel" aria-label="Lineup date navigation">
-    <form className="matchup-period-controls" action={`/team/${teamId}`}>
-      <label htmlFor="lineup-date">Lineup date (ET)</label>
+    <AutoNavigateForm action={`/team/${teamId}`}>
+      <label htmlFor="lineup-date">Lineup date</label>
       <input id="lineup-date" type="date" name="date" defaultValue={date} key={date} required />
-      <button type="submit" className="secondary-button">View day</button>
-    </form>
+    </AutoNavigateForm>
     <nav className="matchup-period-links" aria-label="Lineup days">
       <Link className="secondary-button" href={href(shiftLineupDate(date, -1))}>← Previous day</Link>
       <Link className="secondary-button" href={href(today)}>Today</Link>

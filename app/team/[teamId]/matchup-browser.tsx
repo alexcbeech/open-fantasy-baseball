@@ -1,5 +1,6 @@
 import { IdentityImage } from "@/app/identity-image";
 import Link from "next/link";
+import { AutoNavigateForm } from "@/app/auto-navigate-form";
 import { getMatchupBrowser } from "@/lib/data/matchup-browser";
 import { LiveMatchup } from "./live-matchup";
 import { MatchupPicker } from "./matchup-picker";
@@ -16,14 +17,13 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
     <section className="panel" aria-labelledby="league-matchups-heading">
       <h2 id="league-matchups-heading" className="visually-hidden">Matchup schedule</h2>
       {period ? <>
-        <form className="matchup-period-controls" action={`/team/${teamId}`}>
+        <AutoNavigateForm action={`/team/${teamId}`}>
           <input type="hidden" name="tab" value="matchup" />
           <label htmlFor="matchup-period">Scoring period</label>
           <select id="matchup-period" name="period" defaultValue={period.id} key={period.id}>
             {periods.map((entry) => <option key={entry.id} value={entry.id}>{entry.label} · {statusLabels[entry.status]}</option>)}
           </select>
-          <button className="secondary-button" type="submit">View</button>
-        </form>
+        </AutoNavigateForm>
         <nav className="matchup-period-links" aria-label="Scoring period navigation">
           {index > 0 ? <Link className="secondary-button" href={href(periods[index - 1].id)}>← Previous</Link> : <span />}
           <span className="subtle">{period.label} · {statusLabels[period.status]}</span>
