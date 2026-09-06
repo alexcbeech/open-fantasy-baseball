@@ -4940,6 +4940,13 @@ button.row {
 .image-upload-controls p { margin: 0; }
 .image-upload-controls input { max-width: 100%; min-width: 0; }
 .image-upload-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.image-crop-editor { display: grid; gap: 10px; }
+.image-crop-viewport { position: relative; width: min(280px, 100%); aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); cursor: grab; touch-action: none; user-select: none; }
+.image-crop-viewport:active { cursor: grabbing; }
+.image-crop-viewport img { position: absolute; max-width: none; object-fit: fill; pointer-events: none; }
+.image-crop-controls { display: grid; gap: 8px; }
+.image-crop-controls label { display: grid; grid-template-columns: minmax(112px, auto) 1fr; align-items: center; gap: 10px; font-size: 14px; }
+.image-crop-controls input { width: 100%; }
 .team-image-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .team-identity-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .team-identity-copy { min-width: 0; flex: 1; }

@@ -10,6 +10,8 @@ beforeEach(() => {
   vi.stubGlobal("React", React);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: "https://example.test/small.webp" }) }));
   URL.createObjectURL = vi.fn(() => "blob:preview"); URL.revokeObjectURL = vi.fn();
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => callback(new Blob(["crop"], { type: "image/webp" })));
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 function setup() {
@@ -30,10 +32,13 @@ it("previews then uploads the selected file and supports removal", async () => {
   const input = setup();
   const file = new File(["png"], "logo.png", { type: "image/png" });
   fireEvent.change(input, { target: { files: [file] } });
-  expect(document.querySelector("img")?.getAttribute("src")).toBe("blob:preview");
+  const preview = screen.getByRole("img", { name: "Profile picture crop preview" });
+  Object.defineProperties(preview, { naturalWidth: { value: 1200 }, naturalHeight: { value: 800 } });
+  fireEvent.load(preview);
+  expect(preview.getAttribute("src")).toBe("blob:preview");
   fireEvent.click(screen.getByRole("button", { name: "Upload image" }));
   await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Profile picture saved."));
-  expect(fetch).toHaveBeenCalledWith("/api/v1/profile/image", { method: "PUT", headers: { "Content-Type": "image/png" }, body: file });
+  expect(fetch).toHaveBeenCalledWith("/api/v1/profile/image", { method: "PUT", headers: { "Content-Type": "image/webp" }, body: expect.any(Blob) });
   expect(document.querySelector("img")?.getAttribute("src")).toBe("https://example.test/small.webp");
   vi.mocked(fetch).mockResolvedValueOnce({ ok: true, json: async () => ({ url: null }) } as Response);
   fireEvent.click(screen.getByRole("button", { name: "Remove image" }));
@@ -45,6 +50,9 @@ it("keeps the original image when the server rejects an upload", async () => {
   const input = setup();
   vi.mocked(fetch).mockResolvedValueOnce({ ok: false, json: async () => ({ error: "Image could not be read." }) } as Response);
   fireEvent.change(input, { target: { files: [new File(["bad"], "bad.png", { type: "image/png" })] } });
+  const preview = screen.getByRole("img", { name: "Profile picture crop preview" });
+  Object.defineProperties(preview, { naturalWidth: { value: 100 }, naturalHeight: { value: 100 } });
+  fireEvent.load(preview);
   fireEvent.click(screen.getByRole("button", { name: "Upload image" }));
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("could not be read"));
   expect(refresh).not.toHaveBeenCalled();
