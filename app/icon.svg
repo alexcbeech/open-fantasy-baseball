@@ -1,6 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Open Fantasy Baseball">
-  <rect x="8" y="8" width="104" height="104" rx="24" fill="#14213d" />
-  <path d="M32 32 H88 V62 L60 90 L32 62 Z" fill="#eef0f4" />
-  <text x="60" y="57" text-anchor="middle" font-family="'Arial Black', Arial, Helvetica, sans-serif" font-weight="900" font-size="21" fill="#14213d">OFB</text>
-  <path d="M43 70 H77" stroke="#e63946" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.5 6" />
+<rect width="120" height="120" rx="26" fill="#14213d" />
+<g transform="translate(13 13) scale(.783333)">
+  <path d="M2 2 H118 V66 L60 118 L2 66 Z" fill="#eef0f4" />
+  <path d="M7 7 H113 V64 L60 111 L7 64 Z" fill="#14213d" />
+  <path d="M11 11 H109 V62 L60 105 L11 62 Z" fill="#eef0f4" />
+  <!-- Custom outlined lettering stays consistent without a font dependency. -->
+  <g fill="#14213d" fill-rule="evenodd">
+    <path d="M21 15 H35 L41 21 V58 L35 62 L15 65 V22 Z M25 26 V55 L31 53 V26 Z" />
+    <path d="M46 15 H74 V27 H58 V34 H72 V46 H58 V61 L46 63 Z" />
+    <path d="M79 15 H99 L105 21 V35 L100 40 L105 45 V64 L99 69 L79 63 Z M90 26 V34 L95 35 V26 Z M90 46 V55 L95 57 V47 Z" />
+  </g>
+  <g fill="none" stroke="#e63946" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M29 73 Q60 94 91 73" />
+    <path d="M30 69 L29 78 M40 74 L38 84 M50 78 L49 88 M61 79 V90 M72 77 L74 87 M82 73 L85 83 M89 68 L93 77" />
+  </g>
+</g>
 </svg>
