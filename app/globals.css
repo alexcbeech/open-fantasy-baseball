@@ -120,7 +120,9 @@ select {
    page background instead of dark-on-dark. */
 .app-shell--flush {
   background:
-    linear-gradient(180deg, var(--topbar-start) 0, var(--topbar-end) 72px, transparent 72px),
+    linear-gradient(180deg, var(--topbar-start) 0,
+      var(--topbar-end) calc(max(18px, env(safe-area-inset-top)) + 68px),
+      transparent calc(max(18px, env(safe-area-inset-top)) + 68px)),
     var(--bg);
 }
 
@@ -152,8 +154,8 @@ select {
 .brand-mark {
   display: block;
   flex: 0 0 auto;
-  height: 40px;
-  width: 40px;
+  height: 56px;
+  width: 56px;
 }
 
 .brand-text {
@@ -3682,8 +3684,6 @@ p.player-meta,
   align-items: center;
   color: #fff;
   display: flex;
-  /* The mark SVG carries whitespace inside its viewBox, so the visual gap
-     is larger than this number suggests. */
   gap: 10px;
   justify-content: center;
   margin-bottom: 26px;
@@ -3692,8 +3692,8 @@ p.player-meta,
 .auth-brand-mark {
   filter: drop-shadow(0 12px 22px rgb(0 0 0 / 35%));
   flex: 0 0 auto;
-  height: 104px;
-  width: 104px;
+  height: 88px;
+  width: 88px;
 }
 
 .auth-brand .brand-kicker {

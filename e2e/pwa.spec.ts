@@ -22,8 +22,8 @@ test.describe("progressive web app", () => {
     for (const icon of [
       "icon-192.png",
       "icon-512.png",
-      "icon-maskable-v2-192.png",
-      "icon-maskable-v2-512.png",
+      "icon-maskable-v3-192.png",
+      "icon-maskable-v3-512.png",
     ]) {
       const iconResponse = await request.get(`/icons/${icon}`);
       expect(iconResponse.ok(), icon).toBeTruthy();
@@ -43,7 +43,7 @@ test.describe("progressive web app", () => {
     expect(scope).toBe("http://localhost:3100/");
 
     const cacheNames = await page.evaluate(() => caches.keys());
-    expect(cacheNames).toContain("ofb-offline-v2");
+    expect(cacheNames).toContain("ofb-offline-v3");
 
     const offlineHtml = await page.evaluate(async () => {
       const response = await caches.match("/offline.html");

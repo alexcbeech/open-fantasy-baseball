@@ -14,8 +14,8 @@ export function BrandLockup({ kicker, title, clip = false }: { kicker?: string; 
         className="brand-mark"
         src="/brand/ofb-mark.svg"
         alt={markOnly ? "Open Fantasy Baseball" : ""}
-        width={40}
-        height={40}
+        width={56}
+        height={56}
         aria-hidden={markOnly ? undefined : "true"}
       />
       {markOnly ? null : (
