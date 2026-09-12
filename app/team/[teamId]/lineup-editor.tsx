@@ -43,6 +43,8 @@ type LineupEditorProps = {
   canManageAutoStart?: boolean;
   lineupDate?: string;
   todayDate?: string;
+  timeZone?: string;
+  editableFromDate?: string;
   readOnly?: boolean;
   teamId: string;
   initialLineup: LineupPlayer[];
@@ -161,6 +163,8 @@ export function LineupEditor({
   canManageAutoStart = false,
   lineupDate = lineupToday(),
   todayDate = lineupToday(),
+  timeZone = "America/New_York",
+  editableFromDate = lineupToday(),
   readOnly = false,
   teamId,
   initialLineup,
@@ -173,8 +177,8 @@ export function LineupEditor({
 }: LineupEditorProps) {
   const router = useRouter();
   const isToday = lineupDate === todayDate;
-  const isFuture = lineupDate > todayDate;
-  const lockedView = readOnly || lineupDate < todayDate;
+  const isFuture = lineupDate > editableFromDate;
+  const lockedView = readOnly || lineupDate < editableFromDate;
   const [slotByPlayerId, setSlotByPlayerId] = useState(() => slotsFromLineup(initialLineup));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -188,13 +192,13 @@ export function LineupEditor({
   // Poll both today's boxscores and the live-only subset. Daily stat lines
   // remain visible after the final out; only in-progress games get live styling.
   const loadDailyStatus = useCallback(async (): Promise<Record<string, PostedLineupStatus> | null> => {
-    if (isToday && lineupDate !== lineupToday()) {
+    if (isToday && lineupDate !== lineupToday(new Date(), timeZone)) {
       router.refresh();
       return null;
     }
     if (isFuture) return null;
     try {
-      const response = await fetch(`/api/v1/teams/${teamId}/live${isToday ? "" : `?date=${lineupDate}`}`);
+      const response = await fetch(`/api/v1/teams/${teamId}/live?date=${lineupDate}`);
       if (!response.ok) {
         return null;
       }
@@ -217,7 +221,7 @@ export function LineupEditor({
       // Keep the last known maps on a transient failure.
       return null;
     }
-  }, [teamId, lineupDate, isFuture, isToday, router]);
+  }, [teamId, lineupDate, isFuture, isToday, timeZone, router]);
 
   useEffect(() => {
     let active = true;

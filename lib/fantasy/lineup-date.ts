@@ -1,5 +1,5 @@
-export function lineupToday(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+export function lineupToday(now = new Date(), timeZone = "America/New_York"): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
 export function isLineupDate(value: unknown): value is string {

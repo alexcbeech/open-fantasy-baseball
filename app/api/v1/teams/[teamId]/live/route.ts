@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveApiIdentity } from "@/lib/auth/api-identity";
 import { requireTeamViewer } from "@/lib/auth/team-access";
 import { readRoute } from "@/lib/api/read-route";
-import { getLineupDayStatus, getTeamDailyPlayerStatus } from "@/lib/data/mlb-live";
+import { getTeamDailyPlayerStatus } from "@/lib/data/mlb-live";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +31,9 @@ export async function GET(request: Request, { params }: RouteContext) {
     const date = new URL(request.url).searchParams.get("date");
     if (date !== null && !isLineupDate(date)) return NextResponse.json({ error: "Invalid lineup date" }, { status: 400 });
     const today = lineupToday();
-    const status = date && date !== today
-      ? date > today ? { live: {}, today: {}, lineups: {} }
-        : { ...await getLineupDayStatus(teamId, undefined, new Date(`${date}T16:00:00Z`)), live: {}, lineups: {} }
-      : await getTeamDailyPlayerStatus(teamId);
+    const status = date && date > today
+      ? { live: {}, today: {}, lineups: {} }
+      : await getTeamDailyPlayerStatus(teamId, undefined, date ? new Date(`${date}T16:00:00Z`) : new Date());
 
     return NextResponse.json(status);
   });

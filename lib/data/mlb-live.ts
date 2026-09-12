@@ -563,7 +563,7 @@ export async function getLineupDayStatus(teamId: string, baseUrl = defaultBaseUr
   );
 }
 
-/** Live boxscore lines and posted batting-order status for one fantasy team. */
+/** Boxscore lines and posted batting-order status for the supplied day's roster. */
 export async function getTeamDailyPlayerStatus(
   teamId: string,
   baseUrl = defaultBaseUrl,
@@ -584,11 +584,11 @@ export async function getTeamDailyPlayerStatus(
            and le.lineup_date = (
              select max(lineup_date)
              from lineup_entry
-             where team_id = $1 and lineup_date <= (now() at time zone 'America/New_York')::date
+             where team_id = $1 and lineup_date <= $2::date
            )
            and p.mlb_player_id is not null
            and p.current_mlb_team_id is not null`,
-        [teamId],
+        [teamId, todayIso(now)],
       );
       const [todayLines, lineups] = await Promise.all([
         getTodayLinesForPlayers(players.rows, baseUrl, now),

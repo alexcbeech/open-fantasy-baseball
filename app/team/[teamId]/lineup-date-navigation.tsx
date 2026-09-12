@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AutoNavigateForm } from "@/app/auto-navigate-form";
 import { shiftLineupDate } from "@/lib/fantasy/lineup-date";
 
-export function LineupDateNavigation({ teamId, date, today }: { teamId: string; date: string; today: string }) {
+export function LineupDateNavigation({ teamId, date, today, editableFromDate = today }: { teamId: string; date: string; today: string; editableFromDate?: string }) {
   const href = (day: string) => `/team/${teamId}?date=${day}`;
   return <section className="panel" aria-label="Lineup date navigation">
     <AutoNavigateForm action={`/team/${teamId}`}>
@@ -14,7 +14,7 @@ export function LineupDateNavigation({ teamId, date, today }: { teamId: string; 
       <Link className="secondary-button" href={href(today)}>Today</Link>
       <Link className="secondary-button" href={href(shiftLineupDate(date, 1))}>Next day →</Link>
     </nav>
-    <p className="subtle">{date < today ? "Past lineup · locked" : date === today ? "Today's lineup" : "Future lineup · changes apply from this day until the next saved lineup."}</p>
-    {date > today ? <p className="subtle">Roster adds, drops, and trades reset saved future lineups to your updated roster.</p> : null}
+    <p className="subtle">{date === today ? "Today's lineup" : date < today ? "Past lineup" : "Upcoming lineup"}{date < editableFromDate ? " · locked" : date > editableFromDate ? " · changes apply from this day until the next saved lineup." : ""}</p>
+    {date > editableFromDate ? <p className="subtle">Roster adds, drops, and trades reset saved future lineups to your updated roster.</p> : null}
   </section>;
 }

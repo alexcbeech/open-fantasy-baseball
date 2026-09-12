@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { lineupToday } from "../lib/fantasy/lineup-date";
 
 test("completed games retain team stat lines and appear in the player game log", async ({ page }) => {
   const stats = { H: 2, AB: 4, R: 1, HR: 1, RBI: 3 };
   let final = false;
-  await page.route("**/teams/team-2/live", (route) => {
+  await page.route("**/teams/team-2/live?date=*", (route) => {
+    expect(new URL(route.request().url()).searchParams.get("date")).toBe(lineupToday(new Date(), "America/Los_Angeles"));
     const entry = { state: final ? "Final" : "Bottom 7th", stats, points: 21.7 };
     return route.fulfill({ json: { live: final ? {} : { "player-6": entry }, today: { "player-6": entry }, lineups: {} } });
   });
