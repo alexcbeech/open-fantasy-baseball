@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FeedbackReplyComposer } from "./feedback-reply-composer";
 import { feedbackStatuses, type FeedbackRecord, type FeedbackStatus } from "@/lib/data/feedback-schema";
 
 const statusLabels: Record<FeedbackStatus, string> = {
@@ -252,11 +253,12 @@ export function AdminFeedbackList({ initialFeedback }: { initialFeedback: Feedba
                   </div>
                 </div>
               </div>
+              <FeedbackReplyComposer feedback={item} onClosed={() => setItems((current) => current.map((row) => row.id === item.id ? { ...row, status: "closed" } : row))} />
             </div>
           ))}
         </div>
       ) : (
-        <div className="empty-state">No {statusLabels[filter as FeedbackStatus].toLowerCase()} feedback</div>
+        <div className="empty-state">No {filter === "all" ? "" : statusLabels[filter].toLowerCase()} feedback</div>
       )}
     </>
   );

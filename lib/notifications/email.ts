@@ -13,6 +13,9 @@ export type EmailMessage = {
   subject: string;
   html: string;
   text: string;
+  from?: string;
+  replyTo?: string;
+  idempotencyKey?: string;
 };
 
 export type EmailSendResult = { ok: true; id: string | null } | { ok: false; reason: string };
@@ -37,13 +40,15 @@ export async function sendEmail(message: EmailMessage): Promise<EmailSendResult>
       headers: {
         authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "content-type": "application/json",
+        ...(message.idempotencyKey ? { "Idempotency-Key": message.idempotencyKey } : {}),
       },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM_EMAIL,
+        from: message.from ?? process.env.RESEND_FROM_EMAIL,
         to: [message.to],
         subject: message.subject,
         html: message.html,
         text: message.text,
+        ...(message.replyTo ? { reply_to: message.replyTo } : {}),
       }),
       signal: AbortSignal.timeout(10_000),
     });

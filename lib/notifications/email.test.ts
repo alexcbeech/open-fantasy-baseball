@@ -18,6 +18,15 @@ afterEach(() => {
 });
 
 describe("sendEmail via Resend", () => {
+  it("preserves a feedback reply's sender and retry key", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("RESEND_FROM_EMAIL", "new@example.com");
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ id: "sent" })));
+    await sendEmail({ ...message, from: "old@example.com", replyTo: "support@example.com", idempotencyKey: "feedback-reply/one" });
+    const init = vi.mocked(fetch).mock.calls[0][1]!;
+    expect(init.headers).toMatchObject({ "Idempotency-Key": "feedback-reply/one" });
+    expect(JSON.parse(init.body as string)).toMatchObject({ from: "old@example.com", reply_to: "support@example.com" });
+  });
   it("reports not-configured without calling the provider when env is missing", async () => {
     vi.stubEnv("RESEND_API_KEY", "");
     vi.stubEnv("RESEND_FROM_EMAIL", "");
