@@ -72,6 +72,7 @@ export type LeagueSettings = {
 };
 
 export type TeamSummary = {
+  autoStartActive?: boolean;
   logoUrl?: string | null;
   id: string;
   leagueId: string;

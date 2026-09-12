@@ -7,7 +7,7 @@ test("past lineups lock moves; future moves send the chosen date", async ({ page
   await page.goto(`/team/team-1?date=${shiftLineupDate(today, -1)}`);
   await expect(page.getByText("Past lineup · locked")).toBeVisible();
   await expect(page.getByRole("button", { name: "Adley Rutschman: read-only lineup" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Start Active Players" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Start Active Players", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "View day" })).toHaveCount(0);
   await page.getByLabel("Lineup date", { exact: true }).fill("");
   await expect(page).toHaveURL(new RegExp(`date=${shiftLineupDate(today, -1)}$`));

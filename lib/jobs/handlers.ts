@@ -15,7 +15,7 @@ export const jobHandlers: Record<string, JobHandler> = {
   // Waiver resolution + transaction audit. runNightlyProcessing already filters
   // to pending, due claims under `for update`, so a retry is safe.
   nightly_processing: async () => runNightlyProcessing(),
-  // Bot teams run Start Active Players on their own lineups. Re-running finds
+  // Bots and opted-in manager teams run Start Active Players. Re-running finds
   // nothing left to move, so a retry is a no-op.
   set_bot_lineups: async () => setBotLineups(),
   // Recompute every active matchup's category battle from current lineups and
