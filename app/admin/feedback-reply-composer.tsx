@@ -91,7 +91,7 @@ export function FeedbackReplyComposer({ feedback, onClosed }: { feedback: Feedba
         {preview ? <div className="feedback-email-preview">
           <h4>Review before sending</h4>
           <p>From: {settings?.from ?? "Not configured"}<br />Reply-To: {settings?.replyTo ?? "Not configured"}<br />To: {draft.recipient}<br />Subject: {draft.subject}</p>
-          <iframe title="OFB email preview" sandbox="" srcDoc={feedbackEmailHtml(draft.body)} />
+          <iframe title="OFB email preview" sandbox="" srcDoc={feedbackEmailHtml(draft.body, feedback)} />
           <div className="feedback-reply-buttons">
             <button type="button" className="primary-button" disabled={busy || !settings?.configured} onClick={() => void run(() => send(draft, false))}>Send email</button>
             <button type="button" className="secondary-button" disabled={busy || !settings?.configured} onClick={() => void run(() => send(draft, true))}>Send and close feedback</button>

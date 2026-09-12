@@ -1,8 +1,32 @@
-// Shared by the preview and sender; user text is always escaped, never raw HTML.
-export function feedbackEmailText(body: string) {
-  return `${body.trim()}\n\n—\nOpen Fantasy Baseball\nA response to your OFB feedback. You can reply to this email.`;
+import type { FeedbackRecord } from "@/lib/data/feedback-schema";
+
+type FeedbackReference = Pick<FeedbackRecord, "id" | "message" | "category">;
+const site = "https://openfantasy.app";
+const escape = (text: string) => text.replace(/[&<>"']/g, (value) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
+const paragraphs = (text: string) => escape(text.trim()).replace(/\r?\n/g, "<br />");
+
+// Preview and sender share this template; retries retain the persisted payload.
+export function feedbackEmailText(body: string, feedback: FeedbackReference) {
+  return `${body.trim()}\n\nYour original feedback\n${feedback.category === "issue" ? "Issue" : "Idea"} · Reference ${feedback.id}\n${feedback.message}\n\n—\nOpen Fantasy Baseball\nYou can reply directly to this email.\n${site}`;
 }
-export function feedbackEmailHtml(body: string) {
-  const escape = (text: string) => text.replace(/[&<>"']/g, (value) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
-  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#14213d"><h2>Open Fantasy Baseball</h2><div style="white-space:pre-wrap;overflow-wrap:anywhere">${escape(body.trim())}</div><hr><p>A response to your OFB feedback. You can reply to this email.</p></div>`;
+
+export function feedbackEmailHtml(body: string, feedback: FeedbackReference) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#eef0f4;color:#14213d;font-family:Arial,Helvetica,sans-serif">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f4"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #dce1e9;border-radius:12px">
+<tr><td style="padding:28px 24px;background:#14213d;border-radius:12px 12px 0 0;border-bottom:4px solid #e63946">
+<img src="${site}/icons/icon-192.png" width="64" height="64" alt="OFB logo" style="display:block;border:0;margin-bottom:16px">
+<p style="margin:0;color:#ffffff;font-size:22px;line-height:28px;font-weight:bold">Open Fantasy Baseball</p>
+<p style="margin:8px 0 0;color:#dce1e9;font-size:14px;line-height:20px">A reply to your feedback</p></td></tr>
+<tr><td style="padding:28px 24px;font-size:16px;line-height:26px;overflow-wrap:anywhere;word-break:break-word">
+<div>${paragraphs(body)}</div>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;background:#f4f6f9;border-left:3px solid #4c74bb"><tr><td style="padding:18px">
+<h2 style="margin:0 0 8px;font-size:15px;line-height:22px">Your original feedback</h2>
+<p style="margin:0 0 12px;font-size:12px;line-height:18px;color:#526078">${feedback.category === "issue" ? "Issue" : "Idea"} · Reference ${escape(feedback.id)}</p>
+<div style="font-size:14px;line-height:23px">${paragraphs(feedback.message)}</div></td></tr></table>
+<p style="margin:24px 0 0;font-size:14px;line-height:22px;color:#526078">Have more to share? Reply directly to this email.</p></td></tr>
+<tr><td style="padding:20px 24px;border-top:1px solid #dce1e9;font-size:12px;line-height:20px;color:#526078">
+<a href="${site}" style="color:#315c9f;text-decoration:underline;font-weight:bold">Open Fantasy Baseball</a><br>Thank you for helping us improve OFB.</td></tr>
+</table></td></tr></table></body></html>`;
 }

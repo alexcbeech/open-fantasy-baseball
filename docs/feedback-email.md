@@ -21,3 +21,5 @@ The first send attempt persists the exact sender, Reply-To, HTML, text, recipien
 “Sent” means accepted by the provider, not confirmed inbox delivery. A timeout or missing provider receipt displays “Send unconfirmed.” Use **Retry saved reply** instead of composing the same email again. Automatic retries stop after 23 hours, before Resend's 24-hour idempotency window expires. After that, check the provider's sending records before composing another message. This first version does not ingest delivery/bounce webhooks or users' replies; replies arrive in the configured inbox.
 
 Provider reference: https://resend.com/docs/api-reference/emails/send-email
+
+Replies include OFB's logo and colors, the original feedback message, category, and reference ID in both the preview and sent email (with an equivalent plain-text reference). The logo uses the public HTTPS PNG at https://openfantasy.app/icons/icon-192.png; the brand name remains readable when images are blocked. The server loads reference content from the saved feedback record. Retries retain their original stored email payload.

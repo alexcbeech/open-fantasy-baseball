@@ -41,6 +41,9 @@ test("admin saves, previews, retries, and closes feedback without duplicate send
   await expect(page.getByLabel("Message", { exact: true })).toHaveValue("We fixed the date issue.\n<script>Not executable</script>");
   await page.getByRole("button", { name: "Preview email", exact: true }).click();
   await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText("<script>Not executable</script>", { exact: false })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText(feedback.message, { exact: true })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText("Issue · Reference " + feedbackId)).toBeVisible();
+  await expect(page.frameLocator('iframe[title="OFB email preview"]').getByRole("img", { name: "OFB logo" })).toBeVisible();
   await expect(page.getByText("Reply-To: inbox@example.com", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Send and close feedback", exact: true }).click();
   await expect(page.getByRole("region", { name: "Feedback email reply", exact: true }).getByRole("alert")).toContainText("could not be confirmed");
