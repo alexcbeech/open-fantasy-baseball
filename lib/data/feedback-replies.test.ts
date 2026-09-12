@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/notifications/email";
 
 vi.mock("@/lib/db/client", () => ({ query: vi.fn(), getPool: vi.fn(), isDatabaseConfigured: () => true }));
 vi.mock("@/lib/notifications/email", () => ({ sendEmail: vi.fn(), isEmailConfigured: () => true }));
+vi.mock("./feedback", () => ({ getFeedbackById: async () => ({ id: "feedback", category: "issue", message: "Original feedback" }) }));
 const reply = { id: "reply", feedbackId: "feedback", recipient: "user@example.com", subject: "Thanks", body: "Hello",
   revision: 1, status: "draft", firstAttemptAt: null, fromAddress: "ofb@example.com", replyTo: "support@example.com",
   html: "<p>Hello</p>", emailText: "Hello", closeFeedback: true };
@@ -38,6 +39,7 @@ describe("feedback reply delivery", () => {
     vi.mocked(sendEmail).mockResolvedValueOnce({ ok: true, id: "provider" });
     tx.query.mockResolvedValue({ rows: [{ ...reply, status: "sent" }] });
     await sendFeedbackReply("feedback", "reply", 1, true, "admin");
+    expect(vi.mocked(query).mock.calls[1][1]).toEqual(expect.arrayContaining([expect.stringContaining("Your original feedback"), expect.stringContaining("Original feedback")]));
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: "feedback-reply/reply", html: reply.html, from: reply.fromAddress }));
     expect(tx.query).toHaveBeenCalledWith("update feedback set status = 'closed' where id = $1", ["feedback"]);
     expect(tx.query).toHaveBeenLastCalledWith("commit");

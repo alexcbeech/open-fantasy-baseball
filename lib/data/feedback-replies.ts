@@ -57,6 +57,8 @@ export async function sendFeedbackReply(feedbackId: string, id: string, revision
   if (existing.firstAttemptAt && !canRetryFeedbackReply(existing.firstAttemptAt)) {
     throw new FeedbackReplyError("The safe retry window has expired. Check this reply in Resend before composing another email.");
   }
+  const feedback = await getFeedbackById(feedbackId);
+  if (!feedback) throw new FeedbackReplyError("Feedback was not found.", 404);
   // Commit the immutable payload BEFORE contacting Resend. A crashed request can
   // resume after the lease, using the same payload and key even after a deployment.
   const claimed = await query<FeedbackReply & { html: string; emailText: string }>(`update feedback_reply set
@@ -69,7 +71,7 @@ export async function sendFeedbackReply(feedbackId: string, id: string, revision
       and (status in ('draft', 'unconfirmed') or (status = 'sending' and attempt_at < now() - interval '1 minute'))
       and (first_attempt_at is null or first_attempt_at > now() - interval '23 hours')
     returning ${columns}, html, email_text as "emailText"`,
-  [feedbackId, id, revision, settings.from, settings.replyTo, feedbackEmailHtml(existing.body), feedbackEmailText(existing.body), closeFeedback, sender]);
+  [feedbackId, id, revision, settings.from, settings.replyTo, feedbackEmailHtml(existing.body, feedback), feedbackEmailText(existing.body, feedback), closeFeedback, sender]);
   const reply = claimed.rows[0];
   if (!reply) throw new FeedbackReplyError("This reply is already sending or has changed. Reload replies in a minute.");
   const delivery = await sendEmail({ to: reply.recipient, from: reply.fromAddress!, replyTo: reply.replyTo!,
