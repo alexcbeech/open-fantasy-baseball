@@ -23,3 +23,4 @@ The first send attempt persists the exact sender, Reply-To, HTML, text, recipien
 Provider reference: https://resend.com/docs/api-reference/emails/send-email
 
 Replies include OFB's logo and colors, the original feedback message, category, and reference ID in both the preview and sent email (with an equivalent plain-text reference). The logo uses the public HTTPS PNG at https://openfantasy.app/icons/icon-192.png; the brand name remains readable when images are blocked. The server loads reference content from the saved feedback record. Retries retain their original stored email payload.
+Preview email opens a modal dialog with a scrollable email body and visible send controls. Close preview or Escape returns to the saved draft.

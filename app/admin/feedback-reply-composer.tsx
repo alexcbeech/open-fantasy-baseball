@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FeedbackRecord } from "@/lib/data/feedback-schema";
 import type { FeedbackReply, ReplySettings } from "@/lib/data/feedback-reply-schema";
 import { feedbackEmailHtml } from "@/lib/notifications/feedback-email";
@@ -16,6 +16,16 @@ export function FeedbackReplyComposer({ feedback, onClosed }: { feedback: Feedba
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState(false);
+  const previewDialog = useRef<HTMLDialogElement>(null);
+  const previewButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!preview) return;
+    const dialog = previewDialog.current;
+    const overflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => { dialog?.close(); document.body.style.overflow = overflow; previewButton.current?.focus(); };
+  }, [preview]);
   const url = `/api/v1/feedback/${feedback.id}/replies`;
   const dirty = draft && (subject !== draft.subject || body !== draft.body);
 
@@ -67,7 +77,7 @@ export function FeedbackReplyComposer({ feedback, onClosed }: { feedback: Feedba
       <h3>Email reply</h3>
       <p className="subtle">To: {feedback.userEmail ?? "No email address recorded"}</p>
       {settings && !settings.configured ? <p className="status-banner">Sending is unavailable until OFB’s sender and Reply-To inbox are configured. You can save drafts.</p> : null}
-      {error ? <p className="status-banner bad" role="alert">{error}</p> : null}
+      {error && !preview ? <p className="status-banner bad" role="alert">{error}</p> : null}
       {notice ? <p className="status-banner" role="status">{notice}</p> : null}
       <div className="feedback-reply-buttons">
         <button type="button" className="secondary-button" disabled={busy} onClick={() => void run(load)}>{dirty ? "Discard changes and reload" : "Reload replies"}</button>
@@ -85,18 +95,23 @@ export function FeedbackReplyComposer({ feedback, onClosed }: { feedback: Feedba
         <div className="feedback-reply-buttons">
           <button className="secondary-button" type="button" disabled={busy || !subject.trim()}
             onClick={() => void run(async () => { await save(); })}>Save draft</button>
-          <button className="secondary-button" type="button" disabled={busy || !body.trim() || !subject.trim()}
+          <button ref={previewButton} className="secondary-button" type="button" aria-haspopup="dialog" disabled={busy || !body.trim() || !subject.trim()}
             onClick={() => void run(async () => { if (!dirty || await save()) setPreview(true); })}>Preview email</button>
         </div>
-        {preview ? <div className="feedback-email-preview">
-          <h4>Review before sending</h4>
-          <p>From: {settings?.from ?? "Not configured"}<br />Reply-To: {settings?.replyTo ?? "Not configured"}<br />To: {draft.recipient}<br />Subject: {draft.subject}</p>
+        {preview ? <dialog ref={previewDialog} className="feedback-email-preview" aria-labelledby={`${inputId}-preview-title`}
+          onCancel={(event) => { event.preventDefault(); setPreview(false); }}>
+          <header className="feedback-email-preview-header">
+            <h3 id={`${inputId}-preview-title`}>Review before sending</h3>
+            <button type="button" className="secondary-button" onClick={() => setPreview(false)}>Close preview</button>
+          </header>
+          <p className="feedback-email-envelope">From: {settings?.from ?? "Not configured"}<br />Reply-To: {settings?.replyTo ?? "Not configured"}<br />To: {draft.recipient}<br />Subject: {draft.subject}</p>
+          {error ? <p className="status-banner bad" role="alert">{error}</p> : null}
           <iframe title="OFB email preview" sandbox="" srcDoc={feedbackEmailHtml(draft.body, feedback)} />
           <div className="feedback-reply-buttons">
             <button type="button" className="primary-button" disabled={busy || !settings?.configured} onClick={() => void run(() => send(draft, false))}>Send email</button>
             <button type="button" className="secondary-button" disabled={busy || !settings?.configured} onClick={() => void run(() => send(draft, true))}>Send and close feedback</button>
           </div>
-        </div> : null}
+        </dialog> : null}
       </div> : null}
       <h4>Reply history</h4>
       {replies.filter((reply) => reply.status !== "draft").map((reply) => <article className="feedback-reply-history" key={reply.id}>

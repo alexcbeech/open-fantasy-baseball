@@ -40,6 +40,16 @@ test("admin saves, previews, retries, and closes feedback without duplicate send
   await openReplies();
   await expect(page.getByLabel("Message", { exact: true })).toHaveValue("We fixed the date issue.\n<script>Not executable</script>");
   await page.getByRole("button", { name: "Preview email", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review before sending" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Close preview" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Preview email", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Preview email", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole("button", { name: "Preview email", exact: true }).click();
+  await expect(dialog).toBeVisible();
   await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText("<script>Not executable</script>", { exact: false })).toBeVisible();
   await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText(feedback.message, { exact: true })).toBeVisible();
   await expect(page.frameLocator('iframe[title="OFB email preview"]').getByText("Issue · Reference " + feedbackId)).toBeVisible();
