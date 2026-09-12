@@ -28,6 +28,7 @@ import { getPlayerWatchForTeam, listPlayers } from "@/lib/data/players";
 import { listLeagueTransactions } from "@/lib/data/transactions";
 import { TransactionLog } from "./transaction-log";
 import { getLineupForTeam, getTeamSummary } from "@/lib/data/teams";
+import { getProfilePreferences } from "@/lib/data/profile";
 import { formatDraftTime } from "@/lib/draft/schedule";
 import { formatScoringType } from "@/lib/fantasy/scoring";
 import { hasTradeDeadlinePassed } from "@/lib/fantasy/trade-deadline";
@@ -61,9 +62,7 @@ const tabs = ["Team", "Matchup", "Players", "League"] as const;
 export default async function TeamPage({ params, searchParams }: TeamPageProps) {
   const { teamId } = await params;
   const { tab, period, matchup, date } = await searchParams;
-  const today = lineupToday();
   if (date !== undefined && !isLineupDate(date)) notFound();
-  const lineupDate = date ?? today;
   const selectedTab = tabs.find((candidate) => candidate.toLowerCase() === tab?.toLowerCase()) ?? "Team";
   const authEnabled = isNeonAuthConfigured();
   const currentUser = await getCurrentOfbUser();
@@ -71,6 +70,12 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
   if (!currentUser && authEnabled) {
     redirect("/auth/sign-in");
   }
+
+  const profile = await getProfilePreferences(currentUser?.email);
+  const now = new Date();
+  const today = lineupToday(now, profile.timeZone);
+  const editableFromDate = lineupToday(now);
+  const lineupDate = date ?? today;
 
   // With a real database, a non-UUID id (e.g. the demo "team-1") can't match a
   // row, so the data layer would silently fall back to mock data. 404 instead
@@ -211,6 +216,8 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
           <TeamTab
             lineupDate={lineupDate}
             today={today}
+            timeZone={profile.timeZone}
+            editableFromDate={editableFromDate}
             canManage={viewerManagesTeam}
             autoStartActive={team.autoStartActive ?? false}
             teamId={team.id}
@@ -243,7 +250,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 }
 
 function TeamTab({
-  lineupDate, today, canManage, autoStartActive,
+  lineupDate, today, timeZone, editableFromDate, canManage, autoStartActive,
   teamId,
   lineup,
   watchItems,
@@ -255,6 +262,8 @@ function TeamTab({
 }: {
   lineupDate: string;
   today: string;
+  timeZone: string;
+  editableFromDate: string;
   canManage: boolean;
   autoStartActive: boolean;
   teamId: string;
@@ -273,12 +282,14 @@ function TeamTab({
 
   return (
     <div className="team-tab">
-      <LineupDateNavigation teamId={teamId} date={lineupDate} today={today} />
+      <LineupDateNavigation teamId={teamId} date={lineupDate} today={today} editableFromDate={editableFromDate} />
       <LineupEditor
         key={`${lineupDate}:${lineupVersion}`}
         lineupDate={lineupDate}
         todayDate={today}
-        readOnly={!canManage || lineupDate < today}
+        timeZone={timeZone}
+        editableFromDate={editableFromDate}
+        readOnly={!canManage || lineupDate < editableFromDate}
         canManageAutoStart={canManage}
         autoStartActive={autoStartActive}
         teamId={teamId}
