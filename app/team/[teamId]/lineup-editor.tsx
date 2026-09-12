@@ -36,8 +36,11 @@ import { prefetchPlayerDetail } from "./player-detail-cache";
 import { PlayerDetailSheet } from "./player-detail-sheet";
 import { PositionBadge } from "./position-badge";
 import { ProbableStarterCheck } from "./probable-starter-check";
+import { AutoStartActive, StartActiveHelp } from "./auto-start-active";
 
 type LineupEditorProps = {
+  autoStartActive?: boolean;
+  canManageAutoStart?: boolean;
   lineupDate?: string;
   todayDate?: string;
   readOnly?: boolean;
@@ -154,6 +157,8 @@ function PlayerNewsIcon({ headline }: { headline: string }) {
 }
 
 export function LineupEditor({
+  autoStartActive = false,
+  canManageAutoStart = false,
   lineupDate = lineupToday(),
   todayDate = lineupToday(),
   readOnly = false,
@@ -434,10 +439,14 @@ export function LineupEditor({
       <section className="panel" aria-labelledby="lineup-heading">
         <div className="lineup-header">
           <h2 id="lineup-heading">Lineup</h2>
-          <button className="start-active-button" type="button" onClick={startActivePlayers} disabled={lockedView}>
-            Start Active Players
-          </button>
+          <div className="start-active-actions">
+            <button className="start-active-button" type="button" onClick={startActivePlayers} disabled={lockedView}>
+              Start Active Players
+            </button>
+            <StartActiveHelp />
+          </div>
         </div>
+        <AutoStartActive key={`${teamId}:${autoStartActive}`} teamId={teamId} initialEnabled={autoStartActive} canManage={canManageAutoStart} />
         {error ? (
           <div className="status-banner bad" role="alert">
             {error}

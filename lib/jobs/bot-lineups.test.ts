@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LineupPlayer, Player, RosterSlot } from "@/lib/fantasy/types";
 import { computeBotLineupUpdate } from "./bot-lineups";
+import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 
 type PlayerOverrides = Partial<Player> & { id: string; positions: RosterSlot[] };
 
@@ -26,6 +27,17 @@ function entry(slot: RosterSlot, overrides: PlayerOverrides): LineupPlayer {
 }
 
 describe("computeBotLineupUpdate", () => {
+  it("honors custom league capacities and leaves IL/NA players in place", () => {
+    const lineup = [
+      entry("BN", { id: "best", positions: ["OF"], projectedStats: { HR: 40 } }),
+      entry("OF", { id: "other", positions: ["OF"], projectedStats: { HR: 10 } }),
+      entry("IL", { id: "injured", positions: ["OF"], status: "injured" }),
+      entry("NA", { id: "minor", positions: ["OF"], status: "minors" }),
+    ];
+    const slots = { ...defaultRosterSlots, OF: 1, UTIL: 0, NA: 1 };
+    const update = computeBotLineupUpdate(lineup, "daily", beforeGames, slots);
+    expect(update).toEqual({ kind: "update", entries: [{ playerId: "best", slot: "OF" }, { playerId: "other", slot: "BN" }] });
+  });
   it("starts a benched player with a game over a starter without one", () => {
     // Both UTIL seats are held by playing hitters, so the idle catcher has
     // nowhere to slide: the playing catcher takes C and the idle one is benched.

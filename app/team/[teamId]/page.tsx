@@ -212,6 +212,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
             lineupDate={lineupDate}
             today={today}
             canManage={viewerManagesTeam}
+            autoStartActive={team.autoStartActive ?? false}
             teamId={team.id}
             lineup={teamLineup}
             watchItems={watchItems}
@@ -242,7 +243,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
 }
 
 function TeamTab({
-  lineupDate, today, canManage,
+  lineupDate, today, canManage, autoStartActive,
   teamId,
   lineup,
   watchItems,
@@ -255,6 +256,7 @@ function TeamTab({
   lineupDate: string;
   today: string;
   canManage: boolean;
+  autoStartActive: boolean;
   teamId: string;
   lineup: LineupPlayer[];
   watchItems: PlayerWatchItem[];
@@ -277,6 +279,8 @@ function TeamTab({
         lineupDate={lineupDate}
         todayDate={today}
         readOnly={!canManage || lineupDate < today}
+        canManageAutoStart={canManage}
+        autoStartActive={autoStartActive}
         teamId={teamId}
         initialLineup={lineup}
         scoringType={scoringType}

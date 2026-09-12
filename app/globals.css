@@ -1012,6 +1012,18 @@ select {
   padding: 8px 12px;
 }
 
+.start-active-actions, .auto-start-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.auto-start-setting { margin-bottom: 1rem; font-size: 0.85rem; }
+.auto-start-row { justify-content: space-between; }
+.start-active-help { border: 1px solid currentColor; border-radius: 50%; width: 2rem; height: 2rem; background: transparent; color: inherit; cursor: pointer; }
+.start-active-dialog { max-width: min(34rem, calc(100vw - 2rem)); max-height: 85dvh; overflow: auto; border: 0; border-radius: 1rem; padding: 1.5rem; line-height: 1.6; }
+.start-active-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+
 .start-active-button:hover {
   background: var(--surface-strong);
 }

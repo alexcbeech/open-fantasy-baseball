@@ -127,6 +127,7 @@ const teamSummarySql = `
     l.name as league_name,
     ft.name as team_name,
     ft.logo_url,
+    ft.auto_start_active,
     u.display_name as manager_name,
     l.scoring_type,
     sp.label as matchup_label,
