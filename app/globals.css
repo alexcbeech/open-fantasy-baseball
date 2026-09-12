@@ -1488,6 +1488,65 @@ button.row {
   margin: 0;
 }
 
+.transaction-summary {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 4px;
+}
+
+.transaction-player {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 24px auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.transaction-player-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.transaction-player-info strong {
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.transaction-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.transaction-player-add .transaction-label,
+.transaction-player-add .transaction-marker {
+  color: var(--win);
+}
+
+.transaction-player-drop .transaction-label,
+.transaction-player-drop .transaction-marker {
+  color: var(--loss);
+}
+
+.transaction-marker {
+  font-size: 24px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.confirm-panel .transaction-note {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 2px 0 4px;
+}
+
 .confirm-panel-actions {
   display: flex;
   gap: 8px;
