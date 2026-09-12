@@ -15,11 +15,11 @@ export function feedbackEmailHtml(body: string, feedback: FeedbackReference) {
 <body style="margin:0;padding:0;background:#eef0f4;color:#14213d;font-family:Arial,Helvetica,sans-serif">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f4"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #dce1e9;border-radius:12px">
-<tr><td style="padding:28px 24px;background:#14213d;border-radius:12px 12px 0 0;border-bottom:4px solid #e63946">
-<img src="${site}/icons/icon-192.png" width="64" height="64" alt="OFB logo" style="display:block;border:0;margin-bottom:16px">
-<p style="margin:0;color:#ffffff;font-size:22px;line-height:28px;font-weight:bold">Open Fantasy Baseball</p>
-<p style="margin:8px 0 0;color:#dce1e9;font-size:14px;line-height:20px">A reply to your feedback</p></td></tr>
-<tr><td style="padding:28px 24px;font-size:16px;line-height:26px;overflow-wrap:anywhere;word-break:break-word">
+<tr><td style="padding:18px 16px;background:#14213d;border-radius:12px 12px 0 0;border-bottom:4px solid #e63946">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+<td width="44" style="width:44px;vertical-align:middle"><img src="${site}/icons/icon-192.png" width="44" height="44" alt="OFB logo" style="display:block;border:0"></td>
+<td style="padding-left:10px;vertical-align:middle;color:#ffffff;font-size:16px;line-height:22px;font-weight:bold;white-space:nowrap">Open Fantasy Baseball</td>
+</tr></table></td></tr><tr><td style="padding:28px 24px;font-size:16px;line-height:26px;overflow-wrap:anywhere;word-break:break-word">
 <div>${paragraphs(body)}</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:28px;background:#f4f6f9;border-left:3px solid #4c74bb"><tr><td style="padding:18px">
 <h2 style="margin:0 0 8px;font-size:15px;line-height:22px">Your original feedback</h2>

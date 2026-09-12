@@ -16,6 +16,7 @@ describe("feedback email", () => {
     expect(html).toContain("Issue · Reference feedback-123");
     expect(html).toContain('src="https://openfantasy.app/icons/icon-192.png"');
     expect(html).toContain('alt="OFB logo"');
+    expect(html).not.toContain("A reply to your feedback");
     const text = feedbackEmailText(" Thanks! ", feedback);
     expect(text).toContain("Thanks!\n\nYour original feedback");
     expect(text).toContain(feedback.message);
