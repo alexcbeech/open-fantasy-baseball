@@ -5,7 +5,7 @@ import { useBodyScrollLock } from "@/app/use-body-scroll-lock";
 import { defaultRosterSlots } from "@/lib/fantasy/defaults";
 import { tradeIssues, type TradeRosterPlayer } from "@/lib/fantasy/trade-evaluation";
 import type { LineupPlayer } from "@/lib/fantasy/types";
-import { PlayerAvatar } from "./player-avatar";
+import { RosterPickRow } from "./roster-pick-row";
 
 type TradeProposalSheetProps = {
   leagueId: string;
@@ -156,20 +156,12 @@ export function TradeProposalSheet({
     lineup
       .filter((entry) => !excludeIds?.has(entry.player.id))
       .map((entry) => (
-        <label className="trade-pick-row" key={entry.player.id}>
-          <input
-            type="checkbox"
-            checked={selected.has(entry.player.id)}
-            onChange={() => onToggle(entry.player.id)}
-          />
-          <PlayerAvatar mlbPlayerId={entry.player.mlbPlayerId} name={entry.player.name} />
-          <span className="player-main">
-            <span className="player-name">{entry.player.name}</span>
-            <span className="player-meta">
-              {entry.player.mlbTeam} &ndash; {entry.player.positions.join(", ")}
-            </span>
-          </span>
-        </label>
+        <RosterPickRow
+          key={entry.player.id}
+          player={entry.player}
+          selected={selected.has(entry.player.id)}
+          onSelect={() => onToggle(entry.player.id)}
+        />
       ));
 
   return (

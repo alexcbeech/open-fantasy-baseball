@@ -7,6 +7,7 @@ import { playerRecentForm, playerStarRating, type PlayerStarRating } from "@/lib
 import { liveLineSummary, playerOverviewSummary, playerStatusLabel } from "@/lib/fantasy/player-view";
 import type { LivePlayerStatus, Player, PlayerDetail, PlayerGameLog, PlayerStatWindow, PlayerValueMetrics } from "@/lib/fantasy/types";
 import { PlayerAvatar } from "./player-avatar";
+import { RosterPickRow } from "./roster-pick-row";
 
 export type PlayerAction = "add" | "drop" | "move-to-il" | "move-to-na" | "claim" | "cancel-claim";
 
@@ -65,6 +66,8 @@ export function PlayerDetailView({
   const [confirmingAction, setConfirmingAction] = useState<"add" | "drop" | "claim" | null>(null);
   const [claimBid, setClaimBid] = useState("0");
   const [dropPlayerId, setDropPlayerId] = useState("");
+  const [reviewingDrop, setReviewingDrop] = useState(false);
+  const selectedDrop = player.dropCandidates?.find((candidate) => candidate.id === dropPlayerId);
   const tabbed = variant === "card";
   const health = { ...healthBadges[player.status], label: playerStatusLabel(player) };
   const summary = playerOverviewSummary(player);
@@ -74,7 +77,12 @@ export function PlayerDetailView({
     (confirmingAction === "add" || confirmingAction === "claim") && Boolean(player.management.needsDropToAdd);
 
   function confirmAction() {
-    if (!confirmingAction || (dropRequired && !dropPlayerId)) {
+    if (!confirmingAction || (dropRequired && !selectedDrop)) {
+      return;
+    }
+
+    if (dropRequired && !reviewingDrop) {
+      setReviewingDrop(true);
       return;
     }
 
@@ -88,6 +96,7 @@ export function PlayerDetailView({
     onAction(confirmingAction, Object.keys(options).length ? options : undefined);
     setConfirmingAction(null);
     setDropPlayerId("");
+    setReviewingDrop(false);
   }
 
   const confirmTitles = { add: "Add Player", drop: "Drop Player", claim: "Place Waiver Claim" } as const;
@@ -142,7 +151,7 @@ export function PlayerDetailView({
 
       {confirmingAction ? (
         <div className="confirm-panel" role="alertdialog" aria-labelledby="confirm-action-heading" aria-describedby="confirm-action-detail">
-          <h4 id="confirm-action-heading">{confirmTitles[confirmingAction]}</h4>
+          <h4 id="confirm-action-heading">{dropRequired ? (reviewingDrop ? "Review Add and Drop" : "Select a Player to Drop") : confirmTitles[confirmingAction]}</h4>
           <p id="confirm-action-detail">
             {confirmingAction === "add" ? (
               <>
@@ -173,29 +182,40 @@ export function PlayerDetailView({
               />
             </label>
           ) : null}
-          {dropRequired ? (
-            <label className="claim-bid-field">
-              Your roster is full — choose a player to drop with this {confirmingAction === "add" ? "add" : "claim"}
-              <select value={dropPlayerId} onChange={(event) => setDropPlayerId(event.target.value)}>
-                <option value="">Select a player to drop</option>
+          {dropRequired && !reviewingDrop ? (
+            <section aria-labelledby="drop-selection-heading">
+              <h5 id="drop-selection-heading">Your team &mdash; select one player to drop</h5>
+              <p>Your roster is full. Choose a player to make room for {player.name}.</p>
+              <div className="trade-pick-list" role="radiogroup" aria-labelledby="drop-selection-heading">
                 {(player.dropCandidates ?? []).map((candidate) => (
-                  <option value={candidate.id} key={candidate.id}>
-                    {candidate.name}
-                    {candidate.positions.length ? ` (${candidate.positions.join(", ")})` : ""}
-                  </option>
+                  <RosterPickRow key={candidate.id} player={candidate} type="radio" name="drop-player"
+                    selected={dropPlayerId === candidate.id} onSelect={() => setDropPlayerId(candidate.id)} />
                 ))}
-              </select>
-            </label>
+              </div>
+              {!player.dropCandidates?.length ? <p role="status">No players are eligible to drop right now.</p> : null}
+            </section>
+          ) : null}
+          {dropRequired && reviewingDrop && selectedDrop ? (
+            <section aria-label="Transaction summary">
+              <h5>{confirmingAction === "claim" ? "You add if the claim succeeds" : "You add"}</h5>
+              <p><strong>{player.name}</strong> &middot; {player.positions.join(", ")} &middot; {player.mlbTeam}</p>
+              <h5>{confirmingAction === "claim" ? "You drop if the claim succeeds" : "You drop"}</h5>
+              <p><strong>{selectedDrop.name}</strong> &middot; {selectedDrop.positions.join(", ")}</p>
+              <p>{confirmingAction === "claim"
+                ? "The selected player stays on your team unless this waiver claim succeeds."
+                : "The dropped player will leave your lineup and go on waivers."}</p>
+              <button className="secondary-button" type="button" onClick={() => setReviewingDrop(false)}>Change drop player</button>
+            </section>
           ) : null}
           <div className="confirm-panel-actions">
             <button
               className="primary-button"
               type="button"
-              disabled={actionInFlight || (dropRequired && !dropPlayerId)}
+              disabled={actionInFlight || (dropRequired && !selectedDrop)}
               aria-busy={actionInFlight && activeAction === confirmingAction}
               onClick={confirmAction}
             >
-              {confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
+              {dropRequired ? (!reviewingDrop ? "Review Add and Drop" : confirmingAction === "claim" ? "Confirm Claim and Drop" : "Confirm Add and Drop") : confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
             </button>
             <button
               className="secondary-button"
@@ -203,6 +223,7 @@ export function PlayerDetailView({
               onClick={() => {
                 setConfirmingAction(null);
                 setDropPlayerId("");
+                setReviewingDrop(false);
               }}
             >
               Cancel
@@ -211,7 +232,7 @@ export function PlayerDetailView({
         </div>
       ) : null}
 
-      <div className="player-actions" aria-label="Player management actions">
+      {!confirmingAction ? <div className="player-actions" aria-label="Player management actions">
         {player.management.canClaim ? (
           <button
             className="secondary-button"
@@ -261,7 +282,7 @@ export function PlayerDetailView({
         >
           {activeAction === "move-to-na" ? "Moving..." : "NA"}
         </button>
-      </div>
+      </div> : null}
 
       {tabbed ? (
         <div className="detail-tabs" role="tablist" aria-label="Player detail sections">
