@@ -156,7 +156,6 @@ export function PlayerDetailView({
             {confirmingAction === "add" ? (
               <>
                 Add <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) to your team?
-                They&apos;ll fill an open eligible lineup slot, or your bench if every slot is taken.
               </>
             ) : confirmingAction === "drop" ? (
               <>
@@ -204,7 +203,6 @@ export function PlayerDetailView({
               <p>{confirmingAction === "claim"
                 ? "The selected player stays on your team unless this waiver claim succeeds."
                 : "The dropped player will leave your lineup and go on waivers."}</p>
-              <button className="secondary-button" type="button" onClick={() => setReviewingDrop(false)}>Change drop player</button>
             </section>
           ) : null}
           <div className="confirm-panel-actions">
@@ -215,7 +213,7 @@ export function PlayerDetailView({
               aria-busy={actionInFlight && activeAction === confirmingAction}
               onClick={confirmAction}
             >
-              {dropRequired ? (!reviewingDrop ? "Review Add and Drop" : confirmingAction === "claim" ? "Confirm Claim and Drop" : "Confirm Add and Drop") : confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
+              {dropRequired ? "Confirm" : confirmingAction === "add" ? "Confirm Add" : confirmingAction === "drop" ? "Confirm Drop" : "Confirm Claim"}
             </button>
             <button
               className="secondary-button"
