@@ -153,7 +153,9 @@ export function PlayerDetailView({
         <div className="confirm-panel" role="alertdialog" aria-labelledby="confirm-action-heading" aria-describedby="confirm-action-detail">
           <h4 id="confirm-action-heading">{dropRequired ? (reviewingDrop ? "Review Add and Drop" : "Select a Player to Drop") : confirmTitles[confirmingAction]}</h4>
           <p id="confirm-action-detail">
-            {confirmingAction === "add" ? (
+            {dropRequired && reviewingDrop ? (
+              "Review your roster change before confirming."
+            ) : confirmingAction === "add" ? (
               <>
                 Add <strong>{player.name}</strong> ({player.positions.join(", ")} &middot; {player.mlbTeam}) to your team?
               </>
@@ -195,14 +197,28 @@ export function PlayerDetailView({
             </section>
           ) : null}
           {dropRequired && reviewingDrop && selectedDrop ? (
-            <section aria-label="Transaction summary">
-              <h5>{confirmingAction === "claim" ? "You add if the claim succeeds" : "You add"}</h5>
-              <p><strong>{player.name}</strong> &middot; {player.positions.join(", ")} &middot; {player.mlbTeam}</p>
-              <h5>{confirmingAction === "claim" ? "You drop if the claim succeeds" : "You drop"}</h5>
-              <p><strong>{selectedDrop.name}</strong> &middot; {selectedDrop.positions.join(", ")}</p>
-              <p>{confirmingAction === "claim"
-                ? "The selected player stays on your team unless this waiver claim succeeds."
-                : "The dropped player will leave your lineup and go on waivers."}</p>
+            <section className="transaction-summary" aria-label="Transaction summary">
+              <div className="transaction-player transaction-player-add">
+                <span className="transaction-marker" aria-hidden="true">+</span>
+                <PlayerAvatar mlbPlayerId={player.mlbPlayerId} name={player.name} />
+                <div className="transaction-player-info">
+                  <span className="transaction-label">You add</span>
+                  <strong>{player.name}</strong>
+                  <span className="player-meta">{player.positions.join(", ")} &middot; {player.mlbTeam}</span>
+                </div>
+              </div>
+              <div className="transaction-player transaction-player-drop">
+                <span className="transaction-marker" aria-hidden="true">&minus;</span>
+                <PlayerAvatar name={selectedDrop.name} />
+                <div className="transaction-player-info">
+                  <span className="transaction-label">You drop</span>
+                  <strong>{selectedDrop.name}</strong>
+                  <span className="player-meta">{selectedDrop.positions.join(", ")}</span>
+                </div>
+              </div>
+              <p className="transaction-note">{confirmingAction === "claim"
+                ? "Both moves happen only if your waiver claim succeeds."
+                : "The dropped player will go on waivers."}</p>
             </section>
           ) : null}
           <div className="confirm-panel-actions">

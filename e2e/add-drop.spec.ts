@@ -43,7 +43,7 @@ for (const action of ["add", "claim"] as const) {
     await expect(detail.getByRole("radio", { name: /First Teammate/ })).not.toBeChecked();
     await review.click();
     await expect(summary).toContainText("Second Teammate");
-    if (action === "claim") await expect(summary).toContainText("unless this waiver claim succeeds");
+    if (action === "claim") await expect(summary).toContainText("Both moves happen only if your waiver claim succeeds.");
     await detail.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
     expect(submissions[0]).toEqual({ action, dropPlayerId: "drop-2", ...(action === "claim" ? { bid: 12 } : {}) });
