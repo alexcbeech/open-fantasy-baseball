@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getCurrentOfbUser, getNeonAuth } from "@/lib/auth/neon-auth";
+import { getNeonAuth } from "@/lib/auth/neon-auth";
 import { isAccountBlocked } from "@/lib/auth/account-status";
 
 export type AuthFormState = {
@@ -30,9 +30,18 @@ export async function signInWithEmail(_previousState: AuthFormState, formData: F
   if (result.error) {
     return { error: result.error.message || "Failed to sign in." };
   }
-  if (!(await getCurrentOfbUser())) {
+  // Neon reads getSession() from incoming request headers. The new session
+  // cookie is only sent with this response, so it is not available there yet.
+  // Check the authenticated identity now; normal access checks run after redirect.
+  const user = result.data?.user;
+  try {
+    if (!user || await isAccountBlocked(user.email, user.id)) {
+      await auth.signOut();
+      return { error: "Sign-in is unavailable for this account. Contact an administrator." };
+    }
+  } catch {
     await auth.signOut();
-    return { error: "Sign-in is unavailable for this account. Contact an administrator." };
+    return { error: "Sign-in is temporarily unavailable. Please try again shortly." };
   }
 
   // Only league-invite landings may override the post-sign-in destination;
