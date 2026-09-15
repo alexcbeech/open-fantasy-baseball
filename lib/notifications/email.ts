@@ -6,6 +6,8 @@
  * keeps local dev and demo mode working without an account.
  */
 
+import { DeliverySuppressed, withEligibleRecipient } from "./recipient-guard";
+
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 export type EmailMessage = {
@@ -16,9 +18,10 @@ export type EmailMessage = {
   from?: string;
   replyTo?: string;
   idempotencyKey?: string;
+  createdAt?: string | Date;
 };
 
-export type EmailSendResult = { ok: true; id: string | null } | { ok: false; reason: string };
+export type EmailSendResult = { ok: true; id: string | null } | { ok: false; reason: string; suppressed?: boolean };
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
@@ -30,6 +33,14 @@ export function isEmailConfigured() {
  * provider is down or unconfigured.
  */
 export async function sendEmail(message: EmailMessage): Promise<EmailSendResult> {
+  try {
+    return await withEligibleRecipient(message.to, () => deliverEmail(message), message.createdAt);
+  } catch (error) {
+    return { ok: false, reason: error instanceof DeliverySuppressed ? error.message : "Recipient status could not be verified.", suppressed: error instanceof DeliverySuppressed };
+  }
+}
+
+async function deliverEmail(message: EmailMessage): Promise<EmailSendResult> {
   if (!isEmailConfigured()) {
     return { ok: false, reason: "Email is not configured (RESEND_API_KEY / RESEND_FROM_EMAIL)." };
   }

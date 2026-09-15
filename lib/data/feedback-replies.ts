@@ -52,6 +52,7 @@ export async function sendFeedbackReply(feedbackId: string, id: string, revision
   const existing = (await query<FeedbackReply>(`select ${columns} from feedback_reply where feedback_id = $1 and id = $2`, [feedbackId, id])).rows[0];
   if (!existing) throw new FeedbackReplyError("Reply was not found.", 404);
   if (existing.status === "sent") return existing;
+  if (existing.status === "canceled") throw new FeedbackReplyError("This reply was canceled because the account was deactivated.");
   if (existing.revision !== revision) throw new FeedbackReplyError("This draft changed. Reload replies before sending.");
   if (!existing.body.trim()) throw new FeedbackReplyError("Write a message before sending.", 400);
   if (existing.firstAttemptAt && !canRetryFeedbackReply(existing.firstAttemptAt)) {
@@ -75,7 +76,11 @@ export async function sendFeedbackReply(feedbackId: string, id: string, revision
   const reply = claimed.rows[0];
   if (!reply) throw new FeedbackReplyError("This reply is already sending or has changed. Reload replies in a minute.");
   const delivery = await sendEmail({ to: reply.recipient, from: reply.fromAddress!, replyTo: reply.replyTo!,
-    subject: reply.subject, html: reply.html, text: reply.emailText, idempotencyKey: `feedback-reply/${id}` });
+    subject: reply.subject, html: reply.html, text: reply.emailText, idempotencyKey: `feedback-reply/${id}`, createdAt: reply.createdAt });
+  if (!delivery.ok && delivery.suppressed) {
+    await query("update feedback_reply set status = 'canceled', error = $2, updated_at = now() where id = $1 and status = 'sending'", [id, delivery.reason]);
+    throw new FeedbackReplyError(delivery.reason);
+  }
   if (!delivery.ok || !delivery.id) {
     const error = "Sending could not be confirmed. Retry this saved reply to safely check or resend it.";
     await query(`update feedback_reply set status = 'unconfirmed', error = $2, updated_at = now() where id = $1 and status = 'sending'`, [id, error]);
@@ -85,8 +90,8 @@ export async function sendFeedbackReply(feedbackId: string, id: string, revision
   try {
     await client.query("begin");
     const saved = await client.query<FeedbackReply>(`update feedback_reply set status = 'sent', provider_id = $2,
-      sent_at = now(), updated_at = now(), error = null where id = $1 returning ${columns}`, [id, delivery.id]);
-    if (reply.closeFeedback) await client.query("update feedback set status = 'closed' where id = $1", [feedbackId]);
+      sent_at = now(), updated_at = now(), error = null where id = $1 and status = 'sending' returning ${columns}`, [id, delivery.id]);
+    if (reply.closeFeedback && saved.rows[0]) await client.query("update feedback set status = 'closed' where id = $1", [feedbackId]);
     await client.query("commit");
     return saved.rows[0];
   } catch (error) {

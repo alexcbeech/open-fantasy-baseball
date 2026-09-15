@@ -27,7 +27,7 @@ export function eligibleAnnouncementEmails(emails: string[]) {
 }
 async function audience() {
   // Only real app accounts with a linked sign-in identity; excludes seeded/demo users and invitations.
-  const rows = await query<{ email: string }>(`select u.email from app_user u where exists
+  const rows = await query<{ email: string }>(`select u.email from app_user u where u.deactivated_at is null and exists
     (select 1 from auth_identity i where i.user_id = u.id and i.provider = 'neon-auth')`);
   const emails = eligibleAnnouncementEmails(rows.rows.map(row => row.email));
   return { emails, token: createHash("sha256").update(JSON.stringify(emails)).digest("hex") };
@@ -87,8 +87,8 @@ export async function queueAdminAnnouncement(id: string, revision: number, audie
 // the provider's 24-hour deduplication window (one hour of margin).
 export async function processAdminAnnouncement(id: string, budgetMs = 240_000) {
   const start = Date.now();
-  const payload = (await query<{ subject: string; html: string; text: string; from: string; replyTo: string }>(
-    `select subject, html, email_text as text, from_address as "from", reply_to as "replyTo" from admin_announcement where id=$1 and status='queued'`, [id])).rows[0];
+  const payload = (await query<{ subject: string; html: string; text: string; from: string; replyTo: string; createdAt: string }>(
+    `select subject, html, email_text as text, from_address as "from", reply_to as "replyTo", queued_at::text as "createdAt" from admin_announcement where id=$1 and status='queued'`, [id])).rows[0];
   if (!payload) throw new AnnouncementError("Queued announcement was not found.", 404);
   while (Date.now() - start < budgetMs) {
     await query(`update admin_announcement_recipient set status='blocked' where announcement_id=$1
@@ -103,8 +103,9 @@ export async function processAdminAnnouncement(id: string, budgetMs = 240_000) {
     const key = createHash("sha256").update(recipient.email).digest("hex");
     const result = await sendEmail({ ...payload, to: recipient.email, idempotencyKey: `announcement/${id}/${key}` });
     await query(`update admin_announcement_recipient set status=$3, provider_id=$4,
-      accepted_at=case when $3='accepted' then now() else null end where announcement_id=$1 and email=$2`,
-    [id, recipient.email, result.ok && result.id ? "accepted" : "unconfirmed", result.ok ? result.id : null]);
+      accepted_at=case when $3='accepted' then now() else null end where announcement_id=$1 and email=$2 and status='sending'`,
+    [id, recipient.email, !result.ok && result.suppressed ? "blocked" : result.ok && result.id ? "accepted" : "unconfirmed", result.ok ? result.id : null]);
+    if (!result.ok && result.suppressed) continue;
     // Avoid an error storm on provider outages/rate limits. Admin can resume later.
     if (!result.ok || !result.id) break;
     await new Promise(resolve => setTimeout(resolve, 600));

@@ -1164,7 +1164,8 @@ export async function setupDraft(leagueId: string, viewerUserId: string, input: 
         `insert into notification_outbox (user_id, type, title, body, url)
          select lm.user_id, 'draft_scheduled', $2, $3, $4
          from league_member lm
-         where lm.league_id = $1`,
+         join app_user u on u.id = lm.user_id
+         where lm.league_id = $1 and u.deactivated_at is null`,
         [
           leagueId,
           "Draft scheduled",

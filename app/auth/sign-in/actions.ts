@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getNeonAuth } from "@/lib/auth/neon-auth";
+import { getCurrentOfbUser, getNeonAuth } from "@/lib/auth/neon-auth";
+import { isAccountBlocked } from "@/lib/auth/account-status";
 
 export type AuthFormState = {
   error: string;
@@ -21,10 +22,17 @@ export async function signInWithEmail(_previousState: AuthFormState, formData: F
     return { error: "Email and password are required." };
   }
 
+  try {
+    if (await isAccountBlocked(email)) return { error: "Sign-in is unavailable for this account. Contact an administrator." };
+  } catch { return { error: "Sign-in is temporarily unavailable. Please try again shortly." }; }
   const result = await auth.signIn.email({ email, password });
 
   if (result.error) {
     return { error: result.error.message || "Failed to sign in." };
+  }
+  if (!(await getCurrentOfbUser())) {
+    await auth.signOut();
+    return { error: "Sign-in is unavailable for this account. Contact an administrator." };
   }
 
   // Only league-invite landings may override the post-sign-in destination;

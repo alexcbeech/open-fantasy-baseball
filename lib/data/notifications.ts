@@ -55,7 +55,8 @@ export async function enqueueNotificationForTeam(
     `insert into notification_outbox (user_id, type, title, body, url)
      select ft.manager_user_id, $2, $3, $4, $5
      from fantasy_team ft
-     where ft.id = $1 and ft.is_bot = false`,
+     join app_user u on u.id = ft.manager_user_id
+     where ft.id = $1 and ft.is_bot = false and u.deactivated_at is null`,
     [teamId, content.type, content.title, content.body, content.url ?? null],
   );
 }
@@ -67,6 +68,7 @@ export type DrainNotificationsResult = {
 };
 
 type PendingRow = {
+  created_at: Date;
   id: string;
   email: string;
   type: NotificationType;
@@ -84,8 +86,11 @@ export async function drainNotifications(limit = 200): Promise<DrainNotification
   return tryDatabase(
     async () => {
       const pool = getPool();
+      const suppressed = await pool.query(`update notification_outbox n set status = 'skipped', last_error = 'Account deactivated'
+        from app_user u where u.id = n.user_id and n.status = 'pending'
+        and (u.deactivated_at is not null or n.created_at <= u.sessions_valid_after)`);
       const pending = await pool.query<PendingRow>(
-        `select n.id, u.email, n.type, n.title, n.body, n.url
+        `select n.id, u.email, n.type, n.title, n.body, n.url, n.created_at
          from notification_outbox n
          join app_user u on u.id = n.user_id
          where n.status = 'pending'
@@ -94,7 +99,7 @@ export async function drainNotifications(limit = 200): Promise<DrainNotification
         [limit],
       );
 
-      const result: DrainNotificationsResult = { sent: 0, failed: 0, skipped: 0 };
+      const result: DrainNotificationsResult = { sent: 0, failed: 0, skipped: suppressed.rowCount ?? 0 };
 
       for (const row of pending.rows) {
         try {
@@ -103,16 +108,20 @@ export async function drainNotifications(limit = 200): Promise<DrainNotification
             body: row.body,
             url: row.url ?? undefined,
             tag: row.type,
-          });
-          await pool.query(
-            `update notification_outbox set status = 'sent', sent_at = now(), attempts = attempts + 1 where id = $1`,
+          }, row.created_at);
+          if (delivery.suppressed) {
+            await pool.query("update notification_outbox set status = 'skipped', last_error = 'Account deactivated' where id = $1 and status = 'pending'", [row.id]);
+            result.skipped += 1;
+            continue;
+          }
+          const updated = await pool.query(
+            `update notification_outbox set status = 'sent', sent_at = now(), attempts = attempts + 1 where id = $1 and status = 'pending'`,
             [row.id],
           );
-          result.sent += 1;
-          void delivery;
+          result.sent += updated.rowCount ?? 0;
         } catch (error) {
           await pool.query(
-            `update notification_outbox set status = 'failed', attempts = attempts + 1, last_error = $2 where id = $1`,
+            `update notification_outbox set status = 'failed', attempts = attempts + 1, last_error = $2 where id = $1 and status = 'pending'`,
             [row.id, error instanceof Error ? error.message.slice(0, 500) : String(error)],
           );
           result.failed += 1;

@@ -116,11 +116,11 @@ export function FeedbackReplyComposer({ feedback, onClosed }: { feedback: Feedba
       <h4>Reply history</h4>
       {replies.filter((reply) => reply.status !== "draft").map((reply) => <article className="feedback-reply-history" key={reply.id}>
         <strong>{reply.subject}</strong>
-        <p className="subtle">{reply.status === "sent" ? "Sent · accepted by email provider" : reply.status === "sending" ? "Sending · reload to check" : "Send unconfirmed"}<br />
+        <p className="subtle">{reply.status === "canceled" ? "Canceled · account deactivated" : reply.status === "sent" ? "Sent · accepted by email provider" : reply.status === "sending" ? "Sending · reload to check" : "Send unconfirmed"}<br />
           {reply.senderEmail ?? reply.authorEmail} · {new Date(reply.sentAt ?? reply.firstAttemptAt ?? reply.createdAt).toLocaleString()}<br />To: {reply.recipient}</p>
         <p className="feedback-admin-message">{reply.body}</p>
         {reply.error ? <p role="status">{reply.error}</p> : null}
-        {reply.status !== "sent" ? <button type="button" className="secondary-button" disabled={busy || !settings?.configured}
+        {reply.status !== "sent" && reply.status !== "canceled" ? <button type="button" className="secondary-button" disabled={busy || !settings?.configured}
           onClick={() => void run(() => send(reply, reply.closeFeedback))}>Retry saved reply</button> : null}
       </article>)}
       {!replies.some((reply) => reply.status !== "draft") ? <p className="subtle">No emails sent yet.</p> : null}

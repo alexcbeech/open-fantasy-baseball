@@ -43,6 +43,8 @@ export async function verifyBearerToken(token: string) {
          from oauth_access_token t
          join app_user u on u.id = t.user_id
          where t.token_hash = $1
+           and u.deactivated_at is null
+           and (u.sessions_valid_after is null or t.created_at > u.sessions_valid_after)
            and t.revoked_at is null
            and t.expires_at > now()
          limit 1`,

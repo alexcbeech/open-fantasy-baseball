@@ -2,6 +2,7 @@ import { z } from "zod";
 import { query, tryDatabase } from "@/lib/db/client";
 import { demoUserEmail } from "@/lib/data/profile";
 import { isWebPushConfigured, sendWebPush, type WebPushPayload } from "@/lib/notifications/web-push";
+import { DeliverySuppressed, withEligibleRecipient } from "@/lib/notifications/recipient-guard";
 
 export const pushSubscriptionSchema = z.object({
   endpoint: z.string().trim().url("A push endpoint URL is required.").max(1000),
@@ -99,6 +100,7 @@ export async function removePushSubscription(endpoint: string, email = demoUserE
 }
 
 export type PushDeliverySummary = {
+  suppressed?: boolean;
   configured: boolean;
   sent: number;
   failed: number;
@@ -109,7 +111,7 @@ export type PushDeliverySummary = {
  * Fan a payload out to every active subscription for a user. Endpoints the push
  * service reports as gone (404/410) are revoked so the roster self-heals.
  */
-export async function sendPushToUser(email: string, payload: WebPushPayload): Promise<PushDeliverySummary> {
+export async function sendPushToUser(email: string, payload: WebPushPayload, createdAt?: string | Date): Promise<PushDeliverySummary> {
   if (!isWebPushConfigured()) {
     return { configured: false, sent: 0, failed: 0, pruned: 0 };
   }
@@ -120,7 +122,7 @@ export async function sendPushToUser(email: string, payload: WebPushPayload): Pr
         `select s.endpoint, s.p256dh_key, s.auth_secret
          from push_subscription s
          join app_user u on u.id = s.user_id
-         where u.email = $1 and s.revoked_at is null`,
+         where u.email = $1 and u.deactivated_at is null and s.revoked_at is null`,
         [email],
       );
 
@@ -129,10 +131,14 @@ export async function sendPushToUser(email: string, payload: WebPushPayload): Pr
       const goneEndpoints: string[] = [];
 
       for (const row of result.rows) {
-        const outcome = await sendWebPush(
+        const outcome = await withEligibleRecipient(email, () => sendWebPush(
           { endpoint: row.endpoint, p256dhKey: row.p256dh_key, authSecret: row.auth_secret },
           payload,
-        );
+        ), createdAt).catch(error => {
+          if (error instanceof DeliverySuppressed) return null;
+          throw error;
+        });
+        if (!outcome) return { configured: true, sent, failed, pruned: goneEndpoints.length, suppressed: true };
 
         if (outcome.ok) {
           sent += 1;

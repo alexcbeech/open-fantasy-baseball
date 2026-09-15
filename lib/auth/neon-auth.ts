@@ -2,6 +2,7 @@ import { createNeonAuth, type NeonAuth } from "@neondatabase/auth/next/server";
 import { getPool, tryDatabase } from "@/lib/db/client";
 import { demoUserEmail } from "@/lib/data/profile";
 import { hasAdminRole, normalizeAuthRoles } from "@/lib/auth/roles";
+import { acceptsSession, type AccountStatus } from "@/lib/auth/account-status";
 
 export type OfbCurrentUser = {
   userId: string;
@@ -14,7 +15,7 @@ export type OfbCurrentUser = {
   isAdmin: boolean;
 };
 
-type AppUserRow = {
+type AppUserRow = AccountStatus & {
   id: string;
   email: string;
   display_name: string;
@@ -77,7 +78,7 @@ export async function getCurrentOfbUser(): Promise<OfbCurrentUser | null> {
     return null;
   }
 
-  return ensureOfbUserForNeonAuth(authUser);
+  return ensureOfbUserForNeonAuth(authUser, session?.session.createdAt);
 }
 
 export function getAuthSetupStatus() {
@@ -85,10 +86,6 @@ export function getAuthSetupStatus() {
     baseUrl: Boolean(process.env.NEON_AUTH_BASE_URL),
     cookieSecret: Boolean(process.env.NEON_AUTH_COOKIE_SECRET),
   };
-}
-
-export async function getCurrentOfbUserOrDemo(): Promise<OfbCurrentUser> {
-  return (await getCurrentOfbUser()) ?? getDemoCurrentUser();
 }
 
 /**
@@ -114,8 +111,8 @@ export async function hasExistingOfbAccount(email: string, providerSubject: stri
   );
 }
 
-async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurrentUser> {
-  return tryDatabase(
+export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCreatedAt?: string | Date): Promise<OfbCurrentUser | null> {
+  return tryDatabase<OfbCurrentUser | null>(
     async () => {
       const client = await getPool().connect();
 
@@ -123,21 +120,46 @@ async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurr
         await client.query("begin");
         const displayName = authUser.name?.trim() || authUser.email.split("@")[0] || "OFB Manager";
         const roles = normalizeAuthRoles(authUser);
-        const userResult = await client.query<AppUserRow>(
+        // Prefer the stable identity over the email. Never relink an existing
+        // provider subject or create another account to bypass deactivation.
+        const existing = await client.query<AppUserRow>(`select u.* from app_user u
+          where exists (select 1 from auth_identity i where i.user_id = u.id
+            and i.provider = 'neon-auth' and i.provider_subject = $2)
+          or lower(u.email) = lower($1)
+          order by exists (select 1 from auth_identity i where i.user_id = u.id
+            and i.provider = 'neon-auth' and i.provider_subject = $2) desc
+          for update`, [authUser.email, authUser.id]);
+        if (existing.rows.some(row => !acceptsSession(row, sessionCreatedAt))) {
+          await client.query("rollback");
+          return null;
+        }
+        const userResult = existing.rows.length ? existing : await client.query<AppUserRow>(
           `insert into app_user (email, display_name, avatar_url)
            values ($1, $2, $3)
            on conflict (email) do update set
              avatar_url = case when app_user.avatar_custom then app_user.avatar_url else coalesce(excluded.avatar_url, app_user.avatar_url) end,
              updated_at = now()
-           returning id, email, display_name, avatar_url`,
+           returning id, email, display_name, avatar_url, deactivated_at, sessions_valid_after`,
           [authUser.email, displayName, authUser.image],
         );
         const user = userResult.rows[0];
+        if (!acceptsSession(user, sessionCreatedAt)) {
+          await client.query("rollback");
+          return null;
+        }
+        if (existing.rows.length) {
+          await client.query(`update app_user set avatar_url = case when avatar_custom then avatar_url
+            else coalesce($2, avatar_url) end, updated_at = now() where id = $1`, [user.id, authUser.image]);
+          if (authUser.image) {
+            const updated = await client.query<{ avatar_url: string | null }>("select avatar_url from app_user where id = $1", [user.id]);
+            user.avatar_url = updated.rows[0]?.avatar_url ?? user.avatar_url;
+          }
+        }
 
         await client.query(
           `insert into auth_identity (user_id, provider, provider_subject)
            values ($1, 'neon-auth', $2)
-           on conflict (provider, provider_subject) do update set user_id = excluded.user_id`,
+           on conflict (provider, provider_subject) do nothing`,
           [user.id, authUser.id],
         );
         await client.query(
@@ -166,16 +188,7 @@ async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser): Promise<OfbCurr
         client.release();
       }
     },
-    () => ({
-      userId: authUser.id,
-      email: authUser.email,
-      displayName: authUser.name?.trim() || authUser.email.split("@")[0] || "OFB Manager",
-      avatarUrl: authUser.image ?? null,
-      authProvider: "neon-auth",
-      providerSubject: authUser.id,
-      roles: normalizeAuthRoles(authUser),
-      isAdmin: hasAdminRole(normalizeAuthRoles(authUser)),
-    }),
+    () => null,
   );
 }
 
