@@ -41,7 +41,7 @@ export async function getLeagueSettings(leagueId: string): Promise<LeagueSetting
   return withDemoFallback(
     async () => {
       const result = await query<LeagueSettingsRow>("select id, name, settings from league where id = $1", [leagueId]);
-      return result.rows[0]?.settings ? { ...result.rows[0].settings, id: leagueId, name: result.rows[0].name } : defaultLeagueSettings;
+      return result.rows[0]?.settings ? { ...result.rows[0].settings, botsEligibleForPlayoffs: result.rows[0].settings.botsEligibleForPlayoffs ?? true, id: leagueId, name: result.rows[0].name } : defaultLeagueSettings;
     },
     () => defaultLeagueSettings,
   );
@@ -160,7 +160,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
         seasonYear: league.season_year ?? new Date().getFullYear(),
         status: league.status ?? "active",
         commissionerName: league.commissioner_name ?? "Commissioner",
-        settings: { ...league.settings, id: league.id, name: league.name },
+        settings: { ...league.settings, botsEligibleForPlayoffs: league.settings.botsEligibleForPlayoffs ?? true, id: league.id, name: league.name },
         milestones: hub.milestones,
         announcements: hub.announcements,
         standings,
@@ -182,6 +182,7 @@ export type UpdatableLeagueSettings = Partial<
     | "waiverProcessingDays"
     | "allowILPlus"
     | "allowNA"
+    | "botsEligibleForPlayoffs"
   >
 >;
 
@@ -205,7 +206,7 @@ export async function updateLeagueSettings(leagueId: string, changes: UpdatableL
       throw new Error("League not found.");
     }
 
-    const merged: LeagueSettings = { ...current.rows[0].settings, ...changes };
+    const merged: LeagueSettings = { ...current.rows[0].settings, botsEligibleForPlayoffs: current.rows[0].settings.botsEligibleForPlayoffs ?? true, ...changes };
 
     if (changes.allowNA !== undefined) {
       merged.rosterSlots = { ...merged.rosterSlots, NA: changes.allowNA ? 2 : 0 };

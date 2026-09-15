@@ -221,11 +221,13 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
   let alive: PlayoffTeam[];
 
   if (round === 1) {
-    const settings = await db.query<{ playoff_team_count: number | null }>(
-      `select (settings->>'playoffTeamCount')::int as playoff_team_count from league where id = $1`,
+    const settings = await db.query<{ playoff_team_count: number | null; bots_eligible: boolean | null }>(
+      `select (settings->>'playoffTeamCount')::int as playoff_team_count,
+              (settings->>'botsEligibleForPlayoffs')::boolean as bots_eligible
+       from league where id = $1`,
       [leagueId],
     );
-    const teams = await db.query<{ id: string; name: string }>(`select id, name from fantasy_team where league_id = $1`, [leagueId]);
+    const teams = await db.query<{ id: string; name: string; is_bot: boolean }>(`select id, name, is_bot from fantasy_team where league_id = $1`, [leagueId]);
     const records = await db.query<TeamRecordRow>(teamRecordsSql, [leagueId]);
     const recordByTeam = new Map(records.rows.map((row) => [row.team_id, row]));
     const ranked = rankStandings(
@@ -241,12 +243,16 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
         };
       }),
     );
-    const fieldSize = Math.min(Math.max(settings.rows[0]?.playoff_team_count ?? 0, 2), teams.rows.length);
+    const botIds = new Set(teams.rows.filter((team) => team.is_bot).map((team) => team.id));
+    const eligible = settings.rows[0]?.bots_eligible === false
+      ? ranked.filter((team) => !botIds.has(team.teamId))
+      : ranked;
+    const fieldSize = Math.min(Math.max(settings.rows[0]?.playoff_team_count ?? 0, 2), eligible.length);
 
     await db.query(`update fantasy_team set playoff_seed = null where league_id = $1`, [leagueId]);
     alive = [];
 
-    for (const [index, team] of ranked.slice(0, fieldSize).entries()) {
+    for (const [index, team] of eligible.slice(0, fieldSize).entries()) {
       await db.query(`update fantasy_team set playoff_seed = $2 where id = $1`, [team.teamId, index + 1]);
       alive.push({ teamId: team.teamId, seed: index + 1 });
     }

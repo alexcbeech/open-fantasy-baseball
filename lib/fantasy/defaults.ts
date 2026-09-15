@@ -34,6 +34,7 @@ export const defaultLeagueSettings: LeagueSettings = {
   tradeReview: "league-vote",
   tradeReviewDays: 2,
   playoffTeamCount: 6,
+  botsEligibleForPlayoffs: true,
   lineupLockMode: "daily",
   draftType: "snake",
   playerPool: "all",
@@ -56,4 +57,5 @@ export const commissionerEditableSettings = [
   "waiverProcessingDays",
   "allowILPlus",
   "allowNA",
+  "botsEligibleForPlayoffs",
 ] as const;

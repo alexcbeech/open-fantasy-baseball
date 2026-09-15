@@ -43,3 +43,9 @@ describe("buildLeagueSettingsFromInput", () => {
     expect(buildLeagueSettingsFromInput(parse({ playerPool: "al-west" })).playerPool).toBe("al-west");
   });
 });
+
+it("defaults bot playoff eligibility on and preserves explicit false", () => {
+  expect(buildLeagueSettingsFromInput(parse({ botsEligibleForPlayoffs: undefined })).botsEligibleForPlayoffs).toBe(true);
+  expect(buildLeagueSettingsFromInput(parse({ botsEligibleForPlayoffs: false })).botsEligibleForPlayoffs).toBe(false);
+  expect(createLeagueInputSchema.safeParse({ ...defaultCreateLeagueInput, botsEligibleForPlayoffs: "false" }).success).toBe(false);
+});
