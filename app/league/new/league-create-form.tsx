@@ -80,6 +80,7 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
       benchSlots: formData.get("benchSlots"),
       ilSlots: formData.get("ilSlots"),
       playoffTeamCount: formData.get("playoffTeamCount"),
+      botsEligibleForPlayoffs: formData.get("botsEligibleForPlayoffs") === "on",
       allowNA: formData.has("allowNA"),
       allowILPlus: formData.has("allowILPlus"),
     };
@@ -244,6 +245,11 @@ export function LeagueCreateForm({ defaults }: LeagueCreateFormProps) {
         <input name="playoffTeamCount" inputMode="numeric" defaultValue={defaults.playoffTeamCount} />
       </label>
 
+      <label className="check-row">
+        <input name="botsEligibleForPlayoffs" type="checkbox" defaultChecked={defaults.botsEligibleForPlayoffs} />
+        <span>Allow bots to make the playoffs (head-to-head leagues)</span>
+      </label>
+      <p className="subtle">When disabled, bots are skipped in standings order when filling playoff spots.</p>
       <label className="check-row">
         <input name="allowNA" type="checkbox" defaultChecked={defaults.allowNA} />
         <span>Enable NA slots</span>

@@ -51,6 +51,7 @@ const updateSchema = z
     waiverProcessingDays: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(),
     allowILPlus: z.boolean().optional(),
     allowNA: z.boolean().optional(),
+    botsEligibleForPlayoffs: z.boolean().optional(),
   })
   .strict();
 

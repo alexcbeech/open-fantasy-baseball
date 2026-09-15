@@ -18,6 +18,7 @@ export const createLeagueInputSchema = z
     benchSlots: z.coerce.number().int().min(0).max(10).default(defaultRosterSlots.BN),
     ilSlots: z.coerce.number().int().min(0).max(10).default(defaultRosterSlots.IL),
     playoffTeamCount: z.coerce.number().int().min(2).max(12).default(defaultLeagueSettings.playoffTeamCount),
+    botsEligibleForPlayoffs: z.boolean().default(defaultLeagueSettings.botsEligibleForPlayoffs),
     allowNA: z.coerce.boolean().default(defaultLeagueSettings.allowNA),
     allowILPlus: z.coerce.boolean().default(defaultLeagueSettings.allowILPlus),
   })
@@ -45,6 +46,7 @@ export function buildLeagueSettingsFromInput(input: CreateLeagueInput) {
     playerPool: input.playerPool,
     draftPickSeconds: input.draftPickSeconds,
     playoffTeamCount: input.playoffTeamCount,
+    botsEligibleForPlayoffs: input.botsEligibleForPlayoffs,
     rosterSlots: {
       ...defaultLeagueSettings.rosterSlots,
       BN: input.benchSlots,
@@ -73,6 +75,7 @@ export const defaultCreateLeagueInput: CreateLeagueInput = {
   benchSlots: defaultRosterSlots.BN,
   ilSlots: defaultRosterSlots.IL,
   playoffTeamCount: defaultLeagueSettings.playoffTeamCount,
+  botsEligibleForPlayoffs: defaultLeagueSettings.botsEligibleForPlayoffs,
   allowNA: defaultLeagueSettings.allowNA,
   allowILPlus: defaultLeagueSettings.allowILPlus,
 };

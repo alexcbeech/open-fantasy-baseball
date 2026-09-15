@@ -27,6 +27,7 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
     lineupLockMode: settings.lineupLockMode,
     allowILPlus: settings.allowILPlus,
     allowNA: settings.allowNA,
+    botsEligibleForPlayoffs: settings.botsEligibleForPlayoffs ?? true,
   });
 
   async function save() {
@@ -45,6 +46,7 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
           lineupLockMode: form.lineupLockMode,
           allowILPlus: form.allowILPlus,
           allowNA: form.allowNA,
+          botsEligibleForPlayoffs: form.botsEligibleForPlayoffs,
         }),
       });
       const result = (await response.json()) as { error?: string };
@@ -124,6 +126,16 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
         <input type="checkbox" checked={form.allowNA} onChange={(e) => setForm({ ...form, allowNA: e.target.checked })} />
         NA slots for minor leaguers
       </label>
+
+      {settings.scoringType !== "roto" ? (
+        <div>
+          <label className="settings-check">
+            <input type="checkbox" checked={form.botsEligibleForPlayoffs} onChange={(e) => setForm({ ...form, botsEligibleForPlayoffs: e.target.checked })} />
+            Allow bots to make the playoffs
+          </label>
+          <p className="subtle">When disabled, bots are skipped in standings order when filling playoff spots. Applies when playoffs begin; existing brackets stay fixed.</p>
+        </div>
+      ) : null}
 
       <div className="confirm-panel-actions">
         <button className="primary-button" type="button" disabled={busy} aria-busy={busy} onClick={save}>

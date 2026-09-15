@@ -203,6 +203,15 @@ export const commissionerSettingsMatrix: CommissionerSettingDefinition[] = [
     commissionerEditable: true,
   },
   {
+    key: "botsEligibleForPlayoffs",
+    label: "Bots Eligible for Playoffs",
+    kind: "boolean",
+    appliesTo: ["h2h-categories", "h2h-points"],
+    defaultValue: true,
+    description: "Allow bot teams to qualify. When disabled, skip bots in standings order and fill playoff spots with eligible teams. Applies when playoffs begin.",
+    commissionerEditable: true,
+  },
+  {
     key: "playoffTeamCount",
     label: "Playoff Teams",
     kind: "number",

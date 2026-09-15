@@ -165,7 +165,7 @@ export function LeagueHub({
 
   const pinned = announcements.find((announcement) => announcement.isPinned) ?? null;
   const recent = announcements.filter((announcement) => announcement.id !== pinned?.id);
-  const playoffDetail = scoringType === "roto" ? "Season-long standings" : `${settings.playoffTeamCount} teams qualify`;
+  const playoffDetail = scoringType === "roto" ? "Season-long standings" : `${settings.playoffTeamCount} teams qualify${settings.botsEligibleForPlayoffs === false ? "; bots excluded" : ""}`;
 
   return (
     <section className="panel league-hub" aria-labelledby="league-hub-heading">

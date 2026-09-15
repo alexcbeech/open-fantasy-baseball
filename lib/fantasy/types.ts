@@ -61,6 +61,7 @@ export type LeagueSettings = {
   tradeReview: TradeReviewMode;
   tradeReviewDays: number;
   playoffTeamCount: number;
+  botsEligibleForPlayoffs: boolean;
   lineupLockMode: LineupLockMode;
   draftType: DraftType;
   playerPool: PlayerPool;
