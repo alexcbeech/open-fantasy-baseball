@@ -1,0 +1,44 @@
+import { expect, test } from "@playwright/test";
+import type { AdminAnnouncement } from "../lib/data/admin-announcement-schema";
+
+test("admin drafts, previews, tests, reviews, sends and reloads announcement history", async ({ page }) => {
+  let item: AdminAnnouncement | null = null;
+  const actions: string[] = [];
+  await page.route("**/api/v1/admin/announcements", async route => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { announcements: item ? [item] : [], settings: { configured: true, canDraft: true, from: "OFB <support@ofb.test>", replyTo: "support@ofb.test" }, testRecipient: "admin@ofb.test" } });
+    const data = route.request().postDataJSON(); actions.push(data.action);
+    if (data.action === "create") item = { id: "00000000-0000-4000-8000-000000000001", revision: 0, status: "draft", subject: "", body: "", buttonLabel: "", buttonUrl: "", author: "admin@ofb.test", sender: null, createdAt: "2026-09-15T00:00:00Z", queuedAt: null, total: 0, accepted: 0, pending: 0, unconfirmed: 0, blocked: 0 };
+    if (data.action === "save" && item) Object.assign(item, data.content, { revision: item.revision + 1 });
+    if (data.action === "review") return route.fulfill({ json: { audience: { count: 12, token: "a".repeat(64) } } });
+    if (data.action === "send" && item) Object.assign(item, { status: "queued", total: 12, accepted: 11, unconfirmed: 1, queuedAt: "2026-09-15T01:00:00Z", sender: "admin@ofb.test" });
+    if (data.action === "resume" && item) Object.assign(item, { accepted: 12, unconfirmed: 0 });
+    return route.fulfill({ json: { id: item?.id } });
+  });
+  await page.goto("/admin");
+  const panel = page.getByRole("region", { name: "Email Announcements" });
+  await panel.getByRole("button", { name: "New announcement" }).click();
+  await panel.getByLabel("Subject", { exact: true }).fill("Playoff seeding update");
+  await panel.getByRole("textbox", { name: "Message", exact: true }).fill("Please review your standings.\n<script>plain text</script>");
+  await expect(panel.getByRole("button", { name: "Send test to me" })).toBeDisabled();
+  await panel.getByRole("button", { name: "Save draft" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Draft saved.");
+  await page.reload();
+  await panel.getByRole("button", { name: "Playoff seeding update", exact: true }).click();
+  await expect(panel.getByRole("textbox", { name: "Message", exact: true })).toHaveValue("Please review your standings.\n<script>plain text</script>");
+  await panel.getByRole("button", { name: "Preview email" }).click();
+  await expect(page.getByRole("dialog", { name: "Email preview" })).toBeVisible();
+  await expect(page.frameLocator('iframe[title="Announcement email preview"]').getByText("<script>plain text</script>", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Close preview" }).click();
+  await panel.getByRole("button", { name: "Send test to me" }).click();
+  await expect(panel.getByRole("status")).toContainText("admin@ofb.test");
+  await panel.getByRole("button", { name: "Review recipients" }).click();
+  await expect(panel.getByRole("heading", { name: "Send to 12 users?" })).toBeVisible();
+  expect(actions).not.toContain("send");
+  await panel.getByRole("button", { name: "Send announcement to 12 users" }).click();
+  await expect(panel.getByText("11 accepted by email provider", { exact: false })).toBeVisible();
+  await expect(panel.getByRole("textbox", { name: "Message", exact: true })).toBeDisabled();
+  await panel.getByRole("button", { name: "Resume pending / retry unconfirmed" }).click();
+  await page.reload();
+  await expect(panel.getByText("12 accepted by email provider", { exact: false })).toBeVisible();
+  expect(actions.filter(action => action === "send")).toHaveLength(1);
+});

@@ -4670,6 +4670,21 @@ button.row {
   margin: 0;
 }
 
+.announcement-panel { margin-top: 24px; overflow-wrap: anywhere; }
+.announcement-editor label { display: grid; gap: 6px; margin: 12px 0; font-weight: 700; }
+.announcement-editor input, .announcement-editor textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-strong); color: var(--ink); font: inherit; font-weight: 400; }
+.announcement-panel .section-title { flex-wrap: wrap; gap: 12px; }
+.announcement-panel button { white-space: normal; }
+.announcement-editor textarea { resize: vertical; }
+.announcement-link-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.announcement-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.announcement-confirm { padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin: 16px 0; }
+.announcement-confirm button { margin: 4px; }
+.announcement-text-button { background: none; border: 0; padding: 0; color: var(--brand-strong); text-decoration: underline; cursor: pointer; }
+.announcement-history { list-style: none; padding: 0; }
+.announcement-history li { padding: 16px 0; border-top: 1px solid var(--line); }
+@media (max-width: 600px) { .announcement-link-fields { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+
 /* Admin feedback viewer. */
 .feedback-admin-panel {
   margin-top: 12px;

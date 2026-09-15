@@ -10,6 +10,7 @@ import { nightlyProcessingTasks, getNightlyProcessingWindow } from "@/lib/jobs/n
 import { AdminAuditLog } from "./audit-log";
 import { AdminOperationsPanel } from "./operations-panel";
 import { AdminFeedbackList } from "./feedback-list";
+import { AdminAnnouncementsPanel } from "./announcements-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +90,8 @@ export default async function AdminPage() {
             </div>
           </aside>
         </div>
+
+        <AdminAnnouncementsPanel />
 
         <section className="panel feedback-admin-panel" aria-labelledby="feedback-admin-heading">
           <div className="section-title">
