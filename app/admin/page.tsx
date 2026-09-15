@@ -11,6 +11,7 @@ import { AdminAuditLog } from "./audit-log";
 import { AdminOperationsPanel } from "./operations-panel";
 import { AdminFeedbackList } from "./feedback-list";
 import { AdminAnnouncementsPanel } from "./announcements-panel";
+import { AdminUsersPanel } from "./users-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,7 @@ export default async function AdminPage() {
           </aside>
         </div>
 
+        <AdminUsersPanel />
         <AdminAnnouncementsPanel />
 
         <section className="panel feedback-admin-panel" aria-labelledby="feedback-admin-heading">

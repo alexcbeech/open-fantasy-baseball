@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getNeonAuth, hasExistingOfbAccount } from "@/lib/auth/neon-auth";
+import { getCurrentOfbUser, getNeonAuth, hasExistingOfbAccount } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
@@ -47,5 +47,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  if (!(await getCurrentOfbUser())) {
+    await auth.signOut();
+    return NextResponse.redirect(new URL("/auth/sign-in?error=unavailable", requestUrl));
+  }
   return NextResponse.redirect(new URL(landing, requestUrl));
 }

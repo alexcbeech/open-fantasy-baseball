@@ -5,6 +5,7 @@ import { getNeonAuth } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
+import { isAccountBlocked } from "@/lib/auth/account-status";
 
 export type AuthFormState = {
   error: string;
@@ -39,6 +40,9 @@ export async function signUpWithEmail(_previousState: AuthFormState, formData: F
     return { error: "Neon Auth is not configured." };
   }
 
+  try {
+    if (await isAccountBlocked(email)) return { error: "Account creation is unavailable for this email." };
+  } catch { return { error: "Account creation is temporarily unavailable." }; }
   const result = await auth.signUp.email({ email, password, name });
 
   if (result.error) {

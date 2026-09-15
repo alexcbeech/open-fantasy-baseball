@@ -203,7 +203,8 @@ export async function syncPlayerNews(
              select distinct ft.manager_user_id, 'injury', $2, $3, '/team/' || ft.id
              from roster_entry re
              join fantasy_team ft on ft.id = re.team_id
-             where re.player_id = $1 and re.dropped_at is null and ft.is_bot = false`,
+             join app_user u on u.id = ft.manager_user_id
+             where re.player_id = $1 and re.dropped_at is null and ft.is_bot = false and u.deactivated_at is null`,
             [draft.playerId, draft.headline, draft.summary ?? ""],
           );
         }

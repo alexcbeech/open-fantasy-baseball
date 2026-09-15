@@ -47,7 +47,8 @@ export async function runDraftReminder(payload: Record<string, unknown>): Promis
         `insert into notification_outbox (user_id, type, title, body, url)
          select distinct ft.manager_user_id, 'draft_scheduled', $2, $3, $4
          from fantasy_team ft
-         where ft.league_id = $1 and ft.is_bot = false
+         join app_user u on u.id = ft.manager_user_id
+         where ft.league_id = $1 and ft.is_bot = false and u.deactivated_at is null
            and not exists (
              select 1 from notification_outbox n
              where n.user_id = ft.manager_user_id and n.type = 'draft_scheduled' and n.title = $2 and n.body = $3

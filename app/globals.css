@@ -5068,3 +5068,13 @@ button.row {
   .auth-user--signed-in .auth-name,
   .auth-user--signed-in .auth-role { display: none; }
 }
+/* Account administration stays readable in the narrow preview/mobile pane. */
+.admin-user-search, .admin-user-actions { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.admin-user-search label { flex: 1; min-width: 180px; }
+.admin-users-panel label { display: grid; gap: 6px; }
+.admin-users-panel input, .admin-users-panel textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: inherit; font: inherit; }
+.admin-user-list { display: grid; gap: 12px; margin-top: 16px; }
+.admin-user-card { min-width: 0; overflow-wrap: anywhere; padding: 16px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 10px; }
+.admin-user-card p { margin: 0; }
+.admin-user-confirm { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.admin-user-confirm h3 { margin: 0; }

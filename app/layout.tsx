@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { getCurrentOfbUser, getCurrentOfbUserOrDemo, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
+import { getCurrentOfbUser } from "@/lib/auth/neon-auth";
 import { getProfilePreferences } from "@/lib/data/profile";
 import { FeedbackWidget } from "./feedback-widget";
 import { PwaRegistration } from "./pwa-registration";
@@ -37,13 +37,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const currentUser = await getCurrentOfbUserOrDemo();
-  const profile = await getProfilePreferences(currentUser.email);
+  const currentUser = await getCurrentOfbUser();
+  const profile = currentUser ? await getProfilePreferences(currentUser.email) : { displayMode: "auto", timeZone: "America/Los_Angeles" };
 
   // Feedback is signed-in only: always available locally (no auth configured),
   // otherwise only once a real session exists.
-  const authEnabled = isNeonAuthConfigured();
-  const showFeedback = !authEnabled || Boolean(await getCurrentOfbUser());
+  const showFeedback = Boolean(currentUser);
 
   return (
     <html lang="en" data-theme={profile.displayMode} data-time-zone={profile.timeZone} suppressHydrationWarning>

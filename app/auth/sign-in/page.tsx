@@ -16,6 +16,7 @@ type SignInPageProps = {
 
 /** Errors the OAuth callback route can bounce back with (it has no form state). */
 const callbackErrorMessages: Record<string, string> = {
+  unavailable: "Sign-in is unavailable for this account. Contact an administrator.",
   "signups-closed":
     "That Google account doesn't have an OFB account yet, and account creation is currently disabled.",
   google: "Google sign-in didn't complete. Please try again.",

@@ -61,6 +61,8 @@ test.describe("team tabs", () => {
 test.describe("lineup move sheet", () => {
   test("moves a player through the eligible-slot sheet", async ({ page }) => {
     await page.goto("/team/team-1");
+    // Today's lineup may already be locked when the suite runs at night.
+    await page.getByRole("link", { name: "Next day →" }).click();
 
     await page.getByRole("button", { name: /Move Adley Rutschman out of the C slot/ }).click();
 
