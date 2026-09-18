@@ -120,7 +120,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     matchupTotal: current.matchupTotal,
   }));
 
-  const validation = validateLineup(proposedLineup, leagueSettings.rosterSlots);
+  const validation = validateLineup(proposedLineup, leagueSettings.rosterSlots, currentLineup);
   // A player whose MLB game has started is locked in place until the next
   // daily rollover (first-game mode locks the whole lineup at the day's first
   // pitch); the API enforces this so it can't be bypassed client-side.

@@ -24,6 +24,20 @@ beforeEach(() => {
 });
 
 describe("player acquisition pool enforcement", () => {
+  it.each(["add", "claim"] as const)("blocks %s while a recovered player remains on IL", async (action) => {
+    client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("from fantasy_team ft")) return { rows: [{ league_id: "league-1", settings: {} }] };
+      if (sql.includes("from player p")) return { rows: [{ status: "active" }] };
+      if (sql.includes("select p.full_name")) return { rows: [{ full_name: "JJ Wetherholt" }] };
+      return { rows: [] };
+    });
+    await expect(applyPlayerManagementAction("team", "incoming", action)).rejects.toMatchObject({
+      status: 409, message: expect.stringContaining("JJ Wetherholt is no longer eligible for IL"),
+    });
+    expect(client.query.mock.calls.some(([sql]) => /insert into (roster_entry|waiver_claim)/.test(sql))).toBe(false);
+    expect(client.query.mock.calls.map(([sql]) => sql)).toContain("rollback");
+  });
+
   it("rejects an out-of-pool add before writing a roster entry", async () => {
     client.query.mockImplementation(async (sql: string) => {
       if (sql.includes("from fantasy_team ft")) {

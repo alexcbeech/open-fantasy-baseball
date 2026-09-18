@@ -109,8 +109,12 @@ export function findLineupLockIssues(
   return issues;
 }
 
-export function validateLineup(lineup: LineupPlayer[], rosterSlots = defaultRosterSlots) {
+export function validateLineup(lineup: LineupPlayer[], rosterSlots = defaultRosterSlots, currentLineup: LineupPlayer[] = []) {
   const issues: LineupValidationIssue[] = [];
+  // Losing IL eligibility restricts acquisitions, not moves within the roster.
+  // Only grandfather existing IL occupants; newly placing a player there still
+  // requires eligibility. Callers without a baseline retain strict validation.
+  const existingIL = new Set(currentLineup.filter((entry) => entry.slot === "IL").map((entry) => entry.player.id));
   const playerCounts = new Map<string, number>();
   const slotCounts = new Map<RosterSlot, number>();
 
@@ -118,7 +122,7 @@ export function validateLineup(lineup: LineupPlayer[], rosterSlots = defaultRost
     playerCounts.set(entry.player.id, (playerCounts.get(entry.player.id) ?? 0) + 1);
     slotCounts.set(entry.slot, (slotCounts.get(entry.slot) ?? 0) + 1);
 
-    if (!canUseSlot(entry)) {
+    if (!canUseSlot(entry) && !(entry.slot === "IL" && existingIL.has(entry.player.id))) {
       issues.push({
         code: inactiveSlots.includes(entry.slot) ? "player-status-ineligible" : "position-ineligible",
         message: `${entry.player.name} is not eligible for ${entry.slot}.`,

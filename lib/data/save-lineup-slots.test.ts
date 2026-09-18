@@ -72,6 +72,30 @@ beforeEach(() => {
 });
 
 describe("saveLineupSlots atomic re-validation", () => {
+  it("allows moving another player while a recovered player stays on IL", async () => {
+    currentClient = makeClient([
+      lineupRow({ id: "jj", slot: "IL", positions: ["2B", "SS"] }),
+      lineupRow({ id: "nick", slot: "2B", positions: ["2B", "3B", "SS"] }),
+    ]);
+    await saveLineupSlots("team", [{ playerId: "nick", slot: "3B" }]);
+    expect(sqlCalls()).toContain("commit");
+  });
+
+  it("allows activating a recovered IL player to an open bench seat", async () => {
+    currentClient = makeClient([
+      lineupRow({ id: "jj", slot: "IL", positions: ["2B", "SS"] }),
+      lineupRow({ id: "other-recovered", slot: "IL" }),
+    ]);
+    await saveLineupSlots("team", [{ playerId: "jj", slot: "BN" }]);
+    expect(sqlCalls()).toContain("commit");
+  });
+
+  it("still rejects newly placing an active player on IL", async () => {
+    currentClient = makeClient([lineupRow({ id: "healthy", slot: "BN" })]);
+    await expect(saveLineupSlots("team", [{ playerId: "healthy", slot: "IL" }])).rejects.toThrow("not eligible for IL");
+    expect(sqlCalls()).toContain("rollback");
+  });
+
   it("rejects past dates before any database write", async () => {
     await expect(saveLineupSlots("team", [], "2000-01-01")).rejects.toThrow("Past lineups are locked");
     expect(currentClient.query).not.toHaveBeenCalled();

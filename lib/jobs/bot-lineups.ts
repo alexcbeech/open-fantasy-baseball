@@ -58,7 +58,7 @@ export function computeBotLineupUpdate(lineup: LineupPlayer[], lockMode: LineupL
   // Revalidate the full resulting lineup exactly like the lineup API would,
   // so a planner edge case can never persist an illegal or locked move.
   const proposedLineup = lineup.map((entry) => ({ ...entry, slot: next[entry.player.id] ?? entry.slot }));
-  const validation = validateLineup(proposedLineup, rosterSlots);
+  const validation = validateLineup(proposedLineup, rosterSlots, lineup);
   const lockIssues = findLineupLockIssues(lineup, proposedLineup, now, lockMode);
 
   if (!validation.valid || lockIssues.length) {
