@@ -4,6 +4,22 @@ import { findLineupLockIssues, isPlayerGameLocked, isSlotEligibleForPlayer, vali
 import type { LineupPlayer } from "./types";
 
 describe("lineup validation", () => {
+  it("grandfathers only existing IL occupants when validating moves", () => {
+    const current: LineupPlayer[] = [
+      { slot: "IL", player: { ...players[0], status: "active" }, matchupTotal: 0 },
+      { slot: "BN", player: { ...players[1], status: "active" }, matchupTotal: 0 },
+    ];
+    expect(validateLineup(current).valid).toBe(false);
+    expect(validateLineup(current, undefined, current).valid).toBe(true);
+    const newlyStashed: LineupPlayer[] = [current[0], { ...current[1], slot: "IL" }];
+    expect(validateLineup(newlyStashed, undefined, current).issues).toEqual([
+      expect.objectContaining({ code: "player-status-ineligible", playerId: players[1].id }),
+    ]);
+    expect(validateLineup([current[0], current[0]], undefined, current).issues).toEqual([
+      expect.objectContaining({ code: "duplicate-player" }),
+    ]);
+  });
+
   it("accepts a legal lineup", () => {
     const lineup: LineupPlayer[] = [
       { slot: "C", player: players[5], matchupTotal: 0 },

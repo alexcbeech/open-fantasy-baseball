@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
 import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
-import { assignLineupSlotForAdd } from "@/lib/data/player-actions";
+import { assertILEligibleForAcquisition, assignLineupSlotForAdd, PlayerActionError } from "@/lib/data/player-actions";
 import { processDueTrades } from "@/lib/data/trades";
 
 // What this job actually does — surfaced verbatim in the admin panel, so it
@@ -219,7 +219,7 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
             waiverClaimsWon += 1;
             transactionsCreated += 1;
           } catch (error) {
-            if (!isUniqueViolation(error)) {
+            if (!isUniqueViolation(error) && !(error instanceof PlayerActionError)) {
               throw error;
             }
 
@@ -299,6 +299,8 @@ async function capUnaffordableBids(client: PoolClient, group: WaiverClaimCandida
 }
 
 async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCandidate, jobRunId: string) {
+  await client.query("select pg_advisory_xact_lock(hashtext($1))", [claim.teamId]);
+  await assertILEligibleForAcquisition(client, claim.teamId, claim.dropPlayerId ?? undefined);
   const settings = await client.query<{ waiver_mode: string | null }>(
     `select settings->>'waiverMode' as waiver_mode from league where id = $1`,
     [claim.leagueId],

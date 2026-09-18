@@ -27,11 +27,11 @@ function entry(slot: RosterSlot, overrides: PlayerOverrides): LineupPlayer {
 }
 
 describe("computeBotLineupUpdate", () => {
-  it("honors custom league capacities and leaves IL/NA players in place", () => {
+  it("honors custom league capacities and leaves recovered IL and NA players in place", () => {
     const lineup = [
       entry("BN", { id: "best", positions: ["OF"], projectedStats: { HR: 40 } }),
       entry("OF", { id: "other", positions: ["OF"], projectedStats: { HR: 10 } }),
-      entry("IL", { id: "injured", positions: ["OF"], status: "injured" }),
+      entry("IL", { id: "recovered", positions: ["OF"], status: "active" }),
       entry("NA", { id: "minor", positions: ["OF"], status: "minors" }),
     ];
     const slots = { ...defaultRosterSlots, OF: 1, UTIL: 0, NA: 1 };

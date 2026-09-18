@@ -337,7 +337,7 @@ export function LineupEditor({
   function commitSlots(nextSlots: Record<string, RosterSlot>) {
     if (lockedView) return false;
     const nextLineup = initialLineup.map((entry) => ({ ...entry, slot: nextSlots[entry.player.id] }));
-    const result = validateLineup(nextLineup, rosterSlots);
+    const result = validateLineup(nextLineup, rosterSlots, currentLineup);
 
     if (!result.valid) {
       setError(result.issues[0]?.message ?? "That move would create an illegal lineup.");

@@ -68,6 +68,10 @@ export async function applyPlayerManagementAction(
       throw new PlayerActionError("Player is not eligible for this league's player pool.", 422);
     }
 
+    if (action === "add" || action === "claim") {
+      await assertILEligibleForAcquisition(client, teamId, options.dropPlayerId);
+    }
+
     switch (action) {
       case "add":
         await addPlayer(client, team, teamId, playerId, player, options);
@@ -196,6 +200,33 @@ async function assertLineupChangeUnlocked(
       `This player's game has already started. ${changeLabel} reopen at the next daily rollover.`,
       409,
     );
+  }
+}
+
+/** Recheck at acquisition time, including when a previously submitted claim clears. */
+export async function assertILEligibleForAcquisition(client: PoolClient, teamId: string, dropPlayerId?: string) {
+  const result = await client.query<{ full_name: string }>(
+    `select p.full_name
+     from roster_entry re
+     join player p on p.id = re.player_id
+     join fantasy_team ft on ft.id = re.team_id
+     join league l on l.id = ft.league_id
+     join lateral (
+       select le.slot from lineup_entry le
+       where le.team_id = re.team_id and le.player_id = re.player_id
+         and le.lineup_date <= (now() at time zone 'America/New_York')::date
+       order by le.lineup_date desc limit 1
+     ) current_lineup on true
+     where re.team_id = $1 and re.dropped_at is null
+       and ($2::uuid is null or re.player_id <> $2::uuid)
+       and current_lineup.slot = 'IL'
+       and not (p.status = 'injured' or
+         (p.status = 'day-to-day' and coalesce((l.settings->>'allowILPlus')::boolean, false)))
+     limit 1`,
+    [teamId, dropPlayerId ?? null],
+  );
+  if (result.rows.length) {
+    throw new PlayerActionError(`${result.rows[0].full_name} is no longer eligible for IL. Move them out of IL or drop them before adding a player.`, 409);
   }
 }
 

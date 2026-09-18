@@ -348,7 +348,7 @@ export async function saveLineupSlots(teamId: string, entries: Array<{ playerId:
       player: entry.player,
       matchupTotal: entry.matchupTotal,
     }));
-    const validation = validateLineup(proposedLineup, rosterSlots);
+    const validation = validateLineup(proposedLineup, rosterSlots, currentLineup);
     const lockIssues = future ? [] : findLineupLockIssues(currentLineup, proposedLineup, new Date(), lockMode);
 
     if (lockIssues.length) {
