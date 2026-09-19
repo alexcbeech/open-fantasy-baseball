@@ -4,10 +4,10 @@ import { shiftLineupDate } from "@/lib/fantasy/lineup-date";
 
 export function LineupDateNavigation({ teamId, date, today, editableFromDate = today }: { teamId: string; date: string; today: string; editableFromDate?: string }) {
   const href = (day: string) => `/team/${teamId}?date=${day}`;
-  return <section className="panel" aria-label="Lineup date navigation">
+  return <section className="panel lineup-date-panel" aria-label="Lineup date navigation">
     <AutoNavigateForm action={`/team/${teamId}`}>
       <label htmlFor="lineup-date">Lineup date</label>
-      <input id="lineup-date" type="date" name="date" defaultValue={date} key={date} required />
+      <input className="lineup-date-input" id="lineup-date" type="date" name="date" defaultValue={date} key={date} required />
     </AutoNavigateForm>
     <nav className="matchup-period-links" aria-label="Lineup days">
       <Link className="secondary-button" href={href(shiftLineupDate(date, -1))}>← Previous day</Link>
