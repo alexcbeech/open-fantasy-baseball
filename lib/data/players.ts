@@ -53,7 +53,7 @@ export async function getPlayerWatchForTeam(teamId: string): Promise<PlayerWatch
 }
 
 export async function listPlayers(
-  options: { query?: string; availability?: Player["availability"]; leagueId?: string } = {},
+  options: { query?: string; availability?: Player["availability"]; leagueId?: string; limit?: number; offset?: number } = {},
 ): Promise<Player[]> {
   return withDemoFallback(
     async () => {
@@ -69,13 +69,25 @@ export async function listPlayers(
       // known, so a player owned in another league still reads free-agent here.
       let rosterScope = "";
       let leaguePoolJoin = "";
+      let waiverCondition = "false";
 
       if (options.leagueId && isUuid(options.leagueId)) {
         values.push(options.leagueId);
         rosterScope = `and league_id = $${values.length}`;
+        waiverCondition = `exists (select 1 from roster_entry w where w.player_id = p.id and w.league_id = $${values.length} and w.dropped_at is not null and w.waiver_until > now())`;
         leaguePoolJoin = `join league pool_league on pool_league.id = $${values.length}`;
         filters.push(dynamicPoolFilterConditionSql("pool_league.settings->>'playerPool'"));
       }
+
+      const availabilitySql = `case when active_roster.player_id is not null then 'rostered' when ${waiverCondition} then 'waivers' else 'free-agent' end`;
+      if (options.availability) {
+        values.push(options.availability);
+        filters.push(`${availabilitySql} = $${values.length}`);
+      }
+      values.push(Math.min(Math.max(options.limit ?? 500, 1), 500));
+      const limitParameter = values.length;
+      values.push(Math.max(options.offset ?? 0, 0));
+      const offsetParameter = values.length;
 
       const result = await query<DbPlayerRow>(
         `
@@ -87,7 +99,7 @@ export async function listPlayers(
             p.status,
             p.status_detail,
             coalesce(array_agg(distinct ppe.position order by ppe.position) filter (where ppe.position is not null), '{}') as positions,
-            case when active_roster.player_id is null then 'free-agent' else 'rostered' end as availability,
+            ${availabilitySql} as availability,
             latest_news.headline as news_headline,
             coalesce(season_stats.stats, '{}'::jsonb) as season_stats,
             coalesce(projection_stats.stats, '{}'::jsonb) as projected_stats,
@@ -158,8 +170,8 @@ export async function listPlayers(
           group by p.id, mt.abbreviation, active_roster.player_id, latest_news.headline, season_stats.stats, projection_stats.stats,
             p.season_fan_points, next_game.game_date, next_game.home_away, next_game.opponent,
             todays_game.first_pitch, todays_game.probable_starter, adp.rostered_percent
-          order by p.full_name
-          limit 500
+          order by p.full_name, p.id
+          limit $${limitParameter} offset $${offsetParameter}
         `,
         values,
       );

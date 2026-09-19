@@ -90,6 +90,8 @@ export async function setBotLineups(now = new Date()): Promise<BotLineupSummary>
      from fantasy_team ft
      join league l on l.id = ft.league_id
      where (ft.is_bot or ft.auto_start_active) and l.status in ('active', 'playoffs')
+       and not exists (select 1 from ai_bot_manager b where b.team_id = ft.id
+         and ft.is_bot and b.enabled and b.token_hash is not null and b.token_expires_at > now())
      order by ft.league_id, ft.id`,
   );
   summary.botTeamsSeen = teams.rows.filter((team) => team.is_bot).length;

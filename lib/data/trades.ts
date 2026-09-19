@@ -56,13 +56,15 @@ async function viewerTeams(client: PoolClient, leagueId: string, identity: ApiId
     `select ft.id as team_id, ft.is_bot
      from fantasy_team ft
      join app_user u on u.id = ft.manager_user_id
-     where ft.league_id = $1 and (u.id::text = $2 or u.email = $3)`,
-    [leagueId, identity.userId, identity.email],
+     where ft.league_id = $1 and (u.id::text = $2 or u.email = $3)
+       and ($4::uuid is null or (ft.id = $4 and ft.is_bot))`,
+    [leagueId, identity.userId, identity.email, identity.botTeamId ?? null],
   );
   return result.rows;
 }
 
 async function isCommissioner(client: PoolClient, leagueId: string, identity: ApiIdentity): Promise<boolean> {
+  if (identity.botTeamId) return false;
   const result = await client.query<{ is_commissioner: boolean }>(
     `select
        exists (

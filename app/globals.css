@@ -5207,3 +5207,15 @@ button.row {
     box-shadow: none;
   }
 }
+/* Per-team external AI managers. */
+.ai-bot-panel .panel-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.ai-bot-card { border-top: 1px solid var(--line); padding: 18px 0; }
+.ai-bot-card form { display: grid; gap: 12px; }
+.ai-bot-card label { display: grid; gap: 6px; }
+.ai-bot-card input:not([type="checkbox"]), .ai-bot-card textarea { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+.ai-bot-card textarea { background: var(--input-bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; resize: vertical; }
+.ai-bot-card .ai-bot-toggle { display: flex; align-items: center; gap: 8px; }
+.ai-bot-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-bot-token { overflow-wrap: anywhere; }
+.ai-bot-decisions { padding-left: 20px; }
+.ai-bot-decisions li { padding: 10px 0; }

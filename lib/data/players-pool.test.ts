@@ -60,6 +60,17 @@ describe("listPlayers league pool", () => {
 
     const [playerSql, values] = dbQuery.mock.calls[0] as [string, unknown[]];
     expect(playerSql).toContain("unaccent(p.full_name) ilike unaccent($1)");
-    expect(values).toEqual(["%Hector Rodriguez%"]);
+    expect(values).toEqual(["%Hector Rodriguez%", 500, 0]);
+  });
+
+  it("filters league-specific waiver availability before pagination", async () => {
+    dbQuery.mockResolvedValueOnce({ rows: [] });
+    await listPlayers({ leagueId: LEAGUE_ID, availability: "waivers", limit: 31, offset: 600 });
+    const [sql, values] = dbQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("w.league_id = $1");
+    expect(sql).toContain("w.waiver_until > now()");
+    expect(sql).toContain("limit $3 offset $4");
+    expect(sql).toContain("order by p.full_name, p.id");
+    expect(values).toEqual([LEAGUE_ID, "waivers", 31, 600]);
   });
 });

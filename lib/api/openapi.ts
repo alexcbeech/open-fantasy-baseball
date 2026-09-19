@@ -814,6 +814,27 @@ export const openApiDocument = {
         },
       },
     },
+    "/leagues/{leagueId}/bot-managers": {
+      get: {
+        tags: ["Leagues"], summary: "Read AI bot configurations and recent decisions",
+        security: bearerSecurity, "x-ofb-required-scope": "read:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        responses: { "200": { description: "Bot model labels, state, and recent decisions. Strategy and token expiry are commissioner-only." } },
+      },
+      post: {
+        tags: ["Leagues"], summary: "Configure an AI bot or rotate/revoke its team-bound MCP credential",
+        security: bearerSecurity, "x-ofb-required-scope": "commissioner:league",
+        parameters: [pathParameter("leagueId", "League id.")],
+        requestBody: jsonBody({ oneOf: [
+          { type: "object", required: ["teamId", "model", "strategy", "enabled", "allowTrades"], additionalProperties: false,
+            properties: { teamId: { type: "string", format: "uuid" }, model: { type: "string", maxLength: 120 }, strategy: { type: "string", maxLength: 4000 }, enabled: { type: "boolean" }, allowTrades: { type: "boolean" } } },
+          { type: "object", required: ["teamId", "action"], additionalProperties: false,
+            properties: { teamId: { type: "string", format: "uuid" }, action: { type: "string", enum: ["rotate-token", "revoke-token"] } } },
+        ] }),
+        responses: { "200": { description: "Saved. Rotations return a token once; responses are no-store. Rotation and revocation pause management." },
+          "400": { description: "Invalid configuration." }, "403": { description: "Commissioner required." }, "409": { description: "Bot or connection not ready." }, "429": { description: "Rate limited." } },
+      },
+    },
     "/leagues/settings-matrix": {
       get: {
         tags: ["Leagues"],
