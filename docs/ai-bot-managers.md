@@ -35,6 +35,23 @@ is excluded from the ordinary bot lineup job. Pausing, revocation, or token expi
 returns it to ordinary lineup automation. There is no scheduler liveness monitor
 yet: if the external scheduler stops, pause the AI manager to restore that fallback.
 
+## Reusable manager skill
+
+The maintained management instructions live in
+[OFB Bot Manager](../.agents/skills/ofb-bot-manager/SKILL.md). The skill covers
+morning roster health, pregame lineup checks, weekly strategy, and verified
+execution through the bot MCP tools.
+
+On the runner computer, use the skill from this repository checkout or copy its
+`ofb-bot-manager` folder into `~/.codex/skills/`. Invoke it as
+`$ofb-bot-manager` in the scheduled task and specify the intended connection,
+team/league, review mode, and execution permissions. Keep copied installations
+updated from the repository; this file is the maintained source.
+
+Keep tokens, model selection, and schedules outside the repository. Installing
+the skill does not create a schedule or enable a bot. Test the connection in
+analysis-only mode before enabling unattended management.
+
 ## Tools
 
 | Tool | Purpose |
