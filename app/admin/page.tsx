@@ -61,7 +61,6 @@ export default async function AdminPage() {
       </header>
 
       <section className="page admin-page">
-        <h1>Admin</h1>
         <AdminOperationsPanel initialHistory={history} />
 
         <AdminSection title="Nightly Window" id="schedule-heading">

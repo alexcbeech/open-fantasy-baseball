@@ -2830,10 +2830,6 @@ p.player-meta,
   gap: 12px;
 }
 
-.admin-page > h1 {
-  margin: 0;
-}
-
 .admin-section.panel {
   display: block;
   min-width: 0;
