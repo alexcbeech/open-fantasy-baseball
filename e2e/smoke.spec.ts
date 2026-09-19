@@ -63,6 +63,9 @@ test.describe("lineup move sheet", () => {
     await page.goto("/team/team-1");
     // Today's lineup may already be locked when the suite runs at night.
     await page.getByRole("link", { name: "Next day →" }).click();
+    // The current roster stays interactive during navigation. Wait for the
+    // next day's render before opening a sheet that navigation would unmount.
+    await expect(page.getByText(/^Upcoming lineup/)).toBeVisible();
 
     await page.getByRole("button", { name: /Move Adley Rutschman out of the C slot/ }).click();
 
