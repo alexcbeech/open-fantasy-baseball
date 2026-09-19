@@ -219,6 +219,7 @@ export function LeagueHub({
           <span>Waivers</span>
           <strong>{settings.waiverMode === "faab" ? `$${settings.faabBudget} FAAB` : "Rolling priority"}</strong>
         </div>
+        {scoringType !== "roto" ? <div><span>Weekly player adds</span><strong>{settings.weeklyPlayerAddLimit ?? 6}</strong></div> : null}
         <div>
           <span>Trade review</span>
           <strong>{tradeReviewLabel(settings)}</strong>

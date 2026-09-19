@@ -38,3 +38,8 @@ it("scopes the count to successful non-draft acquisitions in the current league 
   expect(sql).toContain(">= sp.starts_at");
   expect(sql).toContain("< sp.ends_at");
 });
+
+it("returns the persisted rollover timestamp with the count", async () => {
+  query.mockResolvedValue({ rows: [{ add_limit: 6, used: "4", resets_at: new Date("2026-09-21T07:00:00Z") }] });
+  await expect(getWeeklyPlayerAdds(client, "league", "team")).resolves.toEqual({ limit: 6, used: 4, resetsAt: "2026-09-21T07:00:00.000Z" });
+});

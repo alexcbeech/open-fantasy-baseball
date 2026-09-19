@@ -42,7 +42,7 @@ test.describe("team tabs", () => {
 
     await page.getByRole("link", { name: "League", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Commissioner" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "League Settings" })).toBeVisible();
   });
 
   test("flags players carrying recent news with a row icon", async ({ page }) => {
@@ -162,9 +162,11 @@ test.describe("commissioner settings", () => {
     await expect(hub.getByText("Playoffs start")).toBeVisible();
     await expect(hub.getByText("Championship")).toBeVisible();
 
-    const commissioner = page.getByRole("complementary", { name: "Commissioner" });
-    await expect(commissioner.getByRole("heading", { name: "Commissioner" })).toBeVisible();
+    const commissioner = page.getByRole("complementary", { name: "League Settings" });
+    await expect(commissioner.getByRole("heading", { name: "League Settings" })).toBeVisible();
     await expect(commissioner.getByText("Waivers")).toBeVisible();
-    await expect(commissioner.getByText("FAAB")).toBeVisible();
+    await expect(commissioner.getByText("Rolling priority")).toBeVisible();
+    await expect(commissioner.getByText("FAAB budget")).toHaveCount(0);
+    await expect(commissioner.getByText("Weekly player adds")).toBeVisible();
   });
 });

@@ -1661,7 +1661,7 @@ button.row {
 .points-proj {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1.1;
 }
 
@@ -5186,3 +5186,24 @@ button.row {
 .admin-user-card p { margin: 0; }
 .admin-user-confirm { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .admin-user-confirm h3 { margin: 0; }
+
+/* Keep actual scoring dominant and estimates explicitly labelled. */
+.player-points { gap: 5px; font-variant-numeric: tabular-nums; }
+.points-proj-label { font-size: 10px; }
+.players-tab { display: grid; gap: 16px; min-width: 0; }
+.weekly-adds-status p { margin: 6px 0 0; line-height: 1.5; }
+
+/* In the mobile footer, Feedback cannot obscure roster rows or actions. */
+@media (max-width: 640px) {
+  .feedback-fab {
+    position: static;
+    display: flex;
+    width: fit-content;
+    min-height: 44px;
+    margin: 12px auto max(24px, env(safe-area-inset-bottom));
+    background: var(--surface);
+    color: var(--muted);
+    border: 1px solid var(--line);
+    box-shadow: none;
+  }
+}
