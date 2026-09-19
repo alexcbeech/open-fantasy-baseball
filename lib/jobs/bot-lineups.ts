@@ -85,13 +85,21 @@ export async function setBotLineups(now = new Date()): Promise<BotLineupSummary>
     teamsSkipped: [],
   };
 
+  // During rollout the web code may arrive before its additive migration. Keep
+  // ordinary bots running until AI managers can actually be configured.
+  const migration = await getPool().query<{ ready: boolean }>(
+    "select exists (select 1 from schema_migration where filename = '0037_ai_bot_managers.sql') as ready",
+  );
+  const aiManagerFilter = migration.rows[0]?.ready
+    ? `and not exists (select 1 from ai_bot_manager b where b.team_id = ft.id
+         and ft.is_bot and b.enabled and b.token_hash is not null and b.token_expires_at > now())`
+    : "";
   const teams = await getPool().query<{ id: string; league_id: string; is_bot: boolean }>(
     `select ft.id, ft.league_id, ft.is_bot
      from fantasy_team ft
      join league l on l.id = ft.league_id
      where (ft.is_bot or ft.auto_start_active) and l.status in ('active', 'playoffs')
-       and not exists (select 1 from ai_bot_manager b where b.team_id = ft.id
-         and ft.is_bot and b.enabled and b.token_hash is not null and b.token_expires_at > now())
+       ${aiManagerFilter}
      order by ft.league_id, ft.id`,
   );
   summary.botTeamsSeen = teams.rows.filter((team) => team.is_bot).length;

@@ -8,7 +8,8 @@ model call is made by the server, and saving a configuration does not schedule a
 ## Setup
 
 1. Apply `0037_ai_bot_managers.sql` through the normal migration process before
-   deploying the new bot lineup job. Validate on a development database first.
+   configuring AI managers. Validate on a development database first. Ordinary bot
+   lineup automation continues to work while the migration is pending.
 2. In a team's **League → AI managers** panel, a commissioner chooses the bot.
    Enter the exact model configured in the external scheduler and a strategy.
    Leaving the model blank is allowed while paused. Model labels are declared,
