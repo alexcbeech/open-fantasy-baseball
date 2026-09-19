@@ -7,10 +7,12 @@ import { BrandLockup } from "@/app/brand-lockup";
 import { DraftCountdown } from "@/app/draft-countdown";
 import { LiveScoreRow } from "@/app/live-score-row";
 import { LineupEditor } from "./lineup-editor";
+import { getWeeklyPlayerAdds } from "@/lib/data/weekly-player-adds";
+import { WeeklyAddsStatus } from "./weekly-adds-status";
 import { PlayersBrowser } from "./players-browser";
 import { getCurrentOfbUser, isNeonAuthConfigured } from "@/lib/auth/neon-auth";
 import { getTeamAccess, isLeagueCommissioner, isLeagueCreator } from "@/lib/auth/team-access";
-import { isDatabaseConfigured, isUuid } from "@/lib/db/client";
+import { getPool, isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
 import { LeagueHub } from "./league-hub";
 import { LeagueSettingsEditor } from "./league-settings-editor";
@@ -118,6 +120,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
     leagueTransactions,
     viewerIsCommissioner,
     viewerIsCreator,
+    weeklyAdds,
   ] = await Promise.all([
     measureServerOperation("team.league-settings", () => getLeagueSettings(team.leagueId)),
     measureServerOperation("team.draft-status", () => getLeagueDraftStatus(team.leagueId)),
@@ -138,6 +141,9 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
       : Promise.resolve([]),
     selectedTab === "League" && currentUser ? isLeagueCommissioner(team.leagueId, currentUser) : Promise.resolve(false),
     selectedTab === "League" && currentUser ? isLeagueCreator(team.leagueId, currentUser) : Promise.resolve(false),
+    selectedTab === "Players" && isDatabaseConfigured()
+      ? getWeeklyPlayerAdds(getPool(), team.leagueId, teamId)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -233,7 +239,7 @@ export default async function TeamPage({ params, searchParams }: TeamPageProps) 
         {selectedTab === "Matchup" ? (
           <MatchupBrowser leagueId={team.leagueId} teamId={team.id} periodId={period} matchupId={matchup} />
         ) : null}
-        {selectedTab === "Players" ? <PlayersTab teamId={team.id} players={playerPool} /> : null}
+        {selectedTab === "Players" ? <div className="players-tab"><WeeklyAddsStatus usage={weeklyAdds} timeZone={profile.timeZone} /><PlayersTab teamId={team.id} players={playerPool} /></div> : null}
         {selectedTab === "League" && leagueOverview ? (
           <LeagueTab
             overview={leagueOverview}
@@ -356,7 +362,7 @@ function LeagueTab({
       <TransactionLog transactions={transactions} />
 
       <aside className="panel" aria-labelledby="settings-heading">
-        <h3 id="settings-heading">Commissioner</h3>
+        <h3 id="settings-heading">League Settings</h3>
         {canManage ? (
           <div className="commissioner-actions">
             <LeagueInviteButton leagueId={overview.leagueId} />
@@ -374,12 +380,13 @@ function LeagueTab({
           </div>
           <div className="setting-row">
             <span>Waivers</span>
-            <strong>{overview.settings.waiverMode}</strong>
+            <strong>{overview.settings.waiverMode === "faab" ? "FAAB bidding" : "Rolling priority"}</strong>
           </div>
-          <div className="setting-row">
-            <span>FAAB</span>
+          {overview.scoringType !== "roto" ? <div className="setting-row"><span>Weekly player adds</span><strong>{overview.settings.weeklyPlayerAddLimit ?? 6}</strong></div> : null}
+          {overview.settings.waiverMode === "faab" ? <div className="setting-row">
+            <span>FAAB budget</span>
             <strong>${overview.settings.faabBudget}</strong>
-          </div>
+          </div> : null}
         </div>
         <h3>Team Stats</h3>
         <div className="setting-list">
@@ -389,7 +396,7 @@ function LeagueTab({
                 <span className="player-name">{row.teamName}</span>
                 <span className="player-meta">{row.rosteredPlayers} rostered</span>
               </div>
-              <strong>${row.faabRemaining}</strong>
+              {overview.settings.waiverMode === "faab" ? <strong>${row.faabRemaining} FAAB</strong> : null}
             </div>
           ))}
         </div>

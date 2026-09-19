@@ -482,7 +482,7 @@ export function LineupEditor({
                     </span>
                   ) : (
                     <span className="lineup-col-heads" aria-hidden="true">
-                      <span>{isToday ? "Week" : "Day"}</span>
+                      <span>{isToday ? "Week pts" : "Day pts"}</span>
                       <span>{isToday ? "Proj today" : "Projected"}</span>
                     </span>
                   )}
@@ -610,7 +610,7 @@ export function LineupEditor({
                             aria-label={`${player.name}: ${weeklyPts} fantasy points ${isToday ? "this week" : "on selected day"}, ${todayPts} projected`}
                           >
                             <span className={liveEntry ? "points-live is-live" : "points-live"}>{weeklyPts}</span>
-                            <span className="points-proj">{lineupDate < todayDate ? "—" : todayPts}</span>
+                            {lineupDate >= todayDate ? <span className="points-proj"><span className="points-proj-label">Proj </span>{todayPts}</span> : null}
                           </button>
                         )}
                       </div>
