@@ -22,6 +22,7 @@ export async function configureBot(leagueId: string, config: BotConfig) {
        and (not $5 or exists (select 1 from ai_bot_manager where team_id = $1 and token_hash is not null and token_expires_at > now()))
      on conflict (team_id) do update set model = excluded.model, strategy = excluded.strategy,
        enabled = excluded.enabled, allow_trades = excluded.allow_trades, updated_at = now()
+     where not excluded.enabled or (ai_bot_manager.token_hash is not null and ai_bot_manager.token_expires_at > now())
      returning team_id`, [config.teamId, leagueId, config.model, config.strategy, config.enabled, config.allowTrades],
   );
   if (!result.rowCount) throw new Error("Choose a bot in this league and create its connection token before enabling it.");

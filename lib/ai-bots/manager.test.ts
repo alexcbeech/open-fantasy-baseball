@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { makeBotDecision } from "./manager";
+import { getBotOpponent, makeBotDecision } from "./manager";
 import { applyPlayerManagementAction } from "@/lib/data/player-actions";
 import { saveLineupSlots, getLineupForTeam } from "@/lib/data/teams";
 import { getLeagueSettings } from "@/lib/data/leagues";
@@ -58,6 +58,11 @@ it("preserves uncertain outcomes instead of reporting a rollback", async () => {
 it("enforces a durable daily decision cap", async () => {
   used = 40; await expect(makeBotDecision(principal, decision)).rejects.toThrow(/limit/);
   expect(applyPlayerManagementAction).not.toHaveBeenCalled();
+});
+it("does not read an opponent roster outside the assigned league", async () => {
+  await expect(getBotOpponent(principal, "other-league-team")).rejects.toThrow(/assigned league/);
+  expect(query).toHaveBeenCalledWith(expect.stringContaining("league_id = $2"), ["other-league-team", "league-a"]);
+  expect(getLineupForTeam).not.toHaveBeenCalled();
 });
 it("requires explicit trade permission and restricts the shared bot owner identity", async () => {
   const proposal: BotDecision = { ...decision, command: { kind: "propose-trade", toTeamId: "opponent", offeredPlayerIds: ["a"], requestedPlayerIds: ["b"] } };
