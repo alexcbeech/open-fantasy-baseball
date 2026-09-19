@@ -29,6 +29,7 @@ export const defaultLeagueSettings: LeagueSettings = {
   pitcherCategories: defaultPitcherCategories,
   rosterSlots: defaultRosterSlots,
   inningsMinimumPerMatchup: 7,
+  weeklyPlayerAddLimit: 6,
   waiverMode: "rolling",
   faabBudget: 100,
   tradeReview: "league-vote",
@@ -49,6 +50,7 @@ export const defaultLeagueSettings: LeagueSettings = {
 // (scoring type, team count, roster slots, categories, draft shape) are fixed
 // once the league exists — they define the draft and the season schedule.
 export const commissionerEditableSettings = [
+  "weeklyPlayerAddLimit",
   "waiverMode",
   "faabBudget",
   "tradeReview",

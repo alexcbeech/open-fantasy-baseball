@@ -1,4 +1,5 @@
 import { getPool, isUniqueViolation } from "@/lib/db/client";
+import { getWeeklyPlayerAdds } from "@/lib/data/weekly-player-adds";
 import { hasActiveScoringPeriod, hasStartedGameToday, lineupHasStartedGameToday } from "@/lib/data/game-locks";
 import { getPlayerDetail } from "@/lib/data/players";
 import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
@@ -70,6 +71,7 @@ export async function applyPlayerManagementAction(
 
     if (action === "add" || action === "claim") {
       await assertILEligibleForAcquisition(client, teamId, options.dropPlayerId);
+      await assertWeeklyPlayerAddAllowed(client, team.leagueId, teamId);
     }
 
     switch (action) {
@@ -227,6 +229,13 @@ export async function assertILEligibleForAcquisition(client: PoolClient, teamId:
   );
   if (result.rows.length) {
     throw new PlayerActionError(`${result.rows[0].full_name} is no longer eligible for IL. Move them out of IL or drop them before adding a player.`, 409);
+  }
+}
+
+export async function assertWeeklyPlayerAddAllowed(client: PoolClient, leagueId: string, teamId: string) {
+  const usage = await getWeeklyPlayerAdds(client, leagueId, teamId);
+  if (usage && usage.used >= usage.limit) {
+    throw new PlayerActionError(`Weekly player add limit reached (${usage.used}/${usage.limit}). Adds reset at the next matchup rollover.`, 409);
   }
 }
 

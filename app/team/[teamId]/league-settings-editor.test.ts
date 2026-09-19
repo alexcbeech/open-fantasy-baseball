@@ -34,4 +34,20 @@ it("hides the playoff setting in roto leagues", () => {
   render(React.createElement(LeagueSettingsEditor, { leagueId: "league", settings: { ...defaultLeagueSettings, scoringType: "roto" } }));
   fireEvent.click(screen.getByRole("button", { name: "Edit League Settings" }));
   expect(screen.queryByRole("checkbox", { name: "Allow bots to make the playoffs" })).toBeNull();
+  expect(screen.queryByRole("spinbutton", { name: "Weekly player adds" })).toBeNull();
+});
+
+it("defaults legacy leagues to six adds, validates input, and saves commissioner changes", async () => {
+  render(React.createElement(LeagueSettingsEditor, { leagueId: "league", settings: { ...defaultLeagueSettings, weeklyPlayerAddLimit: undefined } }));
+  fireEvent.click(screen.getByRole("button", { name: "Edit League Settings" }));
+  const input = screen.getByRole("spinbutton", { name: "Weekly player adds" }) as HTMLInputElement;
+  expect(input.value).toBe("6");
+  fireEvent.change(input, { target: { value: "1.5" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save Settings" }));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(screen.getByText("Weekly player adds must be a whole number from 0 to 1000.")).toBeTruthy();
+  fireEvent.change(input, { target: { value: "8" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save Settings" }));
+  await waitFor(() => expect(screen.getByText("Settings saved.")).toBeTruthy());
+  expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).weeklyPlayerAddLimit).toBe(8);
 });

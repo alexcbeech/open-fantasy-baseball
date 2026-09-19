@@ -53,6 +53,17 @@ export const scoringPeriods = ["daily", "weekly"] as const;
 
 export const commissionerSettingsMatrix: CommissionerSettingDefinition[] = [
   {
+    key: "weeklyPlayerAddLimit",
+    label: "Weekly Player Adds",
+    kind: "number",
+    appliesTo: ["h2h-categories", "h2h-points"],
+    defaultValue: 6,
+    min: 0,
+    max: 1000,
+    description: "Successful free-agent adds and waiver claims per team per matchup week. Resets at matchup rollover; 0 blocks adds. Draft picks and trades do not count.",
+    commissionerEditable: true,
+  },
+  {
     key: "scoringType",
     label: "Scoring Type",
     kind: "enum",

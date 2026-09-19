@@ -20,6 +20,7 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
+    weeklyPlayerAddLimit: String(settings.weeklyPlayerAddLimit ?? 6),
     waiverMode: settings.waiverMode,
     faabBudget: String(settings.faabBudget),
     tradeReview: settings.tradeReview,
@@ -34,11 +35,18 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
     setBusy(true);
     setMessage(null);
 
+    if (settings.scoringType !== "roto" && (!form.weeklyPlayerAddLimit.trim() || !Number.isInteger(Number(form.weeklyPlayerAddLimit)) || Number(form.weeklyPlayerAddLimit) < 0 || Number(form.weeklyPlayerAddLimit) > 1000)) {
+      setMessage("Weekly player adds must be a whole number from 0 to 1000.");
+      setBusy(false);
+      return;
+    }
+
     try {
       const response = await fetch(`/api/v1/leagues/${leagueId}/settings`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(settings.scoringType !== "roto" ? { weeklyPlayerAddLimit: Number(form.weeklyPlayerAddLimit) } : {}),
           waiverMode: form.waiverMode,
           faabBudget: Number.parseInt(form.faabBudget, 10) || 0,
           tradeReview: form.tradeReview,
@@ -76,6 +84,15 @@ export function LeagueSettingsEditor({ leagueId, settings }: LeagueSettingsEdito
   return (
     <div className="settings-editor">
       {message ? <div className="status-banner">{message}</div> : null}
+      {settings.scoringType !== "roto" ? (
+        <div>
+          <label className="settings-field">
+            Weekly player adds
+            <input type="number" min={0} max={1000} step={1} value={form.weeklyPlayerAddLimit} onChange={(e) => setForm({ ...form, weeklyPlayerAddLimit: e.target.value })} />
+          </label>
+          <p className="subtle">Free-agent adds and successful waiver claims per team. Resets at matchup rollover. Draft picks and trades do not count; 0 blocks adds.</p>
+        </div>
+      ) : null}
 
       <label className="settings-field">
         Waivers
