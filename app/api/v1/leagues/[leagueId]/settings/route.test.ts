@@ -42,3 +42,21 @@ it.each(["false", 0, null])("rejects non-boolean eligibility %s", async (value) 
   expect((await PATCH(request(value), context)).status).toBe(400);
   expect(updateLeagueSettings).not.toHaveBeenCalled();
 });
+
+function addLimitRequest(value: unknown) {
+  return new Request("http://localhost/api/v1/leagues/league/settings", { method: "PATCH", body: JSON.stringify({ weeklyPlayerAddLimit: value }) });
+}
+it.each([0, 6, 12])("saves and audits weekly add limit %s", async (value) => {
+  expect((await PATCH(addLimitRequest(value), context)).status).toBe(200);
+  expect(updateLeagueSettings).toHaveBeenCalledWith("league", { weeklyPlayerAddLimit: value });
+  expect(recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ detail: { changes: { weeklyPlayerAddLimit: value } } }));
+});
+it.each([-1, 1.5, 1001, null, "6"]) ("rejects invalid weekly add limit %s", async (value) => {
+  expect((await PATCH(addLimitRequest(value), context)).status).toBe(400);
+  expect(updateLeagueSettings).not.toHaveBeenCalled();
+});
+it("restricts add limit updates to commissioners", async () => {
+  vi.mocked(isLeagueCommissioner).mockResolvedValue(false);
+  expect((await PATCH(addLimitRequest(9), context)).status).toBe(403);
+  expect(updateLeagueSettings).not.toHaveBeenCalled();
+});

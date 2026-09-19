@@ -56,6 +56,7 @@ export type LeagueSettings = {
   pitcherCategories: StatCategory[];
   rosterSlots: Record<RosterSlot, number>;
   inningsMinimumPerMatchup: number;
+  weeklyPlayerAddLimit?: number;
   waiverMode: WaiverMode;
   faabBudget: number;
   tradeReview: TradeReviewMode;

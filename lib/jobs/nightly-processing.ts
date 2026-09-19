@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { getPool, isDatabaseConfigured, isUniqueViolation } from "@/lib/db/client";
 import { buildWaiverNotification, enqueueNotificationForTeam } from "@/lib/data/notifications";
 import { ensureTodayLineupSnapshot } from "@/lib/data/lineup-snapshots";
-import { assertILEligibleForAcquisition, assignLineupSlotForAdd, PlayerActionError } from "@/lib/data/player-actions";
+import { assertILEligibleForAcquisition, assertWeeklyPlayerAddAllowed, assignLineupSlotForAdd, PlayerActionError } from "@/lib/data/player-actions";
 import { processDueTrades } from "@/lib/data/trades";
 
 // What this job actually does — surfaced verbatim in the admin panel, so it
@@ -56,7 +56,7 @@ export type WaiverClaimCandidate = {
 export type WaiverClaimDecision = {
   claimId: string;
   status: "won" | "lost";
-  reason: "best_claim" | "lower_priority" | "player_unavailable";
+  reason: "best_claim" | "lower_priority" | "player_unavailable" | "weekly_add_limit";
 };
 
 export function getNightlyProcessingWindow(timeZone = "America/New_York") {
@@ -77,6 +77,7 @@ export function decideWaiverClaimsForPlayer(candidates: WaiverClaimCandidate[], 
   }
 
   const [winner, ...losers] = [...candidates].sort(compareWaiverClaims);
+  if (!winner) return [];
 
   return [
     {
@@ -184,6 +185,11 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
     );
 
     const claims = dueClaims.rows.map(mapWaiverClaim);
+    // Hold team locks through eligibility checks and all awards. A direct add
+    // cannot consume the last allowance between ranking and applying a claim.
+    for (const teamId of [...new Set(claims.map((claim) => claim.teamId))].sort()) {
+      await client.query("select pg_advisory_xact_lock(hashtext($1))", [teamId]);
+    }
     const claimGroups = groupClaimsByPlayer(claims);
     let waiverClaimsWon = 0;
     let waiverClaimsLost = 0;
@@ -194,7 +200,18 @@ async function processDueWaivers(client: PoolClient, now: Date, jobRunId: string
       // A FAAB bid a team can no longer afford (budget spent since placing the
       // claim) competes as a zero bid rather than jumping the queue.
       const affordable = await capUnaffordableBids(client, group);
-      const decisions = decideWaiverClaimsForPlayer(affordable, playerAvailable);
+      const eligible: WaiverClaimCandidate[] = [];
+      const decisions: WaiverClaimDecision[] = [];
+      for (const claim of affordable) {
+        try {
+          await assertWeeklyPlayerAddAllowed(client, claim.leagueId, claim.teamId);
+          eligible.push(claim);
+        } catch (error) {
+          if (!(error instanceof PlayerActionError)) throw error;
+          decisions.push({ claimId: claim.id, status: "lost", reason: "weekly_add_limit" });
+        }
+      }
+      decisions.push(...decideWaiverClaimsForPlayer(eligible, playerAvailable));
       const playerName = await getPlayerName(client, group[0].addPlayerId);
 
       for (const decision of decisions) {
@@ -300,6 +317,7 @@ async function capUnaffordableBids(client: PoolClient, group: WaiverClaimCandida
 
 async function applyWinningWaiverClaim(client: PoolClient, claim: WaiverClaimCandidate, jobRunId: string) {
   await client.query("select pg_advisory_xact_lock(hashtext($1))", [claim.teamId]);
+  await assertWeeklyPlayerAddAllowed(client, claim.leagueId, claim.teamId);
   await assertILEligibleForAcquisition(client, claim.teamId, claim.dropPlayerId ?? undefined);
   const settings = await client.query<{ waiver_mode: string | null }>(
     `select settings->>'waiverMode' as waiver_mode from league where id = $1`,

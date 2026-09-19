@@ -43,6 +43,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
 const updateSchema = z
   .object({
+    weeklyPlayerAddLimit: z.number().int().min(0).max(1000).optional(),
     waiverMode: z.enum([waiverModes[0], waiverModes[1]]).optional(),
     faabBudget: z.coerce.number().int().min(0).max(1000).optional(),
     tradeReview: z.enum([tradeReviewModes[0], tradeReviewModes[1], tradeReviewModes[2]]).optional(),
