@@ -6,6 +6,8 @@ import type { OAuthScope } from "@/lib/auth/scopes";
 export type ApiIdentity = {
   userId: string;
   email: string;
+  /** Internal bot gateway context; never populated from REST request bodies. */
+  botTeamId?: string;
 };
 
 /**

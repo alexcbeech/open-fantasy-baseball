@@ -36,3 +36,13 @@ it("does not write or audit already-set lineups", async () => {
   expect(saveLineupSlots).not.toHaveBeenCalled();
   expect(recordAuditEvent).not.toHaveBeenCalled();
 });
+it("excludes only active AI bots with valid credentials after the migration", async () => {
+  query.mockResolvedValueOnce({ rows: [{ ready: true }] }).mockResolvedValueOnce({ rows: [] });
+  await setBotLineups();
+  expect(query.mock.calls[1][0]).toContain("ft.is_bot and b.enabled and b.token_hash is not null and b.token_expires_at > now()");
+});
+it("keeps ordinary automation available before the AI migration is applied", async () => {
+  query.mockResolvedValueOnce({ rows: [{ ready: false }] }).mockResolvedValueOnce({ rows: [] });
+  await setBotLineups();
+  expect(query.mock.calls[1][0]).not.toContain("from ai_bot_manager");
+});

@@ -15,6 +15,7 @@ import { getTeamAccess, isLeagueCommissioner, isLeagueCreator } from "@/lib/auth
 import { getPool, isDatabaseConfigured, isUuid } from "@/lib/db/client";
 import { LeagueInviteButton } from "./league-invite-button";
 import { LeagueHub } from "./league-hub";
+import { BotManagers } from "./bot-managers";
 import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
 import { TradesPanel } from "./trades-panel";
@@ -346,6 +347,7 @@ function LeagueTab({
         announcements={overview.announcements}
         canManage={canManage}
       />
+      <BotManagers leagueId={overview.leagueId} canManage={canManage} />
 
       <section className="panel" aria-labelledby="standings-heading">
         <h2 id="standings-heading">Standings</h2>
