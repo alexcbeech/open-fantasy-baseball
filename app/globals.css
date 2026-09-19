@@ -2825,33 +2825,76 @@ p.player-meta,
   gap: 12px;
 }
 
-.admin-operations-panel,
-.admin-side-panel {
-  align-content: start;
-  display: grid;
-  gap: 14px;
-}
-
-.admin-operation-list {
+.admin-page {
   display: grid;
   gap: 12px;
 }
 
-.admin-operation {
-  border-bottom: 1px solid var(--line);
+.admin-page > h1 {
+  margin: 0;
+}
+
+.admin-section.panel {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  margin-top: 0;
+}
+
+.admin-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: inherit;
+}
+
+.admin-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-section-summary::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.admin-section details[open] > .admin-section-summary::before {
+  transform: rotate(45deg);
+}
+
+.admin-section-summary:hover {
+  background: var(--surface-strong);
+}
+
+.admin-section-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.admin-section-summary h2 {
+  margin: 0;
+  font-size: 18px;
+  min-width: 0;
+}
+
+.admin-section-meta {
+  margin-left: auto;
+  text-align: right;
+}
+
+.admin-section-body {
+  border-top: 1px solid var(--line);
+  padding: 16px;
   display: grid;
   gap: 12px;
-  padding-bottom: 14px;
-}
-
-.admin-operation:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.admin-operation h2 {
-  font-size: 16px;
-  margin-bottom: 4px;
 }
 
 .admin-task-list {
