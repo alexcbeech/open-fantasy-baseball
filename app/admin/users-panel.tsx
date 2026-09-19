@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminSection } from "./admin-section";
+
 import { useCallback, useEffect, useState } from "react";
 import type { AccountCommand, AdminUser } from "@/lib/data/admin-user-schema";
 
@@ -50,8 +52,8 @@ export function AdminUsersPanel() {
     } finally { setBusy(false); }
   }
 
-  return <section className="panel feedback-admin-panel admin-users-panel" aria-labelledby="admin-users-heading">
-    <div className="section-title"><h2 id="admin-users-heading">Users</h2>
+  return <AdminSection title="Users" id="admin-users-heading" className="admin-users-panel">
+    <div className="section-title">
       <button className="secondary-button" disabled={busy} onClick={() => { setError(""); reload().catch(error => setError(error.message)); }}>Reload users</button></div>
     <p className="subtle">Deactivate an account to stop sign-in, account access, emails, and push notifications. Teams and league history are preserved.</p>
     <form className="admin-user-search" onSubmit={event => { event.preventDefault(); setFilter(search.trim()); setSelected(null); }}>
@@ -84,5 +86,5 @@ export function AdminUsersPanel() {
     </article>)}</div>
     {configured && !error && !users.length ? <p className="subtle">No users found.</p> : null}
     {users.length === 100 ? <p className="subtle">Showing the first 100 matches. Search to narrow the list.</p> : null}
-  </section>;
+  </AdminSection>;
 }

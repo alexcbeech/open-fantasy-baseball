@@ -7,6 +7,7 @@ import { listAdminRunHistory } from "@/lib/data/admin-runs";
 import { listAuditEventPage } from "@/lib/data/audit";
 import { listRecentFeedback } from "@/lib/data/feedback";
 import { nightlyProcessingTasks, getNightlyProcessingWindow } from "@/lib/jobs/nightly-processing";
+import { AdminSection } from "./admin-section";
 import { AdminAuditLog } from "./audit-log";
 import { AdminOperationsPanel } from "./operations-panel";
 import { AdminFeedbackList } from "./feedback-list";
@@ -59,59 +60,47 @@ export default async function AdminPage() {
         <AuthControl enabled={authEnabled} />
       </header>
 
-      <section className="page">
-        <div className="content-grid">
-          <AdminOperationsPanel initialHistory={history} />
+      <section className="page admin-page">
+        <AdminOperationsPanel initialHistory={history} />
 
-          <aside className="panel admin-side-panel" aria-labelledby="schedule-heading">
-            <h2 id="schedule-heading">Nightly Window</h2>
-            <div className="setting-list">
-              <div className="setting-row">
-                <span>Start</span>
-                <strong>{window.localStartTime}</strong>
-              </div>
-              <div className="setting-row">
-                <span>Time Zone</span>
-                <strong>{window.timeZone}</strong>
-              </div>
-              <div className="setting-row">
-                <span>Expected</span>
-                <strong>{window.expectedDurationMinutes} min</strong>
-              </div>
+        <AdminSection title="Nightly Window" id="schedule-heading">
+          <div className="setting-list">
+            <div className="setting-row">
+              <span>Start</span>
+              <strong>{window.localStartTime}</strong>
             </div>
+            <div className="setting-row">
+              <span>Time Zone</span>
+              <strong>{window.timeZone}</strong>
+            </div>
+            <div className="setting-row">
+              <span>Expected</span>
+              <strong>{window.expectedDurationMinutes} min</strong>
+            </div>
+          </div>
 
-            <h2>Task Plan</h2>
-            <div className="admin-task-list">
-              {nightlyProcessingTasks.map((task) => (
-                <div className="admin-task-row" key={task}>
-                  <span className="slot">JOB</span>
-                  <span>{task}</span>
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
+        </AdminSection>
+        <AdminSection title="Task Plan" id="task-plan-heading">
+          <div className="admin-task-list">
+            {nightlyProcessingTasks.map((task) => (
+              <div className="admin-task-row" key={task}>
+                <span className="slot">JOB</span>
+                <span>{task}</span>
+              </div>
+            ))}
+          </div>
+        </AdminSection>
 
         <AdminUsersPanel />
         <AdminAnnouncementsPanel />
 
-        <section className="panel feedback-admin-panel" aria-labelledby="feedback-admin-heading">
-          <div className="section-title">
-            <h2 id="feedback-admin-heading">User Feedback</h2>
-            <span className="subtle">{feedback.length} total</span>
-          </div>
-
+        <AdminSection title="User Feedback" id="feedback-admin-heading" meta={`${feedback.length} total`}>
           <AdminFeedbackList initialFeedback={feedback} />
-        </section>
+        </AdminSection>
 
-        <section className="panel feedback-admin-panel" aria-labelledby="audit-log-heading">
-          <div className="section-title">
-            <h2 id="audit-log-heading">Audit Log</h2>
-            <span className="subtle">newest first</span>
-          </div>
-
+        <AdminSection title="Audit Log" id="audit-log-heading" meta="newest first">
           <AdminAuditLog initialEvents={auditPage.events} initialHasMore={auditPage.hasMore} />
-        </section>
+        </AdminSection>
       </section>
     </main>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminSection } from "./admin-section";
 import { useState } from "react";
 import type { AdminRunHistory } from "@/lib/data/admin-runs";
 
@@ -121,83 +122,74 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
   }
 
   return (
-    <section className="panel admin-operations-panel" aria-labelledby="operations-heading">
-      <h1 id="operations-heading">Operations</h1>
-      <div className="admin-operation-list">
-        {operations.map((operation) => {
-          const state = operationStates[operation.key];
-          const isRunning = state.kind === "running";
+    <>
+      {operations.map((operation) => {
+        const state = operationStates[operation.key];
+        const isRunning = state.kind === "running";
 
-          return (
-            <div className="admin-operation" key={operation.key}>
-              <div>
-                <h2>{operation.title}</h2>
-                <p className="subtle">{operation.description}</p>
+        return (
+          <AdminSection key={operation.key} title={operation.title} id={`${operation.key}-heading`} meta={isRunning ? "Running…" : state.kind === "error" ? "Failed" : state.kind === "success" ? "Completed" : undefined}>
+            <p className="subtle">{operation.description}</p>
+
+            {state.message ? (
+              <div className={state.kind === "error" ? "status-banner bad" : "status-banner good"}>{state.message}</div>
+            ) : null}
+
+            {state.details.length ? (
+              <div className="metric-grid">
+                {state.details.map((detail) => (
+                  <div className="metric" key={detail.label}>
+                    <span className="metric-label">{detail.label}</span>
+                    <strong className="metric-value">{detail.value}</strong>
+                  </div>
+                ))}
               </div>
+            ) : null}
 
-              {state.message ? (
-                <div className={state.kind === "error" ? "status-banner bad" : "status-banner good"}>{state.message}</div>
-              ) : null}
-
-              {state.details.length ? (
-                <div className="metric-grid">
-                  {state.details.map((detail) => (
-                    <div className="metric" key={detail.label}>
-                      <span className="metric-label">{detail.label}</span>
-                      <strong className="metric-value">{detail.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-              <button className="primary-button" type="button" disabled={isRunning} aria-busy={isRunning} onClick={() => runOperation(operation)}>
-                {isRunning ? "Running..." : operation.action}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <section className="admin-history" aria-labelledby="history-heading">
-        <div>
-          <h2>Data Freshness</h2>
-          <div className="metric-grid">
-            <div className="metric">
-              <span className="metric-label">MLB Sync</span>
-              <strong className="metric-value">{formatFreshnessStatus(history.freshness.status)}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Players</span>
-              <strong className="metric-value">{history.freshness.playerCount}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric-label">MLB Teams</span>
-              <strong className="metric-value">{history.freshness.mlbTeamCount}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Games</span>
-              <strong className="metric-value">{history.freshness.scheduledGameCount}</strong>
-            </div>
-            <div className="metric">
-              <span className="metric-label">Probables</span>
-              <strong className="metric-value">{history.freshness.probableStarterCount}</strong>
-            </div>
+            <button className="primary-button" type="button" disabled={isRunning} aria-busy={isRunning} onClick={() => runOperation(operation)}>
+              {isRunning ? "Running..." : operation.action}
+            </button>
+          </AdminSection>
+        );
+      })}
+      <AdminSection title="Data Freshness" id="freshness-heading" meta={formatFreshnessStatus(history.freshness.status)}>
+        <div className="metric-grid">
+          <div className="metric">
+            <span className="metric-label">MLB Sync</span>
+            <strong className="metric-value">{formatFreshnessStatus(history.freshness.status)}</strong>
           </div>
-          <div className="admin-freshness-meta">
-            <span className={`pill freshness-${history.freshness.status}`}>{history.freshness.status}</span>
-            <span className="player-meta">
-              Last successful MLB sync:{" "}
-              {history.freshness.lastSuccessfulMlbSyncAt ? formatDateTime(history.freshness.lastSuccessfulMlbSyncAt) : "never"}
-            </span>
+          <div className="metric">
+            <span className="metric-label">Players</span>
+            <strong className="metric-value">{history.freshness.playerCount}</strong>
           </div>
-          <div className="admin-freshness-meta">
-            <span className="player-meta">{history.freshness.positionEligibilityCount} active position eligibility rows</span>
-            <span className="player-meta">{history.freshness.playerNewsCount} news rows</span>
-            <span className="player-meta">{history.freshness.statLineCount} stat lines</span>
+          <div className="metric">
+            <span className="metric-label">MLB Teams</span>
+            <strong className="metric-value">{history.freshness.mlbTeamCount}</strong>
+          </div>
+          <div className="metric">
+            <span className="metric-label">Games</span>
+            <strong className="metric-value">{history.freshness.scheduledGameCount}</strong>
+          </div>
+          <div className="metric">
+            <span className="metric-label">Probables</span>
+            <strong className="metric-value">{history.freshness.probableStarterCount}</strong>
           </div>
         </div>
-
+        <div className="admin-freshness-meta">
+          <span className={`pill freshness-${history.freshness.status}`}>{history.freshness.status}</span>
+          <span className="player-meta">
+            Last successful MLB sync:{" "}
+            {history.freshness.lastSuccessfulMlbSyncAt ? formatDateTime(history.freshness.lastSuccessfulMlbSyncAt) : "never"}
+          </span>
+        </div>
+        <div className="admin-freshness-meta">
+          <span className="player-meta">{history.freshness.positionEligibilityCount} active position eligibility rows</span>
+          <span className="player-meta">{history.freshness.playerNewsCount} news rows</span>
+          <span className="player-meta">{history.freshness.statLineCount} stat lines</span>
+        </div>
+      </AdminSection>
+      <AdminSection title="Recent Runs" id="history-heading">
         <div className="section-title admin-history-title">
-          <h2 id="history-heading">Recent Runs</h2>
           <button className="secondary-button" type="button" onClick={refreshHistory} disabled={isRefreshingHistory} aria-busy={isRefreshingHistory}>
             {isRefreshingHistory ? "Refreshing..." : "Refresh"}
           </button>
@@ -230,9 +222,8 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
           }))}
         />
 
-        <div className="section-title admin-history-title">
-          <h2>Job Queue</h2>
-        </div>
+      </AdminSection>
+      <AdminSection title="Job Queue" id="job-queue-heading">
         <RunHistoryGroup
           emptyLabel="No queued jobs yet"
           rows={history.jobQueue.map((job) => ({
@@ -245,8 +236,8 @@ export function AdminOperationsPanel({ initialHistory }: { initialHistory: Admin
             meta: `${job.status} · attempt ${job.attempts}/${job.maxAttempts}${job.lastError ? ` · ${job.lastError}` : ""}`,
           }))}
         />
-      </section>
-    </section>
+      </AdminSection>
+    </>
   );
 }
 

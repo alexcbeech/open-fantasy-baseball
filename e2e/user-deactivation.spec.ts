@@ -15,6 +15,7 @@ test("admin confirms deactivation, sees persistence, handles stale state, and re
     return route.fulfill({ json: { authSyncPending: false } });
   });
   await page.goto("/admin");
+  await page.locator("summary").filter({ hasText: "Users" }).click();
   const panel = page.getByRole("region", { name: "Users", exact: true });
   await panel.getByRole("button", { name: "Deactivate", exact: true }).click();
   expect(writes).toBe(0);
@@ -25,6 +26,7 @@ test("admin confirms deactivation, sees persistence, handles stale state, and re
   await panel.getByRole("button", { name: "Confirm account change" }).click();
   await expect(panel.getByRole("status")).toContainText("Account deactivated");
   await page.reload();
+  await page.locator("summary").filter({ hasText: "Users" }).click();
   await expect(panel.getByText("Deactivated", { exact: true })).toBeVisible();
   await expect(panel.getByText("Manager requested a break", { exact: false })).toBeVisible();
   fail = true;
@@ -36,6 +38,7 @@ test("admin confirms deactivation, sees persistence, handles stale state, and re
   await panel.getByRole("button", { name: "Confirm account change" }).click();
   await expect(panel.getByRole("status")).toContainText("fresh sign-in");
   await page.reload();
+  await page.locator("summary").filter({ hasText: "Users" }).click();
   await expect(panel.getByText("Active", { exact: true })).toBeVisible();
 });
 
@@ -50,6 +53,7 @@ test("admin cannot deactivate self and can retry a pending provider block", asyn
     ] } });
   });
   await page.goto("/admin");
+  await page.locator("summary").filter({ hasText: "Users" }).click();
   const panel = page.getByRole("region", { name: "Users", exact: true });
   await expect(panel.getByRole("button", { name: "Deactivate", exact: true })).toBeDisabled();
   await panel.getByRole("button", { name: "Retry authentication sync" }).click();

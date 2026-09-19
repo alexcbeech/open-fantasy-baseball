@@ -1,5 +1,7 @@
 "use client";
 
+import { AdminSection } from "./admin-section";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AdminAnnouncement, AnnouncementContent, AnnouncementSettings } from "@/lib/data/admin-announcement-schema";
 import { announcementContentSchema } from "@/lib/data/admin-announcement-schema";
@@ -59,8 +61,8 @@ export function AdminAnnouncementsPanel() {
   }
   const valid = announcementContentSchema.safeParse(content).success;
   const editable = active?.status === "draft";
-  return <section className="panel announcement-panel" aria-labelledby="announcements-heading">
-    <div className="section-title"><h2 id="announcements-heading">Email Announcements</h2>
+  return <AdminSection title="Email Announcements" id="announcements-heading" className="announcement-panel">
+    <div className="section-title">
       <button className="secondary-button" type="button" disabled={busy || dirty || !settings?.canDraft} onClick={() => void act("create")}>New announcement</button></div>
     <p className="subtle">Send an update to all registered users with valid email addresses. Each user receives a private email.</p>
     {settings && !settings.configured ? <p>Announcements need a database, official email sender, and monitored Reply-To inbox.</p> : null}
@@ -112,5 +114,5 @@ export function AdminAnnouncementsPanel() {
         {item.blocked > 0 ? <p role="status">Safe retries have expired for some recipients. Check this announcement in Resend before sending another message.</p> : null}
       </> : null}
     </li>)}</ul>}
-  </section>;
+  </AdminSection>;
 }

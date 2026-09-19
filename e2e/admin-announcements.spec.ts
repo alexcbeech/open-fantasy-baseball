@@ -15,6 +15,7 @@ test("admin drafts, previews, tests, reviews, sends and reloads announcement his
     return route.fulfill({ json: { id: item?.id } });
   });
   await page.goto("/admin");
+  await page.locator("summary").filter({ hasText: "Email Announcements" }).click();
   const panel = page.getByRole("region", { name: "Email Announcements" });
   await panel.getByRole("button", { name: "New announcement" }).click();
   await panel.getByLabel("Subject", { exact: true }).fill("Playoff seeding update");
@@ -23,6 +24,7 @@ test("admin drafts, previews, tests, reviews, sends and reloads announcement his
   await panel.getByRole("button", { name: "Save draft" }).click();
   await expect(panel.getByRole("status")).toHaveText("Draft saved.");
   await page.reload();
+  await page.locator("summary").filter({ hasText: "Email Announcements" }).click();
   await panel.getByRole("button", { name: "Playoff seeding update", exact: true }).click();
   await expect(panel.getByRole("textbox", { name: "Message", exact: true })).toHaveValue("Please review your standings.\n<script>plain text</script>");
   await panel.getByRole("button", { name: "Preview email" }).click();
@@ -39,6 +41,7 @@ test("admin drafts, previews, tests, reviews, sends and reloads announcement his
   await expect(panel.getByRole("textbox", { name: "Message", exact: true })).toBeDisabled();
   await panel.getByRole("button", { name: "Resume pending / retry unconfirmed" }).click();
   await page.reload();
+  await page.locator("summary").filter({ hasText: "Email Announcements" }).click();
   await expect(panel.getByText("12 accepted by email provider", { exact: false })).toBeVisible();
   expect(actions.filter(action => action === "send")).toHaveLength(1);
 });

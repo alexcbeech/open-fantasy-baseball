@@ -28,6 +28,7 @@ test("admin saves, previews, retries, and closes feedback without duplicate send
   });
   async function openReplies() {
     await page.goto("/admin");
+    await page.locator("summary").filter({ hasText: "User Feedback" }).click();
     await page.getByRole("region", { name: "User Feedback", exact: true }).getByRole("button", { name: "Refresh", exact: true }).click();
     await page.getByRole("button", { name: "Reply by email / history" }).click();
   }
