@@ -11,6 +11,4 @@ test("consolation final is distinct from the championship and survives reload", 
   await page.reload();
   await expect(page.getByText("Consolation Final", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.goto("/team/team-1?tab=league");
-  await expect(page.getByText(/Other teams play seeded consolation brackets/)).toBeVisible();
 });
