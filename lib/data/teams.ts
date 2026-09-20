@@ -8,7 +8,7 @@ import type { LineupPlayer, RosterSlot, TeamSummary } from "@/lib/fantasy/types"
 import { ensureFutureLineupSnapshot, ensureTodayLineupSnapshot } from "./lineup-snapshots";
 import { mapLineupPlayer, mapTeamSummary, type DbLineupRow, type DbTeamSummaryRow } from "./mappers";
 import { rotoStandingsForLeague } from "./roto";
-import { teamRecordsForLeague } from "./season";
+import { postseasonStandingsForLeague, teamRecordsForLeague } from "./season";
 
 type Executor = { query: <T extends QueryResultRow>(sql: string, values?: unknown[]) => Promise<QueryResult<T>> };
 
@@ -130,7 +130,9 @@ const teamSummarySql = `
     ft.auto_start_active,
     u.display_name as manager_name,
     l.scoring_type,
-    sp.label as matchup_label,
+    case when m.is_consolation then
+      case when sp.label = 'Championship' then 'Consolation Final' else 'Consolation Round ' || sp.playoff_round end
+    else sp.label end as matchup_label,
     sp.starts_at as period_starts,
     sp.ends_at as period_ends,
     opponent.name as opponent_name,
@@ -156,9 +158,10 @@ async function standingsContextsForLeague(leagueId: string, scoringType: string 
     return new Map(roto.map((entry) => [entry.teamId, { record: `${entry.points} pts`, rank: entry.rank }]));
   }
 
-  const [records, teams] = await Promise.all([
+  const [records, teams, postseason] = await Promise.all([
     teamRecordsForLeague(leagueId),
     query<{ id: string; name: string }>(`select id, name from fantasy_team where league_id = $1`, [leagueId]),
+    postseasonStandingsForLeague(leagueId),
   ]);
   const ranked = rankStandings(
     teams.rows.map((team) => ({
@@ -167,6 +170,8 @@ async function standingsContextsForLeague(leagueId: string, scoringType: string 
       ...(records.get(team.id) ?? { wins: 0, losses: 0, ties: 0, points: 0 }),
     })),
   );
+  const position = new Map(postseason.map((team, index) => [team.teamId, index]));
+  ranked.sort((a, b) => (position.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) - (position.get(b.teamId) ?? Number.MAX_SAFE_INTEGER));
   return new Map(ranked.map((entry, index) => [entry.teamId, { record: formatRecord(entry), rank: index + 1 }]));
 }
 

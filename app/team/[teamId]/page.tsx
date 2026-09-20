@@ -351,6 +351,9 @@ function LeagueTab({
 
       <section className="panel" aria-labelledby="standings-heading">
         <h2 id="standings-heading">Standings</h2>
+        {overview.scoringType !== "roto" ? (
+          <p className="subtle">Championship qualifiers compete for the top places. Other teams play seeded consolation brackets for the remaining places, sized to fit the playoff rounds. Playoff ties go to the better seed. Records and points show the regular season; postseason ranks update after each finalized round.</p>
+        ) : null}
         <LeagueStandings
           standings={overview.standings}
           leagueId={overview.leagueId}

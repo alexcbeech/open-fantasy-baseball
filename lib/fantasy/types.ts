@@ -308,6 +308,7 @@ export type LiveMatchupUpdate = {
 };
 
 export type LeagueStanding = {
+  postseason?: "Championship" | "Consolation";
   logoUrl?: string | null;
   teamId: string;
   teamName: string;

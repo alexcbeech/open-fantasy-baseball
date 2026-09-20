@@ -34,7 +34,7 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
           {matchups.map((matchup) => <Link key={matchup.id} href={href(period.id, matchup.id)}
             className={`league-matchup-card${selected?.id === matchup.id ? " selected" : ""}`}
             aria-current={selected?.id === matchup.id ? "true" : undefined}>
-            <span className="subtle">{statusLabels[matchup.status]}</span>
+            <span className="subtle">{matchup.is_consolation ? "Consolation · " : ""}{statusLabels[matchup.status]}</span>
             <span className="league-matchup-side"><span className="team-image-name"><IdentityImage url={matchup.home_logo_url} name={matchup.home_name} />{matchup.home_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.home_score)}</strong></span>
             <span className="league-matchup-side"><span className="team-image-name"><IdentityImage url={matchup.away_logo_url} name={matchup.away_name} />{matchup.away_name}</span><strong>{matchup.status === "scheduled" ? "—" : Number(matchup.away_score)}</strong></span>
           </Link>)}
