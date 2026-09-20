@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { getPool } from "@/lib/db/client";
-import { pairPlayoffRound, playoffWinner, survivorsAfterRound, type PlayoffTeam } from "@/lib/fantasy/playoffs";
+import { consolationField, pairPlayoffRound, playoffWinner, rankPostseason, survivorsAfterRound, type PostseasonTeam, type PostseasonResult } from "@/lib/fantasy/playoffs";
 import { rankStandings } from "@/lib/fantasy/season-schedule";
 import { buildSeasonSchedule, roundRobinPairs, type SeasonPeriodPlan } from "@/lib/fantasy/season-schedule";
 
@@ -200,8 +200,8 @@ export async function activateDuePeriods(db: Queryable, leagueId: string, now = 
 }
 
 /**
- * Seed a playoff round's matchups: round 1 takes the top of the standings
- * (persisting each qualifier's seed); later rounds re-seed the survivors —
+ * Seed championship and consolation fields separately. Round 1 persists
+ * seeds from regular-season standings; later rounds re-seed the survivors —
  * winners of the prior round plus any teams that had a bye — pairing best
  * seed against worst, with byes to the top seeds when the field is short of
  * a power of two. Ties advance the better seed.
@@ -218,7 +218,7 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
     [leagueId],
   );
   const totalRounds = Number(roundsResult.rows[0]?.total ?? round);
-  let alive: PlayoffTeam[];
+  let alive: PostseasonTeam[];
 
   if (round === 1) {
     const settings = await db.query<{ playoff_team_count: number | null; bots_eligible: boolean | null }>(
@@ -249,21 +249,28 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
       : ranked;
     const fieldSize = Math.min(Math.max(settings.rows[0]?.playoff_team_count ?? 0, 2), eligible.length);
 
-    await db.query(`update fantasy_team set playoff_seed = null where league_id = $1`, [leagueId]);
+    await db.query(`update fantasy_team set playoff_seed = null, consolation_seed = null, consolation_bracket = null where league_id = $1`, [leagueId]);
     alive = [];
 
     for (const [index, team] of eligible.slice(0, fieldSize).entries()) {
       await db.query(`update fantasy_team set playoff_seed = $2 where id = $1`, [team.teamId, index + 1]);
-      alive.push({ teamId: team.teamId, seed: index + 1 });
+      alive.push({ teamId: team.teamId, seed: index + 1, bracket: 0 });
     }
+    const qualified = new Set(alive.map((team) => team.teamId));
+    const consolation = consolationField(ranked.filter((team) => !qualified.has(team.teamId)).map((team) => team.teamId), totalRounds);
+    for (const team of consolation) {
+      await db.query(`update fantasy_team set consolation_seed = $2, consolation_bracket = $3 where id = $1`, [team.teamId, team.seed, team.bracket]);
+    }
+    alive.push(...consolation);
   } else {
     // Replay the bracket so far: start from the seeded field and knock out
     // each prior round's losers. Teams without a matchup in a round had a bye.
-    const seeded = await db.query<{ id: string; playoff_seed: number }>(
-      `select id, playoff_seed from fantasy_team where league_id = $1 and playoff_seed is not null`,
+    const seeded = await db.query<{ id: string; playoff_seed: number | null; consolation_seed: number | null; consolation_bracket: number | null }>(
+      `select id, playoff_seed, consolation_seed, consolation_bracket from fantasy_team
+       where league_id = $1 and (playoff_seed is not null or consolation_seed is not null)`,
       [leagueId],
     );
-    const seedByTeam = new Map(seeded.rows.map((row) => [row.id, Number(row.playoff_seed)]));
+    const seedByTeam = new Map(seeded.rows.map((row) => [row.id, Number(row.playoff_seed ?? row.consolation_seed)]));
     const played = await db.query<{
       playoff_round: number;
       home_team_id: string;
@@ -274,7 +281,7 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
       `select sp.playoff_round, m.home_team_id, m.away_team_id, m.home_score, m.away_score
        from matchup m
        join scoring_period sp on sp.id = m.scoring_period_id
-       where m.league_id = $1 and sp.is_playoff and sp.playoff_round < $2
+       where m.league_id = $1 and sp.is_playoff and sp.playoff_round < $2 and m.status = 'final'
        order by sp.playoff_round`,
       [leagueId, round],
     );
@@ -290,19 +297,42 @@ async function seedPlayoffRound(db: Queryable, leagueId: string, periodId: strin
 
     alive = seeded.rows
       .filter((row) => !eliminated.has(row.id))
-      .map((row) => ({ teamId: row.id, seed: Number(row.playoff_seed) }));
+      .map((row) => ({ teamId: row.id, seed: Number(row.playoff_seed ?? row.consolation_seed), bracket: row.playoff_seed != null ? 0 : Number(row.consolation_bracket) }));
   }
 
-  const plan = pairPlayoffRound(alive, survivorsAfterRound(totalRounds, round));
-
-  for (const pair of plan.pairs) {
-    await db.query(
-      `insert into matchup (league_id, scoring_period_id, home_team_id, away_team_id, status)
-       values ($1, $2, $3, $4, 'scheduled')
-       on conflict (scoring_period_id, home_team_id, away_team_id) do nothing`,
-      [leagueId, periodId, pair.home.teamId, pair.away.teamId],
-    );
+  for (const bracket of new Set(alive.map((team) => team.bracket))) {
+    const plan = pairPlayoffRound(alive.filter((team) => team.bracket === bracket), survivorsAfterRound(totalRounds, round));
+    for (const pair of plan.pairs) {
+      await db.query(
+        `insert into matchup (league_id, scoring_period_id, home_team_id, away_team_id, status, is_consolation)
+         values ($1, $2, $3, $4, 'scheduled', $5)
+         on conflict (scoring_period_id, home_team_id, away_team_id) do nothing`,
+        [leagueId, periodId, pair.home.teamId, pair.away.teamId, bracket > 0],
+      );
+    }
   }
+}
+
+/** Seeded fields stay fixed after playoffs start, including legacy brackets. */
+export async function postseasonStandingsForLeague(leagueId: string): Promise<PostseasonTeam[]> {
+  const db = getPool();
+  const teams = await db.query<{ id: string; playoff_seed: number | null; consolation_seed: number | null; consolation_bracket: number | null }>(
+    `select id, playoff_seed, consolation_seed, consolation_bracket from fantasy_team
+     where league_id = $1 and (playoff_seed is not null or consolation_seed is not null)`, [leagueId],
+  );
+  if (!teams.rows.length) return [];
+  const results = await db.query<{ playoff_round: number; home_team_id: string; away_team_id: string; home_score: number | string; away_score: number | string }>(
+    `select sp.playoff_round, m.home_team_id, m.away_team_id, m.home_score, m.away_score
+     from matchup m join scoring_period sp on sp.id = m.scoring_period_id
+     where m.league_id = $1 and sp.is_playoff and m.status = 'final'`, [leagueId],
+  );
+  return rankPostseason(teams.rows.map((row) => ({
+    teamId: row.id, seed: Number(row.playoff_seed ?? row.consolation_seed),
+    bracket: row.playoff_seed != null ? 0 : Number(row.consolation_bracket),
+  })), results.rows.map((row): PostseasonResult => ({
+    round: Number(row.playoff_round), homeTeamId: row.home_team_id, awayTeamId: row.away_team_id,
+    homeScore: Number(row.home_score), awayScore: Number(row.away_score),
+  })));
 }
 
 export type TeamRecordRow = {
@@ -314,7 +344,7 @@ export type TeamRecordRow = {
 };
 
 /**
- * W-L-T and accumulated points per team from finalized matchups. Points are
+ * Regular-season W-L-T and accumulated points from finalized matchups. Points are
  * the sum of the team's matchup scores (category wins or fantasy points,
  * depending on the league's scoring), which doubles as the standings
  * tiebreaker.
@@ -327,10 +357,12 @@ export const teamRecordsSql = `
     coalesce(sum(my_score), 0) as points
   from (
     select m.home_team_id as team_id, m.home_score as my_score, m.away_score as their_score
-    from matchup m where m.league_id = $1 and m.status = 'final'
+    from matchup m join scoring_period sp on sp.id = m.scoring_period_id
+    where m.league_id = $1 and m.status = 'final' and not sp.is_playoff
     union all
     select m.away_team_id, m.away_score, m.home_score
-    from matchup m where m.league_id = $1 and m.status = 'final'
+    from matchup m join scoring_period sp on sp.id = m.scoring_period_id
+    where m.league_id = $1 and m.status = 'final' and not sp.is_playoff
   ) sides
   group by team_id
 `;

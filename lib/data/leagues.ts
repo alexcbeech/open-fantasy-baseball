@@ -13,7 +13,7 @@ import { yahooPointCategories } from "@/lib/fantasy/scoring";
 import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { rotoStandingsForLeague } from "./roto";
-import { ensureSeasonSchedule, teamRecordsForLeague } from "./season";
+import { ensureSeasonSchedule, postseasonStandingsForLeague, teamRecordsForLeague } from "./season";
 import { getLeagueHubDetails } from "./league-hub";
 
 type LeagueSettingsRow = {
@@ -35,6 +35,7 @@ type LeagueTeamOverviewRow = {
   faab_remaining: string | number | null;
   rostered_players: string | number;
   matchup_score: string | number | null;
+  regular_live_score?: string | number | null;
 };
 
 export async function getLeagueSettings(leagueId: string): Promise<LeagueSettings> {
@@ -78,13 +79,17 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
            ft.waiver_priority,
            ft.faab_remaining,
            count(re.id) filter (where re.dropped_at is null) as rostered_players,
-           active_matchup.score as matchup_score
+           active_matchup.score as matchup_score,
+           active_matchup.regular_live_score
          from fantasy_team ft
          join app_user u on u.id = ft.manager_user_id
          left join roster_entry re on re.team_id = ft.id and re.dropped_at is null
          left join lateral (
            select
-             case when m.home_team_id = ft.id then m.home_score else m.away_score end as score
+             case when m.home_team_id = ft.id then m.home_score else m.away_score end as score,
+             case when m.status = 'active' and not sp.is_playoff then
+               case when m.home_team_id = ft.id then m.home_score else m.away_score end
+             else 0 end as regular_live_score
            from matchup m
            join scoring_period sp on sp.id = m.scoring_period_id
            where m.home_team_id = ft.id or m.away_team_id = ft.id
@@ -94,7 +99,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
            limit 1
          ) active_matchup on true
          where ft.league_id = $1
-         group by ft.id, u.display_name, active_matchup.score
+         group by ft.id, u.display_name, active_matchup.score, active_matchup.regular_live_score
            order by coalesce(active_matchup.score, 0) desc, ft.waiver_priority nulls last, ft.name`,
           [leagueId],
         ),
@@ -136,7 +141,7 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
               wins: record?.wins ?? 0,
               losses: record?.losses ?? 0,
               ties: record?.ties ?? 0,
-              points: (record?.points ?? 0) + toNumber(row.matchup_score),
+              points: (record?.points ?? 0) + toNumber(row.regular_live_score),
             };
           }),
         );
@@ -151,6 +156,13 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
             points: Math.round(row.points * 10) / 10,
           }),
         );
+        const postseason = await postseasonStandingsForLeague(leagueId);
+        const position = new Map(postseason.map((team, index) => [team.teamId, index]));
+        const bracket = new Map(postseason.map((team) => [team.teamId, team.bracket]));
+        standings.sort((a, b) => (position.get(a.teamId) ?? Number.MAX_SAFE_INTEGER) - (position.get(b.teamId) ?? Number.MAX_SAFE_INTEGER));
+        standings = standings.map((row, index) => ({ ...row, rank: index + 1,
+          postseason: bracket.has(row.teamId) ? (bracket.get(row.teamId) === 0 ? "Championship" : "Consolation") : undefined,
+        }));
       }
 
       return {

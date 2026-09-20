@@ -108,12 +108,12 @@ describe("teams data layer with a configured database", () => {
           { id: "00000000-0000-4000-8000-000000000102", name: "Bats" },
         ],
       });
-    poolQuery.mockResolvedValueOnce({ rows: [] });
+    poolQuery.mockResolvedValue({ rows: [] });
 
     const teams = await listTeamsForCurrentUser({ userId: "demo-user", email: "alex@example.local" });
 
     expect(teams.map((team) => team.rank)).toEqual([1, 2]);
-    expect(poolQuery).toHaveBeenCalledTimes(1);
+    expect(poolQuery).toHaveBeenCalledTimes(2); // records and postseason, once per league
     expect(query).toHaveBeenCalledTimes(2);
   });
 });

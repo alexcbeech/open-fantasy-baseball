@@ -11,6 +11,7 @@ export type MatchupPeriod = {
 };
 
 export type LeagueMatchup = {
+  is_consolation?: boolean;
   home_logo_url?: string | null;
   away_logo_url?: string | null;
   id: string;
@@ -38,7 +39,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
     );
     return result.rows;
   }, () => [12, 13, 14].map((week): MatchupPeriod => ({
-    id: `demo-week-${week}`, label: `Week ${week}`, starts_at: `2026-06-${week === 12 ? "15" : week === 13 ? "22" : "29"}T00:00:00Z`,
+    id: `demo-week-${week}`, label: week === 14 ? "Championship" : `Week ${week}`, starts_at: `2026-06-${week === 12 ? "15" : week === 13 ? "22" : "29"}T00:00:00Z`,
     ends_at: week === 14 ? "2026-07-06T00:00:00Z" : `2026-06-${week === 12 ? "22" : "29"}T00:00:00Z`,
     status: week === 12 ? "final" : week === 13 ? "active" : "scheduled",
   })));
@@ -47,7 +48,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
     const result = await query<LeagueMatchup>(
       `select m.id, m.home_team_id, m.away_team_id, home.name as home_name, away.name as away_name,
               home.logo_url as home_logo_url, away.logo_url as away_logo_url,
-              m.home_score, m.away_score, m.status
+              m.home_score, m.away_score, m.status, m.is_consolation
        from matchup m
        join fantasy_team home on home.id = m.home_team_id
        join fantasy_team away on away.id = m.away_team_id
@@ -61,7 +62,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
       { id: `${period.id}-1`, home_team_id: teamId, away_team_id: "demo-opponent", home_name: team.teamName,
         away_name: team.matchup.opponentName, home_score: 6, away_score: 4, status: period.status },
       { id: `${period.id}-2`, home_team_id: "demo-rivals", away_team_id: "demo-sluggers", home_name: "Moon Shots",
-        away_name: "Basepath Bandits", home_score: 3, away_score: 7, status: period.status },
+        away_name: "Basepath Bandits", home_score: 3, away_score: 7, status: period.status, is_consolation: period.id === "demo-week-14" },
     ];
   }) : [];
   // Resolve requested IDs only against the authorized league and selected period.
@@ -78,7 +79,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
       return {
         ...base,
         matchupId: selected.id,
-        periodLabel: period.label,
+        periodLabel: selected.is_consolation ? "Consolation Final" : period.label,
         userScore: Number(home ? selected.home_score : selected.away_score),
         opponentScore: Number(home ? selected.away_score : selected.home_score),
         userTeam: { id: perspective, teamName: home ? selected.home_name : selected.away_name },

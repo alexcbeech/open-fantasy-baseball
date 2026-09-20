@@ -46,6 +46,7 @@ export function LeagueStandings({ standings, leagueId, viewerTeamId, canTrade }:
                 >
                   <span className="player-name team-image-name"><IdentityImage url={row.logoUrl} name={row.teamName} />{row.teamName}</span>
                   <span className="player-meta">{row.managerName}</span>
+                  {row.postseason ? <span className="player-meta">{row.postseason}</span> : null}
                 </button>
               </td>
               <td>{row.record}</td>

@@ -54,7 +54,9 @@ export async function getMatchupDetailsForTeam(teamId: string, matchupId?: strin
         `select
            m.id as matchup_id,
            m.status,
-           sp.label as period_label,
+           case when m.is_consolation then
+             case when sp.label = 'Championship' then 'Consolation Final' else 'Consolation Round ' || sp.playoff_round end
+           else sp.label end as period_label,
            sp.starts_at,
            sp.ends_at,
            l.scoring_type,
