@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { getBotOpponent, makeBotDecision } from "./manager";
+import { getBotOpponent, getBotPlayer, makeBotDecision } from "./manager";
+import { getPlayerDetail } from "@/lib/data/players";
 import { applyPlayerManagementAction } from "@/lib/data/player-actions";
 import { saveLineupSlots, getLineupForTeam } from "@/lib/data/teams";
 import { getLeagueSettings } from "@/lib/data/leagues";
@@ -63,6 +64,20 @@ it("does not read an opponent roster outside the assigned league", async () => {
   await expect(getBotOpponent(principal, "other-league-team")).rejects.toThrow(/assigned league/);
   expect(query).toHaveBeenCalledWith(expect.stringContaining("league_id = $2"), ["other-league-team", "league-a"]);
   expect(getLineupForTeam).not.toHaveBeenCalled();
+});
+it("reads player details with the assigned team's acquisition context", async () => {
+  const detail = { id: "first-baseman", status: "active", management: { canAdd: true, needsDropToAdd: false } };
+  vi.mocked(getPlayerDetail).mockResolvedValue(detail as never);
+  expect(await getBotPlayer(principal, "first-baseman")).toBe(detail);
+  expect(getPlayerDetail).toHaveBeenCalledWith("first-baseman", principal.teamId);
+});
+it("explains missing player details instead of returning a successful null result", async () => {
+  vi.mocked(getPlayerDetail).mockResolvedValue(null);
+  await expect(getBotPlayer(principal, "missing")).rejects.toThrow("Player not found. Search ofb_bot_players for a current player ID.");
+});
+it("propagates player-detail read failures", async () => {
+  vi.mocked(getPlayerDetail).mockRejectedValue(new Error("Player data temporarily unavailable."));
+  await expect(getBotPlayer(principal, "first-baseman")).rejects.toThrow("Player data temporarily unavailable.");
 });
 it("requires explicit trade permission and restricts the shared bot owner identity", async () => {
   const proposal: BotDecision = { ...decision, command: { kind: "propose-trade", toTeamId: "opponent", offeredPlayerIds: ["a"], requestedPlayerIds: ["b"] } };
