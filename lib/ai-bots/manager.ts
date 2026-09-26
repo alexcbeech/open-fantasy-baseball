@@ -65,7 +65,9 @@ async function executeCommand(principal: BotPrincipal, decision: BotDecision, id
 }
 
 export async function getBotPlayer(principal: BotPrincipal, playerId: string) {
-  return getPlayerDetail(playerId, principal.teamId);
+  const detail = await getPlayerDetail(playerId, principal.teamId);
+  if (!detail) throw new Error("Player not found. Search ofb_bot_players for a current player ID.");
+  return detail;
 }
 
 export async function getBotOpponent(principal: BotPrincipal, teamId: string) {
