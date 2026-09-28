@@ -9,6 +9,7 @@ import { TradeProposalSheet } from "./trade-proposal-sheet";
 
 type LeagueStandingsProps = {
   standings: LeagueStanding[];
+  championTeamId?: string;
   leagueId: string;
   /** The team page being viewed; trades are proposed from this team. */
   viewerTeamId: string;
@@ -17,7 +18,7 @@ type LeagueStandingsProps = {
 };
 
 /** Standings table where tapping a team opens their current lineup. */
-export function LeagueStandings({ standings, leagueId, viewerTeamId, canTrade }: LeagueStandingsProps) {
+export function LeagueStandings({ standings, championTeamId, leagueId, viewerTeamId, canTrade }: LeagueStandingsProps) {
   const router = useRouter();
   const [viewing, setViewing] = useState<LeagueStanding | null>(null);
   const [trading, setTrading] = useState<LeagueStanding | null>(null);
@@ -35,7 +36,7 @@ export function LeagueStandings({ standings, leagueId, viewerTeamId, canTrade }:
         </thead>
         <tbody>
           {standings.map((row) => (
-            <tr key={row.teamId}>
+            <tr key={row.teamId} className={row.teamId === championTeamId ? "standings-champion-row" : undefined}>
               <td>{row.rank}</td>
               <td>
                 <button
@@ -46,7 +47,9 @@ export function LeagueStandings({ standings, leagueId, viewerTeamId, canTrade }:
                 >
                   <span className="player-name team-image-name"><IdentityImage url={row.logoUrl} name={row.teamName} />{row.teamName}</span>
                   <span className="player-meta">{row.managerName}</span>
-                  {row.postseason ? <span className="player-meta">{row.postseason}</span> : null}
+                  {row.teamId === championTeamId
+                    ? <span className="standings-champion-badge">🏆 League champion</span>
+                    : row.postseason ? <span className="player-meta">{row.postseason}</span> : null}
                 </button>
               </td>
               <td>{row.record}</td>

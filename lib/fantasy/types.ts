@@ -318,6 +318,13 @@ export type LeagueStanding = {
   points: number;
 };
 
+export type LeagueChampion = {
+  teamId: string;
+  teamName: string;
+  logoUrl: string | null;
+  seasonYear: number;
+};
+
 export type LeagueTeamStats = {
   teamId: string;
   teamName: string;
@@ -351,6 +358,7 @@ export type LeagueOverview = {
   scoringType: LeagueScoringType;
   seasonYear: number;
   status: string;
+  champion: LeagueChampion | null;
   commissionerName: string;
   settings: LeagueSettings;
   milestones: LeagueMilestones;
