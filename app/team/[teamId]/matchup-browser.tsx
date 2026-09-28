@@ -4,6 +4,7 @@ import { AutoNavigateForm } from "@/app/auto-navigate-form";
 import { getMatchupBrowser } from "@/lib/data/matchup-browser";
 import { LiveMatchup } from "./live-matchup";
 import { MatchupPicker } from "./matchup-picker";
+import { LeagueChampionBanner } from "./league-champion-banner";
 
 const statusLabels = { active: "In progress", final: "Final", scheduled: "Upcoming" };
 
@@ -14,13 +15,7 @@ export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: 
   const href = (id: string, matchup?: string) => `/team/${teamId}?${new URLSearchParams({ tab: "matchup", period: id, ...(matchup ? { matchup } : {}) })}`;
   const index = periods.findIndex((entry) => entry.id === period?.id);
   return <div className="matchup-tab">
-    {champion ? <section className="panel league-champion" aria-label={`${champion.seasonYear} league champion`}>
-      <span className="league-champion-icon" aria-hidden="true">🏆</span>
-      <div>
-        <p className="league-champion-label">{champion.seasonYear} League Champion</p>
-        <p className="league-champion-name team-image-name"><IdentityImage url={champion.logoUrl} name={champion.teamName} />{champion.teamName}</p>
-      </div>
-    </section> : null}
+    {champion ? <LeagueChampionBanner champion={champion} /> : null}
     <section className="panel" aria-labelledby="league-matchups-heading">
       <h2 id="league-matchups-heading" className="visually-hidden">Matchup schedule</h2>
       {period ? <>

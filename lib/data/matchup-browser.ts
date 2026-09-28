@@ -1,6 +1,7 @@
 import { query, withDemoFallback } from "@/lib/db/client";
 import { teams } from "@/lib/fantasy/mock-data";
 import { playoffWinner } from "@/lib/fantasy/playoffs";
+import type { LeagueChampion } from "@/lib/fantasy/types";
 import { getMatchupDetailsForTeam } from "./matchups";
 
 export type MatchupPeriod = {
@@ -23,13 +24,6 @@ export type LeagueMatchup = {
   home_score: number | string;
   away_score: number | string;
   status: MatchupPeriod["status"];
-};
-
-export type LeagueChampion = {
-  teamId: string;
-  teamName: string;
-  logoUrl: string | null;
-  seasonYear: number;
 };
 
 type ChampionshipFinalRow = {

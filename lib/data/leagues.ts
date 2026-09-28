@@ -10,11 +10,12 @@ import {
   seasonEndBoundary,
 } from "@/lib/fantasy/season-schedule";
 import { yahooPointCategories } from "@/lib/fantasy/scoring";
-import type { LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
+import type { LeagueChampion, LeagueOverview, LeagueSettings, LeagueStanding, LeagueTeamStats } from "@/lib/fantasy/types";
 import type { ApiIdentity } from "@/lib/auth/api-identity";
 import { rotoStandingsForLeague } from "./roto";
 import { ensureSeasonSchedule, postseasonStandingsForLeague, teamRecordsForLeague } from "./season";
 import { getLeagueHubDetails } from "./league-hub";
+import { getLeagueChampion } from "./matchup-browser";
 
 type LeagueSettingsRow = {
   id: string;
@@ -165,12 +166,27 @@ export async function getLeagueOverview(leagueId: string): Promise<LeagueOvervie
         }));
       }
 
+      let champion: LeagueChampion | null = null;
+      if (league.status === "complete") {
+        if (scoringType === "roto" && standings[0]) {
+          champion = {
+            teamId: standings[0].teamId,
+            teamName: standings[0].teamName,
+            logoUrl: standings[0].logoUrl ?? null,
+            seasonYear: league.season_year ?? new Date().getFullYear(),
+          };
+        } else if (scoringType !== "roto") {
+          champion = await getLeagueChampion(leagueId);
+        }
+      }
+
       return {
         leagueId: league.id,
         name: league.name,
         scoringType: league.scoring_type ?? league.settings.scoringType,
         seasonYear: league.season_year ?? new Date().getFullYear(),
         status: league.status ?? "active",
+        champion,
         commissionerName: league.commissioner_name ?? "Commissioner",
         settings: { ...league.settings, weeklyPlayerAddLimit: league.settings.weeklyPlayerAddLimit ?? 6, botsEligibleForPlayoffs: league.settings.botsEligibleForPlayoffs ?? true, id: league.id, name: league.name },
         milestones: hub.milestones,
@@ -418,6 +434,7 @@ function mockLeagueOverview(leagueId: string): LeagueOverview {
     scoringType: mockLeagueSettings.scoringType,
     seasonYear,
     status: "active",
+    champion: null,
     commissionerName: "Alex",
     settings: mockLeagueSettings,
     milestones: {
