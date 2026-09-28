@@ -10,10 +10,17 @@ const statusLabels = { active: "In progress", final: "Final", scheduled: "Upcomi
 export async function MatchupBrowser({ leagueId, teamId, periodId, matchupId }: {
   leagueId: string; teamId: string; periodId?: string; matchupId?: string;
 }) {
-  const { periods, period, matchups, selected, details } = await getMatchupBrowser(leagueId, teamId, periodId, matchupId);
+  const { periods, period, matchups, selected, details, champion } = await getMatchupBrowser(leagueId, teamId, periodId, matchupId);
   const href = (id: string, matchup?: string) => `/team/${teamId}?${new URLSearchParams({ tab: "matchup", period: id, ...(matchup ? { matchup } : {}) })}`;
   const index = periods.findIndex((entry) => entry.id === period?.id);
   return <div className="matchup-tab">
+    {champion ? <section className="panel league-champion" aria-label={`${champion.seasonYear} league champion`}>
+      <span className="league-champion-icon" aria-hidden="true">🏆</span>
+      <div>
+        <p className="league-champion-label">{champion.seasonYear} League Champion</p>
+        <p className="league-champion-name team-image-name"><IdentityImage url={champion.logoUrl} name={champion.teamName} />{champion.teamName}</p>
+      </div>
+    </section> : null}
     <section className="panel" aria-labelledby="league-matchups-heading">
       <h2 id="league-matchups-heading" className="visually-hidden">Matchup schedule</h2>
       {period ? <>

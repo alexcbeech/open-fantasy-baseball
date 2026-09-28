@@ -1,5 +1,6 @@
 import { query, withDemoFallback } from "@/lib/db/client";
 import { teams } from "@/lib/fantasy/mock-data";
+import { playoffWinner } from "@/lib/fantasy/playoffs";
 import { getMatchupDetailsForTeam } from "./matchups";
 
 export type MatchupPeriod = {
@@ -24,6 +25,62 @@ export type LeagueMatchup = {
   status: MatchupPeriod["status"];
 };
 
+export type LeagueChampion = {
+  teamId: string;
+  teamName: string;
+  logoUrl: string | null;
+  seasonYear: number;
+};
+
+type ChampionshipFinalRow = {
+  season_year: number;
+  home_team_id: string;
+  away_team_id: string;
+  home_name: string;
+  away_name: string;
+  home_logo_url: string | null;
+  away_logo_url: string | null;
+  home_seed: number;
+  away_seed: number;
+  home_score: number | string;
+  away_score: number | string;
+};
+
+export async function getLeagueChampion(leagueId: string): Promise<LeagueChampion | null> {
+  return withDemoFallback(async () => {
+    const result = await query<ChampionshipFinalRow>(
+      `select l.season_year, m.home_team_id, m.away_team_id,
+              home.name as home_name, away.name as away_name,
+              home.logo_url as home_logo_url, away.logo_url as away_logo_url,
+              home.playoff_seed as home_seed, away.playoff_seed as away_seed,
+              m.home_score, m.away_score
+       from league l
+       join matchup m on m.league_id = l.id
+       join scoring_period sp on sp.id = m.scoring_period_id
+       join fantasy_team home on home.id = m.home_team_id
+       join fantasy_team away on away.id = m.away_team_id
+       where l.id = $1 and l.status = 'complete' and sp.is_playoff
+         and sp.status = 'final' and m.status = 'final' and not m.is_consolation
+         and home.playoff_seed is not null and away.playoff_seed is not null
+       order by sp.playoff_round desc, sp.starts_at desc, m.id
+       limit 1`, [leagueId],
+    );
+    const final = result.rows[0];
+    if (!final) return null;
+    const winner = playoffWinner(
+      { teamId: final.home_team_id, seed: Number(final.home_seed), score: Number(final.home_score) },
+      { teamId: final.away_team_id, seed: Number(final.away_seed), score: Number(final.away_score) },
+    );
+    const homeWon = winner.teamId === final.home_team_id;
+    return {
+      teamId: winner.teamId,
+      teamName: homeWon ? final.home_name : final.away_name,
+      logoUrl: homeWon ? final.home_logo_url : final.away_logo_url,
+      seasonYear: Number(final.season_year),
+    };
+  }, () => null);
+}
+
 export function selectPeriod(periods: MatchupPeriod[], requested?: string) {
   return periods.find((period) => period.id === requested)
     ?? periods.find((period) => period.status === "active")
@@ -32,7 +89,7 @@ export function selectPeriod(periods: MatchupPeriod[], requested?: string) {
 }
 
 export async function getMatchupBrowser(leagueId: string, teamId: string, periodId?: string, matchupId?: string) {
-  const periods = await withDemoFallback(async () => {
+  const [periods, champion] = await Promise.all([withDemoFallback(async () => {
     const result = await query<MatchupPeriod>(
       `select id, label, starts_at::text, ends_at::text, status from scoring_period
        where league_id = $1 order by starts_at, id`, [leagueId],
@@ -42,7 +99,7 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
     id: `demo-week-${week}`, label: week === 14 ? "Championship" : `Week ${week}`, starts_at: `2026-06-${week === 12 ? "15" : week === 13 ? "22" : "29"}T00:00:00Z`,
     ends_at: week === 14 ? "2026-07-06T00:00:00Z" : `2026-06-${week === 12 ? "22" : "29"}T00:00:00Z`,
     status: week === 12 ? "final" : week === 13 ? "active" : "scheduled",
-  })));
+  }))), getLeagueChampion(leagueId)]);
   const period = selectPeriod(periods, periodId);
   const matchups = period ? await withDemoFallback(async () => {
     const result = await query<LeagueMatchup>(
@@ -90,5 +147,5 @@ export async function getMatchupBrowser(leagueId: string, teamId: string, period
       };
     },
   ) : null;
-  return { periods, period, matchups, selected, details };
+  return { periods, period, matchups, selected, details, champion };
 }

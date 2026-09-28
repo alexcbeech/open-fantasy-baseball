@@ -5092,6 +5092,17 @@ button.row {
   gap: 12px;
 }
 
+.league-champion {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(110deg, var(--surface) 55%, color-mix(in srgb, var(--accent) 12%, var(--surface)));
+}
+
+.league-champion-icon { font-size: 32px; line-height: 1; }
+.league-champion-label { margin: 0 0 5px; color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.league-champion-name { margin: 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+
 .matchup-picker-content {
   margin-top: 12px;
 }
