@@ -25,7 +25,8 @@ The fixes below require merge and deployment before they protect production.
 
 1. **Vulnerable dependencies.** Upgrade Next.js to 16.4.3, React/React DOM
    to 19.3.1, Sharp to 0.35.5, Neon Auth to 0.7.0-beta, Zod to 4.6.7,
-   Vercel Blob to 2.8.2, and compatible development/transitive releases.
+   Vercel Blob to 2.8.2, ESLint to the supported 10.13.0 release, and
+   compatible development/transitive releases.
    The Next.js and Sharp SVG advisories describe possible remote code
    execution on glibc-based Linux. Other Next.js RCE advisories have specific
    `ImageResponse` or Cache Component prerequisites; no such usage was found
@@ -77,14 +78,21 @@ Primary advisories:
 ## Verification
 
 - Updated full-tree `npm audit`: zero vulnerabilities.
-- Registry verification: 659 package signatures and 224 attestations verified.
+- Registry verification: 656 package signatures and 227 attestations verified.
 - Lint and TypeScript checks pass. Lint reports one existing React-effect
   cleanup warning in `app/admin/feedback-reply-composer.tsx`.
 - Regression coverage includes native-decoder isolation, push registration
   and legacy-delivery SSRF, mutation origins, fail-closed league creation,
   identity linking, invite enrollment, OAuth callbacks, and encoded auth paths.
-- Production build, complete unit/E2E suites, and PR CI are required before
-  handoff. Final results are recorded in the pull request verification notes.
+- A clean checkout installed the locked tree with Node.js 24 and `npm ci`.
+- All 726 unit tests pass; the optimized production build passes.
+- E2E: 36 pass, with one existing service-worker test skipped in development
+  mode. The new shared-proxy cross-origin regression passes.
+- In-app preview at localhost:3000: invalid credentials rejected, real sign-in
+  successful, profile and team image editors rendered correctly at pane width,
+  same-origin preference saves successful, whitespace-only names rejected,
+  original preferences and authenticated session verified after reload.
+- Required PR CI must pass before this branch is reported ready.
 
 ## Remaining operational limits
 
@@ -94,7 +102,10 @@ Primary advisories:
   nonce-based policy needs a separately verified rollout.
 - OAuth provider-console settings, database roles, hosting/network controls,
   and historical production access logs were outside this local review.
-- No production credentials, schema, user data, or security settings were changed.
-- Major tooling migrations (ESLint 10, TypeScript 7, Vitest 5) are separate
-  compatibility work; supported current-major releases were patched here.
+- No credentials, schema, or security settings were changed. The preview
+  preference-save test briefly changed the display name; the original name
+  was restored and verified after reload. No images or rosters were changed.
+- TypeScript 7 and Vitest 5 are separate compatibility migrations. The current
+  TypeScript ESLint adapter supports TypeScript below 6.1, so TypeScript 5.9.3
+  is retained. Vitest 4.1.12 includes the current applicable security patches.
 - Recheck after dependency upgrades and regularly while the app is active.
