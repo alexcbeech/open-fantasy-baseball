@@ -35,14 +35,14 @@ describe("session identity resolution", () => {
   it("requires an explicit, redeemable invite addressed to the authenticated email", async () => {
     query.mockResolvedValue({ rows: [] });
     expect(await ensureOfbUserForNeonAuth(provider, undefined, "expired-invite")).toBeNull();
-    expect(redeemable).toHaveBeenCalledWith("expired-invite", provider.email);
+    expect(redeemable).toHaveBeenCalledWith("expired-invite", provider.email, expect.objectContaining({ query }));
     expect(query.mock.calls.some(call => call[0].includes("insert into"))).toBe(false);
   });
   it("enrolls a new invited identity through the guarded signup path", async () => {
     redeemable.mockResolvedValue(true);
     query.mockImplementation(async (sql: string) => ({ rows: sql.startsWith("insert into app_user") ? [account] : [] }));
     expect(await ensureOfbUserForNeonAuth(provider, undefined, "valid-invite")).toMatchObject({ userId: "app-user" });
-    expect(redeemable).toHaveBeenCalledWith("valid-invite", provider.email);
+    expect(redeemable).toHaveBeenCalledWith("valid-invite", provider.email, expect.objectContaining({ query }));
   });
   it("does not attach an identity to an account concurrently created by another request", async () => {
     redeemable.mockResolvedValue(true);

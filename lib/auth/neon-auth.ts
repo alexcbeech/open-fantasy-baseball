@@ -147,7 +147,7 @@ export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCr
         // Enforce enrollment at the data boundary too. An upstream OAuth
         // session can land on any page, bypassing our callback's signup gate.
         if (!existing.rows.length && !areSignupsEnabled()
-          && !(inviteToken && await isInviteTokenRedeemable(inviteToken, authUser.email))) {
+          && !(inviteToken && await isInviteTokenRedeemable(inviteToken, authUser.email, client))) {
           await client.query("rollback");
           return null;
         }

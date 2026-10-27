@@ -195,8 +195,9 @@ export async function createLeagueInvite(
 }
 
 /** Look up an invite by its raw token. Returns null for unknown tokens. */
-export async function getLeagueInviteByToken(token: string): Promise<PendingLeagueInvite | null> {
-  const result = await query<{
+export async function getLeagueInviteByToken(token: string, client?: Pick<PoolClient, "query">): Promise<PendingLeagueInvite | null> {
+  const executor = client ?? { query };
+  const result = await executor.query<{
     id: string;
     league_id: string;
     league_name: string;
@@ -234,8 +235,8 @@ export async function getLeagueInviteByToken(token: string): Promise<PendingLeag
 }
 
 /** Whether a raw invite token is currently redeemable (used by the sign-up carve-out). */
-export async function isInviteTokenRedeemable(token: string, email?: string): Promise<boolean> {
-  const invite = await getLeagueInviteByToken(token);
+export async function isInviteTokenRedeemable(token: string, email?: string, client?: Pick<PoolClient, "query">): Promise<boolean> {
+  const invite = await getLeagueInviteByToken(token, client);
 
   if (!invite || invite.acceptedAt || invite.expired) {
     return false;

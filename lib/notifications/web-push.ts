@@ -1,5 +1,5 @@
 import webpush from "web-push";
-import { isAllowedPushEndpoint } from "./push-endpoint";
+import { canonicalPushEndpoint } from "./push-endpoint";
 
 export type WebPushPayload = {
   title: string;
@@ -57,7 +57,8 @@ export function getWebPushPublicKey(): string | null {
 export async function sendWebPush(target: WebPushTarget, payload: WebPushPayload): Promise<WebPushSendResult> {
   // Recheck stored subscriptions too: older rows may predate registration
   // validation. Mark unsafe endpoints gone so the fan-out prunes them.
-  if (!isAllowedPushEndpoint(target.endpoint)) {
+  const endpoint = canonicalPushEndpoint(target.endpoint);
+  if (!endpoint) {
     return { endpoint: target.endpoint, ok: false, statusCode: null, gone: true };
   }
   if (!isWebPushConfigured()) {
@@ -67,7 +68,7 @@ export async function sendWebPush(target: WebPushTarget, payload: WebPushPayload
   try {
     await webpush.sendNotification(
       {
-        endpoint: target.endpoint,
+        endpoint,
         keys: { p256dh: target.p256dhKey, auth: target.authSecret },
       },
       JSON.stringify(payload),

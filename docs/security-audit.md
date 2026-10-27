@@ -41,6 +41,8 @@ The fixes below require merge and deployment before they protect production.
    services (Google, Mozilla, Apple, Microsoft), reject credentials and
    alternate ports, bound keys, and time out delivery after ten seconds.
    Recheck stored endpoints and prune unsafe legacy destinations on delivery.
+   Store and deliver the same canonical URL so web-push's legacy parser
+   cannot interpret an encoded hostname as an internal destination.
    Unsubscription remains able to remove legacy endpoints.
 4. **Mutation origin checks.** Reject foreign/opaque browser origins and
    cross-site fetch metadata for unsafe `/api/` requests in the shared proxy.
@@ -58,6 +60,10 @@ The fixes below require merge and deployment before they protect production.
    new provider identity attaches to an existing account by email; existing
    stable provider links continue to work. Normalize encoded auth paths
    before blocking direct signup and provider-administration endpoints.
+   Invite validation reuses the enrollment transaction's connection, including
+   with a one-connection pool. Fresh email authentication can resume a failed
+   OFB enrollment using a revalidated invite; the signup form preserves that
+   invite in its sign-in link. Revocation during authentication still fails closed.
 7. **Audit development dependencies in CI.** Fail the dependency gate at
    moderate severity across the full tree, including Vite/Vitest tooling.
    Update the SHA-pinned setup-node action to 7.1.0 in CI and nightly sync;
@@ -87,13 +93,20 @@ Primary advisories:
   and legacy-delivery SSRF, mutation origins, fail-closed league creation,
   identity linking, invite enrollment, OAuth callbacks, and encoded auth paths.
 - A clean checkout installed the locked tree with Node.js 24 and `npm ci`.
-- All 726 unit tests pass; the optimized production build passes.
+- All 739 unit tests pass, including the three review regressions. The push
+  test exercises the real web-push parser with HTTPS requests intercepted;
+  enrollment tests cover a bounded pool, partial-creation recovery, invalid
+  invitations, and revocation during sign-in.
+- Production build and full E2E are rerun for the review fixes; final results
+  are recorded in the pull request verification notes.
 - E2E: 36 pass, with one existing service-worker test skipped in development
   mode. The new shared-proxy cross-origin regression passes.
 - In-app preview at localhost:3000: invalid credentials rejected, real sign-in
   successful, profile and team image editors rendered correctly at pane width,
   same-origin preference saves successful, whitespace-only names rejected,
   original preferences and authenticated session verified after reload.
+- Review-fix preview: the user signed out and back in successfully; the
+  authenticated home page and session persisted after reload at pane width.
 - Required PR CI must pass before this branch is reported ready.
 
 ## Remaining operational limits

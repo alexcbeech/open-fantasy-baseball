@@ -51,7 +51,7 @@ export async function signUpWithEmail(_previousState: AuthFormState, formData: F
   // Provision through the same enrollment guard used by session reads. The
   // invite exception must be explicit; a session alone never enables signup.
   if (!result.data?.user || !(await ensureOfbUserForNeonAuth(result.data.user, undefined, inviteToken))) {
-    return { error: "Account setup could not be completed. Please try again." };
+    return { error: "Account setup could not be completed. Use Sign in below to finish setup." };
   }
 
   // Invited users land back on the join page to accept; the token is only
