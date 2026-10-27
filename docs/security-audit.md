@@ -60,6 +60,8 @@ The fixes below require merge and deployment before they protect production.
    before blocking direct signup and provider-administration endpoints.
 7. **Audit development dependencies in CI.** Fail the dependency gate at
    moderate severity across the full tree, including Vite/Vitest tooling.
+   Update the SHA-pinned setup-node action to 7.1.0 in CI and nightly sync;
+   the checkout action is already at its current 7.0.1 release.
 
 The Zod override keeps every copy on the patched direct dependency, including
 the exact vulnerable versions still declared by Neon and Vercel packages.
