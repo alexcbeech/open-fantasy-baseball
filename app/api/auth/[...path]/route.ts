@@ -14,12 +14,12 @@ function missingAuthConfig() {
  * endpoints are also reachable through this proxy — gate them here too so a
  * direct POST can't create an account while signups are closed.
  */
-function isBlockedSignupPath(request: Request) {
+function isBlockedSignupPath(path: string) {
   if (areSignupsEnabled()) {
     return false;
   }
 
-  const segments = new URL(request.url).pathname.toLowerCase().split("/");
+  const segments = path.split("/");
 
   return segments.some((segment) => segment === "sign-up" || segment === "signup" || segment === "register");
 }
@@ -28,11 +28,13 @@ function withSignupGate<Rest extends unknown[]>(
   handler: ((request: Request, ...rest: Rest) => Response | Promise<Response>) | undefined,
 ) {
   return async (request: Request, ...rest: Rest) => {
-    const path = new URL(request.url).pathname.toLowerCase();
+    let path: string;
+    try { path = decodeURIComponent(new URL(request.url).pathname).toLowerCase(); }
+    catch { return Response.json({ error: "Invalid authentication path." }, { status: 400 }); }
     // Account/role administration must pass OFB's audit and anti-lockout rules.
     if (path.includes("/admin/")) return Response.json({ error: "Use OFB account administration." }, { status: 403 });
     if (path.endsWith("/sign-out")) return handler ? handler(request, ...rest) : missingAuthConfig();
-    if (isBlockedSignupPath(request)) {
+    if (isBlockedSignupPath(path)) {
       return Response.json({ error: "Account creation is currently disabled." }, { status: 403 });
     }
 

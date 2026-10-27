@@ -12,10 +12,10 @@ describe("web-push without VAPID configuration", () => {
 
   it("returns a non-throwing not-configured result instead of attempting delivery", async () => {
     const result = await sendWebPush(
-      { endpoint: "https://push.example.com/x", p256dhKey: "key", authSecret: "secret" },
+      { endpoint: "https://fcm.googleapis.com/fcm/send/x", p256dhKey: "key", authSecret: "secret" },
       { title: "t", body: "b" },
     );
 
-    expect(result).toEqual({ endpoint: "https://push.example.com/x", ok: false, statusCode: null, gone: false });
+    expect(result).toEqual({ endpoint: "https://fcm.googleapis.com/fcm/send/x", ok: false, statusCode: null, gone: false });
   });
 });

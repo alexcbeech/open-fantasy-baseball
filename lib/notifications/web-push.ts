@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { isAllowedPushEndpoint } from "./push-endpoint";
 
 export type WebPushPayload = {
   title: string;
@@ -54,6 +55,11 @@ export function getWebPushPublicKey(): string | null {
  * gone (HTTP 404/410) while treating transient errors as retryable.
  */
 export async function sendWebPush(target: WebPushTarget, payload: WebPushPayload): Promise<WebPushSendResult> {
+  // Recheck stored subscriptions too: older rows may predate registration
+  // validation. Mark unsafe endpoints gone so the fan-out prunes them.
+  if (!isAllowedPushEndpoint(target.endpoint)) {
+    return { endpoint: target.endpoint, ok: false, statusCode: null, gone: true };
+  }
   if (!isWebPushConfigured()) {
     return { endpoint: target.endpoint, ok: false, statusCode: null, gone: false };
   }
@@ -65,7 +71,7 @@ export async function sendWebPush(target: WebPushTarget, payload: WebPushPayload
         keys: { p256dh: target.p256dhKey, auth: target.authSecret },
       },
       JSON.stringify(payload),
-      { TTL: 60 },
+      { TTL: 60, timeout: 10_000 },
     );
 
     return { endpoint: target.endpoint, ok: true };
