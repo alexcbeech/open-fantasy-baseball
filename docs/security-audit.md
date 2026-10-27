@@ -97,8 +97,7 @@ Primary advisories:
   test exercises the real web-push parser with HTTPS requests intercepted;
   enrollment tests cover a bounded pool, partial-creation recovery, invalid
   invitations, and revocation during sign-in.
-- Production build and full E2E are rerun for the review fixes; final results
-  are recorded in the pull request verification notes.
+- The optimized production build passes for the review fixes.
 - E2E: 36 pass, with one existing service-worker test skipped in development
   mode. The new shared-proxy cross-origin regression passes.
 - In-app preview at localhost:3000: invalid credentials rejected, real sign-in
@@ -107,6 +106,8 @@ Primary advisories:
   original preferences and authenticated session verified after reload.
 - Review-fix preview: the user signed out and back in successfully; the
   authenticated home page and session persisted after reload at pane width.
+  Sign-in preserved an invite redirect, and an invalid invite displayed its
+  expected error without creating an account or league record.
 - Required PR CI must pass before this branch is reported ready.
 
 ## Remaining operational limits
