@@ -20,6 +20,10 @@ These overrides bridge upstream constraints as of November 3, 2026:
   enforcement. Minimatch 11 also removed `makeRe`; the adapter supports the
   `.makeRe(pattern).test(path)` call used by `import/no-internal-modules` by
   delegating to `Minimatch.match`, without generating a regular expression.
+  Legacy consumers retain minimatch 3's Windows separator handling (unless
+  `allowWindowsEscape` is explicit); modern consumers keep their own options.
+  Regression tests simulate Windows on every CI host and exercise the real
+  import restriction rule and glob exceptions on the native host platform.
 
 Remove each override when its parent accepts patched dependencies and both
 the audit and compatibility checks pass. Remove the local adapter and its tests
