@@ -56,8 +56,9 @@
     "jsdom": "^30.0.1",
     "tsx": "^4.23.13",
     "typescript": "^5.8.3",
-    "vitest": "^4.1.12",
-    "minimatch": "file:tools/minimatch-compat"
+    "vitest": "^5.0.5",
+    "minimatch": "file:tools/minimatch-compat",
+    "vite": "^8.1.0"
   },
   "overrides": {
     "zod": "$zod",
