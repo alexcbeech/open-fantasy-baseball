@@ -8,6 +8,9 @@ const initialState: AuthFormState = null;
 
 export function SignUpForm({ inviteToken, prefillEmail }: { inviteToken?: string; prefillEmail?: string } = {}) {
   const [state, formAction, pending] = useActionState(signUpWithEmail, initialState);
+  const signInHref = inviteToken
+    ? `/auth/sign-in?next=${encodeURIComponent(`/join/${encodeURIComponent(inviteToken)}`)}`
+    : "/auth/sign-in";
 
   return (
     <form action={formAction} className="auth-form">
@@ -29,7 +32,7 @@ export function SignUpForm({ inviteToken, prefillEmail }: { inviteToken?: string
         {pending ? "Creating..." : "Create account"}
       </button>
       <p className="auth-alt">
-        Already have an account? <Link href="/auth/sign-in">Sign in</Link>
+        Already have an account? <Link href={signInHref}>Sign in</Link>
       </p>
     </form>
   );

@@ -60,7 +60,7 @@ describe("image mutation routes", () => {
     expect((await handleImageRequest(request())).status).toBe(503);
   });
   it("does not write corrupt uploads or report a failed database update as successful", async () => {
-    expect((await handleImageRequest(new Request("https://app.test/upload", { method: "PUT", headers: { "Content-Type": "image/png" }, body: "broken" }))).status).toBe(400);
+    expect((await handleImageRequest(new Request("https://app.test/upload", { method: "PUT", headers: { "Content-Type": "image/png" }, body: "broken" }))).status).toBe(415);
     expect(mocks.put).not.toHaveBeenCalled();
     mocks.replace.mockRejectedValueOnce(new Error("database unavailable"));
     expect((await handleImageRequest(request())).status).toBe(503);

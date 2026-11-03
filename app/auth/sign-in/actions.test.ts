@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ signIn: vi.fn(), signOut: vi.fn(), blocked: vi.fn(), session: vi.fn() }));
+const mocks = vi.hoisted(() => ({ signIn: vi.fn(), signOut: vi.fn(), blocked: vi.fn(), session: vi.fn(), ensure: vi.fn() }));
 vi.mock("@/lib/auth/neon-auth", () => ({
   getNeonAuth: () => ({ signIn: { email: mocks.signIn }, signOut: mocks.signOut }),
   getCurrentOfbUser: mocks.session,
+  ensureOfbUserForNeonAuth: mocks.ensure,
 }));
 vi.mock("@/lib/auth/account-status", () => ({ isAccountBlocked: mocks.blocked }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
@@ -20,6 +21,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.blocked.mockResolvedValue(false);
   mocks.session.mockResolvedValue(null);
+  mocks.ensure.mockResolvedValue({ userId: "ofb-user" });
   mocks.signIn.mockResolvedValue({ data: { user: { id: "provider-id", email: "active@example.test" } }, error: null });
 });
 describe("email sign-in session handoff", () => {
@@ -28,6 +30,7 @@ describe("email sign-in session handoff", () => {
     expect(mocks.session).not.toHaveBeenCalled();
     expect(mocks.signOut).not.toHaveBeenCalled();
     expect(mocks.blocked).toHaveBeenLastCalledWith("active@example.test", "provider-id");
+    expect(mocks.ensure).toHaveBeenCalledWith(expect.objectContaining({ id: "provider-id" }), expect.any(Date), null);
   });
   it("blocks inactive accounts before authenticating", async () => {
     mocks.blocked.mockResolvedValue(true);
@@ -46,6 +49,17 @@ describe("email sign-in session handoff", () => {
   });
   it("preserves invite redirects while rejecting external destinations", async () => {
     await expect(signInWithEmail(null, form("/join/invite"))).rejects.toThrow("redirect:/join/invite");
+    expect(mocks.ensure).toHaveBeenLastCalledWith(expect.objectContaining({ email: "active@example.test" }), expect.any(Date), "invite");
     await expect(signInWithEmail(null, form("https://example.test"))).rejects.toThrow("redirect:/");
+    expect(mocks.ensure).toHaveBeenLastCalledWith(expect.any(Object), expect.any(Date), null);
+  });
+  it("rejects malformed invite encoding before authenticating", async () => {
+    expect(await signInWithEmail(null, form("/join/%ZZ"))).toMatchObject({ error: expect.stringContaining("invite link is not valid") });
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+  it("does not treat provider success as completed OFB enrollment", async () => {
+    mocks.ensure.mockResolvedValue(null);
+    expect(await signInWithEmail(null, form("/join/expired-invite"))).toMatchObject({ error: expect.stringContaining("Account setup could not be completed") });
+    expect(mocks.signOut).toHaveBeenCalledOnce();
   });
 });

@@ -18,6 +18,7 @@ import { LeagueHub } from "./league-hub";
 import { BotManagers } from "./bot-managers";
 import { LeagueSettingsEditor } from "./league-settings-editor";
 import { LeagueStandings } from "./league-standings";
+import { LeagueChampionBanner } from "./league-champion-banner";
 import { TradesPanel } from "./trades-panel";
 import { DeleteLeagueButton } from "./delete-league-button";
 import { ImageUploader } from "@/app/image-uploader";
@@ -336,6 +337,7 @@ function LeagueTab({
 
   return (
     <div className="content-grid">
+      {overview.champion ? <LeagueChampionBanner champion={overview.champion} wide /> : null}
       <LeagueHub
         leagueId={overview.leagueId}
         leagueName={overview.name}
@@ -353,6 +355,7 @@ function LeagueTab({
         <h2 id="standings-heading">Standings</h2>
         <LeagueStandings
           standings={overview.standings}
+          championTeamId={overview.champion?.teamId}
           leagueId={overview.leagueId}
           viewerTeamId={viewerTeamId}
           canTrade={tradingOpen}

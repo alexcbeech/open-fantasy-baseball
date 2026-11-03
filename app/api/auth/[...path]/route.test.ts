@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ handler: vi.fn(), getSession: vi.fn(), getCurrentOfbUser: vi.fn(), withEligibleRecipient: vi.fn() }));
+const mocks = vi.hoisted(() => ({ handler: vi.fn(), getSession: vi.fn(), getCurrentOfbUser: vi.fn(), withEligibleRecipient: vi.fn(), signups: vi.fn() }));
 vi.mock("@/lib/auth/neon-auth", () => ({ getCurrentOfbUser: mocks.getCurrentOfbUser,
   getNeonAuth: () => ({ getSession: mocks.getSession, handler: () => ({ GET: mocks.handler, POST: mocks.handler, PUT: mocks.handler, PATCH: mocks.handler, DELETE: mocks.handler }) }) }));
-vi.mock("@/lib/auth/signups", () => ({ areSignupsEnabled: () => true }));
+vi.mock("@/lib/auth/signups", () => ({ areSignupsEnabled: mocks.signups }));
 vi.mock("@/lib/notifications/recipient-guard", () => ({ withEligibleRecipient: mocks.withEligibleRecipient, DeliverySuppressed: class extends Error {} }));
 import { POST } from "./route";
 import { DeliverySuppressed } from "@/lib/notifications/recipient-guard";
@@ -10,6 +10,7 @@ function request(path: string) { return new Request(`https://ofb.test/api/auth/$
 function post(req: Request) { return POST(req, { params: Promise.resolve({ path: new URL(req.url).pathname.split("/").slice(3) }) }); }
 beforeEach(() => {
   vi.clearAllMocks(); mocks.getSession.mockResolvedValue({ data: null }); mocks.getCurrentOfbUser.mockResolvedValue(null);
+  mocks.signups.mockReturnValue(true);
   mocks.handler.mockResolvedValue(Response.json({ ok: true }));
   mocks.withEligibleRecipient.mockImplementation(async (_email, handler) => handler());
 });
@@ -27,6 +28,15 @@ describe("auth proxy deactivation gates", () => {
   });
   it("does not expose provider admin routes that bypass OFB audit and anti-lockout", async () => {
     expect((await post(request("admin/unban-user"))).status).toBe(403);
+    expect(mocks.handler).not.toHaveBeenCalled();
+  });
+  it.each(["%61dmin/unban-user", "admin%2fset-role"])("blocks encoded administration paths: %s", async path => {
+    expect((await post(request(path))).status).toBe(403);
+    expect(mocks.handler).not.toHaveBeenCalled();
+  });
+  it.each(["%73ign-up/email", "sign%2dup/email", "SIGN-UP/email"])("blocks encoded signup paths when enrollment is closed: %s", async path => {
+    mocks.signups.mockReturnValue(false);
+    expect((await post(request(path))).status).toBe(403);
     expect(mocks.handler).not.toHaveBeenCalled();
   });
   it("fails closed when recipient verification fails", async () => {

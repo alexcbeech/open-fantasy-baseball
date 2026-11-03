@@ -3,12 +3,15 @@ import { query, tryDatabase } from "@/lib/db/client";
 import { demoUserEmail } from "@/lib/data/profile";
 import { isWebPushConfigured, sendWebPush, type WebPushPayload } from "@/lib/notifications/web-push";
 import { DeliverySuppressed, withEligibleRecipient } from "@/lib/notifications/recipient-guard";
+import { isAllowedPushEndpoint } from "@/lib/notifications/push-endpoint";
 
 export const pushSubscriptionSchema = z.object({
-  endpoint: z.string().trim().url("A push endpoint URL is required.").max(1000),
+  endpoint: z.string().trim().url("A push endpoint URL is required.").max(1000)
+    .refine(isAllowedPushEndpoint, "Choose a supported browser push service.")
+    .transform(endpoint => new URL(endpoint).href),
   keys: z.object({
-    p256dh: z.string().trim().min(1, "The p256dh key is required."),
-    auth: z.string().trim().min(1, "The auth secret is required."),
+    p256dh: z.string().trim().min(1, "The p256dh key is required.").max(256),
+    auth: z.string().trim().min(1, "The auth secret is required.").max(256),
   }),
 });
 

@@ -44,6 +44,7 @@ export async function handleBotMcp(body: unknown, authorization: string | null) 
       if (!args.success) return error(-32602, args.error.issues.map((issue) => issue.message).join("; "));
       try {
         let output: unknown;
+        let failed = false;
         switch (tool.name) {
           case "ofb_bot_context": output = await getBotContext(principal); break;
           case "ofb_bot_player": output = await getBotPlayer(principal, player.parse(args.data).playerId); break;
@@ -52,9 +53,15 @@ export async function handleBotMcp(body: unknown, authorization: string | null) 
             const filters = search.parse(args.data);
             output = await searchBotPlayers(principal, filters); break;
           }
-          case "ofb_bot_decide": output = await makeBotDecision(principal, botDecisionSchema.parse(args.data)); break;
+          case "ofb_bot_decide": {
+            const receipt = await makeBotDecision(principal, botDecisionSchema.parse(args.data));
+            output = receipt;
+            // Only decision receipts use status as an operation outcome.
+            // Player details use status for health (active, injured, etc.).
+            failed = receipt.status !== "completed";
+            break;
+          }
         }
-        const failed = typeof output === "object" && output !== null && "status" in output && output.status !== "completed";
         return reply({ content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output, isError: failed });
       } catch (cause) {
         return reply({ content: [{ type: "text", text: cause instanceof Error ? cause.message : "Bot operation failed." }], isError: true });

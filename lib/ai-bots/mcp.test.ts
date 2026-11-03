@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { handleBotMcp } from "./mcp";
 import { authenticateBot } from "./access";
-import { makeBotDecision, getBotContext, searchBotPlayers } from "./manager";
+import { makeBotDecision, getBotContext, getBotPlayer, searchBotPlayers } from "./manager";
 import { resetRateLimiter } from "@/lib/rate-limit";
 vi.mock("./access", () => ({ authenticateBot: vi.fn() }));
 vi.mock("./manager", () => ({ makeBotDecision: vi.fn(), getBotContext: vi.fn(), getBotPlayer: vi.fn(), searchBotPlayers: vi.fn() }));
@@ -25,6 +25,27 @@ it("passes only the authenticated principal to the manager", async () => {
   vi.mocked(makeBotDecision).mockResolvedValue({ status: "completed" } as never);
   expect(await call("ofb_bot_decide", decision)).toMatchObject({ result: { isError: false } });
   expect(makeBotDecision).toHaveBeenCalledWith(principal, decision);
+});
+it.each(["active", "day-to-day", "injured", "minors"] as const)("returns successful player details with %s health status", async (status) => {
+  const playerId = "00000000-0000-4000-8000-000000000002";
+  const detail = { id: playerId, name: "First baseman", positions: ["1B"], status,
+    management: { canAdd: true, needsDropToAdd: false } };
+  vi.mocked(getBotPlayer).mockResolvedValue(detail as never);
+  expect(await call("ofb_bot_player", { playerId })).toEqual({ jsonrpc: "2.0", id: 1,
+    result: { isError: false, structuredContent: detail, content: [{ type: "text", text: JSON.stringify(detail) }] } });
+  expect(getBotPlayer).toHaveBeenCalledWith(principal, playerId);
+  expect(makeBotDecision).not.toHaveBeenCalled();
+});
+it("reports player-detail failures with their error message", async () => {
+  vi.mocked(getBotPlayer).mockRejectedValue(new Error("Player not found. Search ofb_bot_players for a current player ID."));
+  expect(await call("ofb_bot_player", { playerId: "00000000-0000-4000-8000-000000000002" })).toEqual({
+    jsonrpc: "2.0", id: 1, result: { isError: true, content: [{ type: "text", text: "Player not found. Search ofb_bot_players for a current player ID." }] },
+  });
+});
+it.each(["pending", "uncertain"])("keeps %s decision receipts as tool errors", async (status) => {
+  const receipt = { status, result: { error: "Inspect current team state before retrying." }, replayed: true };
+  vi.mocked(makeBotDecision).mockResolvedValue(receipt as never);
+  expect(await call("ofb_bot_decide", decision)).toMatchObject({ result: { isError: true, structuredContent: receipt } });
 });
 it("rejects unknown actions and marks uncertain outcomes as tool errors", async () => {
   expect(await call("ofb_bot_decide", { ...decision, command: { kind: "accept-trade" } })).toMatchObject({ error: { code: -32602 } });

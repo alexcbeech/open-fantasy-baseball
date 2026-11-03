@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentOfbUser, getNeonAuth, hasExistingOfbAccount } from "@/lib/auth/neon-auth";
+import { ensureOfbUserForNeonAuth, getNeonAuth, hasExistingOfbAccount } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
@@ -31,12 +31,14 @@ export async function GET(request: NextRequest) {
   }
 
   const email = user.email;
+  let inviteToken = "";
 
   if (!areSignupsEnabled() && !(await hasExistingOfbAccount(email, user.id))) {
     // A live league invite is the one sanctioned path through the signup
     // gate, same as email sign-up -- and it must be addressed to the email
     // Google just vouched for.
-    const inviteToken = landing.startsWith("/join/") ? decodeURIComponent(landing.slice("/join/".length)) : "";
+    try { inviteToken = landing.startsWith("/join/") ? decodeURIComponent(landing.slice("/join/".length)) : ""; }
+    catch { /* A malformed invite cannot authorize signup. */ }
     const invitedSignup = Boolean(
       inviteToken && isDatabaseConfigured() && (await isInviteTokenRedeemable(inviteToken, email)),
     );
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  if (!(await getCurrentOfbUser())) {
+  if (!(await ensureOfbUserForNeonAuth(user, session?.session.createdAt, inviteToken))) {
     await auth.signOut();
     return NextResponse.redirect(new URL("/auth/sign-in?error=unavailable", requestUrl));
   }

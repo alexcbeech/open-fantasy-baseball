@@ -3,6 +3,8 @@ import { getPool, tryDatabase } from "@/lib/db/client";
 import { demoUserEmail } from "@/lib/data/profile";
 import { hasAdminRole, normalizeAuthRoles } from "@/lib/auth/roles";
 import { acceptsSession, type AccountStatus } from "@/lib/auth/account-status";
+import { areSignupsEnabled } from "@/lib/auth/signups";
+import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 
 export type OfbCurrentUser = {
   userId: string;
@@ -20,11 +22,13 @@ type AppUserRow = AccountStatus & {
   email: string;
   display_name: string;
   avatar_url: string | null;
+  identity_linked?: boolean;
 };
 
 type NeonAuthUser = {
   id: string;
   email: string;
+  emailVerified?: boolean;
   name?: string | null;
   image?: string | null;
   role?: string | string[] | null;
@@ -111,7 +115,7 @@ export async function hasExistingOfbAccount(email: string, providerSubject: stri
   );
 }
 
-export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCreatedAt?: string | Date): Promise<OfbCurrentUser | null> {
+export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCreatedAt?: string | Date, inviteToken?: string | null): Promise<OfbCurrentUser | null> {
   return tryDatabase<OfbCurrentUser | null>(
     async () => {
       const client = await getPool().connect();
@@ -122,7 +126,8 @@ export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCr
         const roles = normalizeAuthRoles(authUser);
         // Prefer the stable identity over the email. Never relink an existing
         // provider subject or create another account to bypass deactivation.
-        const existing = await client.query<AppUserRow>(`select u.* from app_user u
+        const existing = await client.query<AppUserRow>(`select u.*, exists (select 1 from auth_identity i where i.user_id = u.id
+            and i.provider = 'neon-auth' and i.provider_subject = $2) as identity_linked from app_user u
           where exists (select 1 from auth_identity i where i.user_id = u.id
             and i.provider = 'neon-auth' and i.provider_subject = $2)
           or lower(u.email) = lower($1)
@@ -133,17 +138,28 @@ export async function ensureOfbUserForNeonAuth(authUser: NeonAuthUser, sessionCr
           await client.query("rollback");
           return null;
         }
+        // A new provider identity must prove email ownership before it can
+        // attach to an existing OFB account. A claimed email is not identity.
+        if (existing.rows.length && !existing.rows[0].identity_linked && authUser.emailVerified !== true) {
+          await client.query("rollback");
+          return null;
+        }
+        // Enforce enrollment at the data boundary too. An upstream OAuth
+        // session can land on any page, bypassing our callback's signup gate.
+        if (!existing.rows.length && !areSignupsEnabled()
+          && !(inviteToken && await isInviteTokenRedeemable(inviteToken, authUser.email, client))) {
+          await client.query("rollback");
+          return null;
+        }
         const userResult = existing.rows.length ? existing : await client.query<AppUserRow>(
           `insert into app_user (email, display_name, avatar_url)
            values ($1, $2, $3)
-           on conflict (email) do update set
-             avatar_url = case when app_user.avatar_custom then app_user.avatar_url else coalesce(excluded.avatar_url, app_user.avatar_url) end,
-             updated_at = now()
+           on conflict (email) do nothing
            returning id, email, display_name, avatar_url, deactivated_at, sessions_valid_after`,
           [authUser.email, displayName, authUser.image],
         );
         const user = userResult.rows[0];
-        if (!acceptsSession(user, sessionCreatedAt)) {
+        if (!user || !acceptsSession(user, sessionCreatedAt)) {
           await client.query("rollback");
           return null;
         }

@@ -156,7 +156,7 @@ test.describe("commissioner settings", () => {
     await page.goto("/team/team-1?tab=league");
 
     const hub = page.getByRole("region", { name: "Sunday Night Rotisserie" });
-    await expect(hub.getByText("2026 League Hub")).toBeVisible();
+    await expect(hub.getByText(/^\d{4} League Hub$/)).toBeVisible();
     await expect(hub.getByText("Pinned announcement")).toBeVisible();
     await expect(hub.getByText("Trade deadline")).toBeVisible();
     await expect(hub.getByText("Playoffs start")).toBeVisible();

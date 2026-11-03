@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 import { isPublicAssetPath, isPublicPagePath } from "@/lib/auth/public-paths";
+import { isCrossOriginMutation } from "@/lib/auth/request-origin";
 
 // Some pages intentionally render without a signed-in session even when Neon
 // Auth is configured. Invite pages must preserve the token while offering the
@@ -26,6 +27,9 @@ const runNeonAuthProxy = neonAuthConfigured
   : null;
 
 export async function proxy(request: NextRequest) {
+  if (request.nextUrl.pathname.startsWith("/api/") && isCrossOriginMutation(request)) {
+    return NextResponse.json({ error: "Send changes from this app's page." }, { status: 403 });
+  }
   const host = request.headers.get("host") ?? "";
 
   if (process.env.NODE_ENV !== "production" && host.startsWith("127.0.0.1")) {

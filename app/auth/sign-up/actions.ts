@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getNeonAuth } from "@/lib/auth/neon-auth";
+import { ensureOfbUserForNeonAuth, getNeonAuth } from "@/lib/auth/neon-auth";
 import { areSignupsEnabled } from "@/lib/auth/signups";
 import { isInviteTokenRedeemable } from "@/lib/data/league-invites";
 import { isDatabaseConfigured } from "@/lib/db/client";
@@ -47,6 +47,11 @@ export async function signUpWithEmail(_previousState: AuthFormState, formData: F
 
   if (result.error) {
     return { error: result.error.message || "Failed to create account." };
+  }
+  // Provision through the same enrollment guard used by session reads. The
+  // invite exception must be explicit; a session alone never enables signup.
+  if (!result.data?.user || !(await ensureOfbUserForNeonAuth(result.data.user, undefined, inviteToken))) {
+    return { error: "Account setup could not be completed. Use Sign in below to finish setup." };
   }
 
   // Invited users land back on the join page to accept; the token is only
