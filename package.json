@@ -56,10 +56,34 @@
     "jsdom": "^30.0.1",
     "tsx": "^4.23.13",
     "typescript": "^5.8.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "minimatch": "file:tools/minimatch-compat",
+    "vite": "^8.1.0"
   },
   "overrides": {
     "zod": "$zod",
-    "@neondatabase/auth": "$@neondatabase/auth"
+    "@neondatabase/auth": "$@neondatabase/auth",
+    "better-auth": "1.7.7",
+    "@better-auth/core": "1.7.7",
+    "@better-auth/oauth-provider": "1.7.7",
+    "@react-email/render": "2.2.0",
+    "eslint": {
+      "minimatch": "11.0.1"
+    },
+    "@eslint/config-array": {
+      "minimatch": "11.0.1"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    },
+    "eslint-plugin-import": {
+      "minimatch": "$minimatch"
+    },
+    "eslint-plugin-react": {
+      "minimatch": "$minimatch"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "minimatch": "$minimatch"
+    }
   }
 }
