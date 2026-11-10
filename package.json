@@ -52,7 +52,7 @@
     "@types/react-dom": "^19.2.5",
     "@types/web-push": "^3.6.4",
     "eslint": "^10.13.0",
-    "eslint-config-next": "^16.4.3",
+    "eslint-config-next": "^16.4.4",
     "jsdom": "^30.0.1",
     "tsx": "^4.23.13",
     "typescript": "^5.8.3",
