@@ -34,7 +34,7 @@
   "dependencies": {
     "@neondatabase/auth": "0.7.0-beta",
     "@vercel/blob": "^2.8.2",
-    "next": "^16.4.3",
+    "next": "^16.4.6",
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
